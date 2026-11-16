@@ -8,6 +8,18 @@ import { cn } from "cn"
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { GlobeIcon } from "lucide-react"
+import {
   Field,
   FieldDescription,
   FieldGroup,
@@ -107,7 +119,10 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
 
   const slugStatus = localStatus ?? checkedStatus
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [turnstileToken, setTurnstileToken] = useState<string | undefined>()
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
     if (slugStatus === "taken") {
@@ -120,15 +135,24 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
       return
     }
 
+    // Turnstile (modo implícito) deja el token en un input oculto dentro del
+    // formulario. Se guarda ahora porque el envío se confirma en un diálogo.
+    const formData = new FormData(event.currentTarget)
+    const token = formData.get("cf-turnstile-response")
+
+    setTurnstileToken(
+      TURNSTILE_SITE_KEY && typeof token === "string" ? token : undefined
+    )
+    setError(null)
+    setConfirmOpen(true)
+  }
+
+  async function submitConfirmed() {
+    setConfirmOpen(false)
     setLoading(true)
     setError(null)
 
     try {
-      // Turnstile (modo implícito) deja el token en un input oculto dentro del
-      // formulario; hay que leerlo antes de enviar el JSON.
-      const formData = new FormData(event.currentTarget)
-      const turnstileToken = formData.get("cf-turnstile-response")
-
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: "POST",
         credentials: "include",
@@ -139,10 +163,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
           name: name.trim() || undefined,
           email: email.trim(),
           password,
-          turnstileToken:
-            TURNSTILE_SITE_KEY && typeof turnstileToken === "string"
-              ? turnstileToken
-              : undefined,
+          turnstileToken,
         }),
       })
 
@@ -363,6 +384,31 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
           </FieldDescription>
         </Field>
       </FieldGroup>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-primary/10 text-primary">
+              <GlobeIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Esta será tu dirección</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tu negocio entrará en{" "}
+              <strong>
+                {effectiveSlug}.{TENANT_DOMAIN}
+              </strong>
+              . No podrás cambiarla más adelante, así que revisa que sea la
+              correcta antes de continuar.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Revisar</AlertDialogCancel>
+            <AlertDialogAction onClick={submitConfirmed}>
+              {loading ? "Creando cuenta..." : "Confirmar y crear"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   )
 }

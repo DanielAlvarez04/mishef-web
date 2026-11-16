@@ -21,6 +21,8 @@ const PUBLIC_PATHS = [
   "/privacidad",
   "/terminos",
   "/join",
+  // Carta digital del negocio.
+  "/menu",
 ]
 
 const API_BASE_URL =
@@ -313,6 +315,15 @@ export async function proxy(request: NextRequest) {
 
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value
+
+  // Dentro del subdominio de un negocio (o de su dominio propio) no se ofrece
+  // crear otra cuenta: el registro vive solo en el dominio principal.
+  if (
+    pathname === "/register" &&
+    (tenantOf(request) || customDomainOf(request))
+  ) {
+    return NextResponse.redirect(new URL("/login", request.url))
+  }
 
   // Rutas públicas: si hay una sesión válida se entra directo al dashboard;
   // si el token está vigente pero la sesión ya no existe, se limpian las

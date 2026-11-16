@@ -1,10 +1,10 @@
-import { redirect } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 
 import { AuthShell } from "@/components/auth-shell"
 import { LoginForm } from "@/components/login-form"
 import { oauthErrorMessage } from "@/lib/auth-errors"
 import { getCurrentUser } from "@/lib/session"
-import { getTenant } from "@/lib/tenant"
+import { getTenant, getTenantDomain, getTenantSlug } from "@/lib/tenant"
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -23,7 +23,19 @@ export default async function LoginPage({
   }
 
   const params = await searchParams
-  const tenant = await getTenant()
+  const [tenant, tenantSlug, tenantDomain] = await Promise.all([
+    getTenant(),
+    getTenantSlug(),
+    getTenantDomain(),
+  ])
+
+  // Host de negocio que no existe o no está verificado: no se muestra el login
+  // genérico de Mishef (evita que cualquier dominio apuntado a la IP pinte
+  // nuestra marca).
+  if (!tenant && (tenantSlug || tenantDomain)) {
+    notFound()
+  }
+
   const error = oauthErrorMessage(first(params.error))
   const challengeId = first(params.challengeId)
   const email = first(params.email)

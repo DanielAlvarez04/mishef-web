@@ -30,6 +30,13 @@ export async function getTenantSlug(): Promise<string | null> {
   return slug || null
 }
 
+/** Dominio propio de la petición (no es un subdominio de Mishef). */
+export async function getTenantDomain(): Promise<string | null> {
+  const requestHeaders = await headers()
+  const domain = requestHeaders.get("x-tenant-domain")?.trim().toLowerCase()
+  return domain || null
+}
+
 /**
  * Datos públicos del negocio. `cache` evita repetir la consulta cuando la
  * misma página la usa en varios componentes.
