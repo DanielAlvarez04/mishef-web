@@ -18,6 +18,10 @@ export interface SessionUser {
   branchId: string | null
   organizationName: string | null
   organizationDomain: string | null
+  /** Color primario de la marca del negocio (`#rrggbb`), si lo definió. */
+  organizationBrandColor: string | null
+  /** URL pública del logo del negocio, si la definió. */
+  organizationLogoUrl: string | null
   /** IVA por defecto del negocio como fracción (`0.16` = 16 %). */
   organizationTaxRate: string
   /** Moneda del negocio (código ISO 4217, p. ej. `MXN`). */
@@ -50,6 +54,8 @@ interface MeResponse {
     id: string
     name: string
     domain?: string | null
+    brandColor?: string | null
+    logoUrl?: string | null
     taxRate?: string | null
     currency?: string | null
     useCoreSuggestions?: boolean | null
@@ -90,6 +96,8 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       branchId: data.branchId ?? null,
       organizationName: data.organization?.name ?? null,
       organizationDomain: data.organization?.domain ?? null,
+      organizationBrandColor: data.organization?.brandColor ?? null,
+      organizationLogoUrl: data.organization?.logoUrl ?? null,
       organizationTaxRate: data.organization?.taxRate ?? "0.16",
       organizationCurrency: data.organization?.currency ?? "MXN",
       organizationUseCoreSuggestions:

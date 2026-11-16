@@ -11,6 +11,11 @@ import { headers } from "next/headers"
 export interface TenantInfo {
   name: string
   slug: string
+  brandColor: string | null
+  logoUrl: string | null
+  address: string | null
+  latitude: string | null
+  longitude: string | null
 }
 
 const SERVER_API_URL =

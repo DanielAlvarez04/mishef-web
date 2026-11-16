@@ -8,6 +8,7 @@ import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
+import { brandStyle } from "@/lib/brand"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 
 export default async function AppLayout({
@@ -45,6 +46,7 @@ export default async function AppLayout({
           defaultOpen={sidebarOpen}
           style={
             {
+              ...brandStyle(user.organizationBrandColor),
               "--sidebar-width": "calc(var(--spacing) * 72)",
               "--header-height": "calc(var(--spacing) * 12)",
             } as React.CSSProperties

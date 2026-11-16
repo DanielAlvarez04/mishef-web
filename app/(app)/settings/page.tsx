@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 
 import { OrganizationCard } from "@/components/settings/organization-card"
+import { OrganizationBrandingCard } from "@/components/settings/organization-branding-card"
 import {
   KitchenOrderCard,
   KitchenPrepCard,
@@ -174,6 +175,17 @@ export default async function SettingsPage({
   const mp = first(params.mp)
   const mpNotice = mercadoPagoNotice(mp)
   const admin = isAdmin(user)
+
+  const organizationResponse = await apiFetch("/organizations/current")
+  const organization = organizationResponse.ok
+    ? ((await organizationResponse.json()) as {
+        brandColor: string | null
+        logoUrl: string | null
+        address: string | null
+        latitude: string | null
+        longitude: string | null
+      })
+    : null
   const practiceExpired =
     user.organizationPracticeMode &&
     user.organizationPracticeUntil !== null &&
@@ -457,6 +469,14 @@ export default async function SettingsPage({
                 <OrganizationCard
                   name={user.organizationName ?? "Sin organización activa"}
                   domain={user.organizationDomain ?? null}
+                  canManage={admin}
+                />
+                <OrganizationBrandingCard
+                  brandColor={organization?.brandColor ?? null}
+                  logoUrl={organization?.logoUrl ?? null}
+                  address={organization?.address ?? null}
+                  latitude={organization?.latitude ?? null}
+                  longitude={organization?.longitude ?? null}
                   canManage={admin}
                 />
                 <PracticeModeCard

@@ -35,7 +35,11 @@ export default async function LoginPage({
       : null
 
   return (
-    <AuthShell name={tenant?.name}>
+    <AuthShell
+      name={tenant?.name}
+      color={tenant?.brandColor}
+      logoUrl={tenant?.logoUrl}
+    >
       <LoginForm
         tenant={tenant?.slug}
         initialIdentifier={email}

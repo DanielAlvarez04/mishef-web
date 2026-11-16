@@ -311,3 +311,56 @@ export async function updateKitchenSettings(input: {
     "/kitchen",
   ])
 }
+
+export interface OrganizationBrandingInput {
+  brandColor?: string | null
+  logoUrl?: string | null
+  address?: string | null
+  latitude?: number | null
+  longitude?: number | null
+}
+
+/**
+ * Marca blanca y ubicación del negocio.
+ *
+ * Recibe solo lo que cambió (la tarjeta calcula el diff). Si llega un valor
+ * vacío se envía `null` para limpiar la columna.
+ */
+export async function updateOrganizationBranding(
+  input: OrganizationBrandingInput
+): Promise<ActionResult> {
+  const payload: Record<string, unknown> = {}
+
+  if (input.brandColor !== undefined) {
+    const color = input.brandColor?.trim() || null
+    if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) {
+      return { ok: false, message: "El color debe tener el formato #rrggbb." }
+    }
+    payload.brandColor = color
+  }
+
+  if (input.logoUrl !== undefined) {
+    const url = input.logoUrl?.trim() || null
+    if (url && !/^https:\/\/\S+$/.test(url)) {
+      return { ok: false, message: "El logo debe ser una URL https." }
+    }
+    payload.logoUrl = url
+  }
+
+  if (input.address !== undefined) {
+    payload.address = input.address?.trim() || null
+  }
+
+  if (input.latitude !== undefined) {
+    payload.latitude = input.latitude
+  }
+
+  if (input.longitude !== undefined) {
+    payload.longitude = input.longitude
+  }
+
+  return mutateApi("/organizations/current", "PATCH", payload, [
+    "/settings",
+    "/dashboard",
+  ])
+}
