@@ -31,6 +31,7 @@ import {
   PackageIcon,
   PercentIcon,
   Settings2Icon,
+  ShieldAlertIcon,
   ShoppingBasketIcon,
   UsersIcon,
 } from "lucide-react"
@@ -78,6 +79,11 @@ const data = {
       title: "Food cost",
       url: "/reports/food-cost",
       icon: <PercentIcon />,
+    },
+    {
+      title: "Fuga interna",
+      url: "/reports/leakage",
+      icon: <ShieldAlertIcon />,
     },
   ],
   navSecondary: [
