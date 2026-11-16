@@ -152,12 +152,12 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               className="data-[slot=sidebar-menu-button]:p-1.5!"
-              tooltip={organizationName ?? "Naranja Pimienta"}
+              tooltip={organizationName ?? "Mishef"}
               render={<Link href="/dashboard" />}
             >
               <GalleryVerticalEndIcon className="size-5!" />
               <span className="truncate text-base font-semibold">
-                {organizationName ?? "Naranja Pimienta"}
+                {organizationName ?? "Mishef"}
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>

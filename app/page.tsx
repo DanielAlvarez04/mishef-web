@@ -20,7 +20,7 @@ export default function ComingSoonPage() {
               <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Naranja Pimienta</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Mishef</h1>
         </div>
 
         <h2 className="text-3xl font-semibold tracking-tight">

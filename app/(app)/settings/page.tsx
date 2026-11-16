@@ -290,7 +290,7 @@ export default async function SettingsPage({
                 <CardTitle>Cuenta</CardTitle>
                 <CardDescription>
                   Datos de tu acceso a{" "}
-                  {user.organizationName ?? "Naranja Pimienta"}.
+                  {user.organizationName ?? "Mishef"}.
                 </CardDescription>
               </CardHeader>
               <CardContent>

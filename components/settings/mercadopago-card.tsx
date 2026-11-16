@@ -227,7 +227,7 @@ export function MercadoPagoCard({
             <p className="text-sm text-muted-foreground">
               Al conectar tu cuenta podrás enviar el importe de la cuenta a la
               terminal Point. Cuando el cliente pague, el pago se registrará
-              solo en Naranja Pimienta.
+              solo en Mishef.
             </p>
             <a
               href={connectUrl}

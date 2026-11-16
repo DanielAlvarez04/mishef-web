@@ -15,9 +15,9 @@ import type { Metadata, Viewport } from "next";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "Naranja Pimienta",
-  description: "Sistema de punto de venta para cafetería",
-  applicationName: "Naranja Pimienta",
+  title: "Mishef",
+  description: "Punto de venta para cafeterías y restaurantes",
+  applicationName: "Mishef",
   manifest: "/manifest.webmanifest",
   icons: {
     icon: "/favicon.ico",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   },
   appleWebApp: {
     capable: true,
-    title: "Naranja Pimienta",
+    title: "Mishef",
     statusBarStyle: "default",
   },
   formatDetection: { telephone: false },

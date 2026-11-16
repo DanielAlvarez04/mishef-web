@@ -89,7 +89,7 @@ export function InstallApp() {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
-        Instala Naranja Pimienta para abrirla como una app y conservar las
+        Instala Mishef para abrirla como una app y conservar las
         comandas pendientes en el dispositivo si se corta la conexión.
       </p>
 

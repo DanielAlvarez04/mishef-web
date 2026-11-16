@@ -26,7 +26,7 @@ export function SiteHeader({ branchName }: { branchName?: string | null }) {
       Object.keys(pageTitles).find((path) => pathname.startsWith(`${path}/`)) ??
         ""
     ] ??
-    "Naranja Pimienta"
+    "Mishef"
 
   // El alcance de la vista siempre está a la vista: si hay sucursal activa el
   // título lo dice explícitamente ("Inventario de Centro").

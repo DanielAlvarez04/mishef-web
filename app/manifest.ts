@@ -9,10 +9,10 @@ import type { MetadataRoute } from "next"
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Naranja Pimienta",
-    short_name: "Pimienta",
+    name: "Mishef",
+    short_name: "Mishef",
     description:
-      "Punto de venta, cocina, catálogo e inventario para cafeterías.",
+      "Punto de venta, cocina, catálogo e inventario para cafeterías y restaurantes.",
     lang: "es",
     start_url: "/dashboard",
     scope: "/",

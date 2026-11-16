@@ -250,12 +250,12 @@ export function OnboardingFlow({
       <Link
         href="/"
         className="absolute top-6 left-6 flex items-center gap-2 text-sm font-medium"
-        aria-label="Naranja Pimienta"
+        aria-label="Mishef"
       >
         <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
           <GalleryVerticalEndIcon className="size-4" />
         </span>
-        Naranja Pimienta
+        Mishef
       </Link>
 
       <div className="flex min-h-full items-center justify-center p-4 md:p-8">
