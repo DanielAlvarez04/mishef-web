@@ -1,9 +1,10 @@
 "use server"
 
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 import type {
   CashMovement,
   CashMovementType,
+  CashReconciliation,
   CashSessionPayload,
 } from "@/lib/cash"
 
@@ -41,5 +42,20 @@ export async function addCashMovement(
     "POST",
     input,
     CASH_PATHS
+  )
+}
+
+/** Conciliación del turno. Con `counted` calcula la diferencia sin cerrar. */
+export async function getCashReconciliation(
+  sessionId: string,
+  counted?: number
+): Promise<ActionResult<CashReconciliation>> {
+  const query =
+    counted !== undefined && Number.isFinite(counted)
+      ? `?counted=${encodeURIComponent(String(counted))}`
+      : ""
+
+  return readApi<CashReconciliation>(
+    `/cash/sessions/${sessionId}/reconciliation${query}`
   )
 }

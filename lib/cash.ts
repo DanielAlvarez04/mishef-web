@@ -139,3 +139,36 @@ export interface ChargesReport {
     cancelledOrders: number
   } | null
 }
+
+export interface CashReconciliationAlert {
+  code: string
+  message: string
+}
+
+export interface CashReconciliation {
+  sessionId: string
+  status: string
+  openedAt: string
+  openingFloat: number
+  cash: {
+    openingFloat: number
+    sales: number
+    tips: number
+    withdrawals: number
+    expenses: number
+    deposits: number
+    adjustments: number
+    expected: number
+  }
+  other: { total: number; count: number }
+  byMethod: Array<{
+    method: PaymentMethod
+    total: number
+    tips: number
+    count: number
+  }>
+  tips: { total: number; cash: number; other: number }
+  totals: { payments: number; amount: number }
+  proposed: { counted: number; difference: number } | null
+  alerts: CashReconciliationAlert[]
+}

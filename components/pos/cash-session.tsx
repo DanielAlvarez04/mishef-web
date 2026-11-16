@@ -42,11 +42,13 @@ import { useMoney } from "@/lib/currency"
 import {
   addCashMovement,
   closeCashSession,
+  getCashReconciliation,
   openCashSession,
 } from "@/lib/cash-actions"
 import {
   CASH_MOVEMENT_LABELS,
   type CashMovementType,
+  type CashReconciliation,
   type CashSession,
   type CashSummary,
 } from "@/lib/cash"
@@ -244,6 +246,35 @@ function CloseDialog({
   const [countedCash, setCountedCash] = React.useState("")
   const [notes, setNotes] = React.useState("")
   const [pending, setPending] = React.useState(false)
+  const [showReconciliation, setShowReconciliation] = React.useState(false)
+  const [reconciliation, setReconciliation] =
+    React.useState<CashReconciliation | null>(null)
+  const [loadingReconciliation, setLoadingReconciliation] =
+    React.useState(false)
+
+  // Conciliación en vivo: se pide al servidor para que el desglose y las
+  // alertas sean los mismos que se guardan al cerrar, no una copia en cliente.
+  React.useEffect(() => {
+    if (!showReconciliation) return
+
+    const counted = Number(countedCash)
+    const value = countedCash.trim() ? counted : undefined
+
+    let cancelled = false
+
+    const timer = setTimeout(async () => {
+      setLoadingReconciliation(true)
+      const result = await getCashReconciliation(session.id, value)
+      if (cancelled) return
+      setReconciliation(result.ok ? (result.data ?? null) : null)
+      setLoadingReconciliation(false)
+    }, 350)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [showReconciliation, countedCash, session.id])
 
   // Conteo ciego: no se muestra el esperado antes de cerrar.
   const submit = async () => {
@@ -330,6 +361,79 @@ function CloseDialog({
               onChange={(event) => setCountedCash(event.target.value)}
               placeholder="0.00"
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="self-start"
+              onClick={() => setShowReconciliation((value) => !value)}
+            >
+              {showReconciliation ? "Ocultar conciliación" : "Ver conciliación"}
+            </Button>
+
+            {showReconciliation ? (
+              <div className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
+                {loadingReconciliation && !reconciliation ? (
+                  <span className="text-muted-foreground">Calculando...</span>
+                ) : reconciliation ? (
+                  <>
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                      <Row label="Fondo inicial" value={money(reconciliation.cash.openingFloat)} />
+                      <Row label="Ventas en efectivo" value={money(reconciliation.cash.sales)} />
+                      <Row label="Propinas en efectivo" value={money(reconciliation.cash.tips)} />
+                      <Row label="Ingresos" value={money(reconciliation.cash.deposits + reconciliation.cash.adjustments)} />
+                      <Row label="Retiros" value={`- ${money(reconciliation.cash.withdrawals)}`} />
+                      <Row label="Gastos" value={`- ${money(reconciliation.cash.expenses)}`} />
+                    </dl>
+
+                    <div className="flex items-center justify-between border-t pt-2 font-medium">
+                      <span>Efectivo esperado</span>
+                      <span>{money(reconciliation.cash.expected)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Otros medios ({reconciliation.other.count})</span>
+                      <span>{money(reconciliation.other.total)}</span>
+                    </div>
+
+                    {reconciliation.proposed ? (
+                      <div
+                        className={`flex items-center justify-between rounded-md px-2 py-1 font-medium ${
+                          reconciliation.proposed.difference === 0
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            : "bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        <span>Diferencia</span>
+                        <span>
+                          {reconciliation.proposed.difference > 0 ? "+" : ""}
+                          {money(reconciliation.proposed.difference)}
+                        </span>
+                      </div>
+                    ) : null}
+
+                    {reconciliation.alerts.length > 0 ? (
+                      <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+                        {reconciliation.alerts.map((alert) => (
+                          <li key={alert.code}>• {alert.message}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Sin alertas: el turno cuadra con lo registrado.
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">
+                    No pudimos cargar la conciliación.
+                  </span>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -498,5 +602,15 @@ function MovementDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/** Fila de la conciliación: etiqueta a la izquierda, monto a la derecha. */
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="text-right tabular-nums">{value}</dd>
+    </>
   )
 }
