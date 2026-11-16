@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
 import {
+  BarChart3Icon,
   ChartBarIcon,
   ChefHatIcon,
   ClockIcon,
@@ -96,6 +97,11 @@ const data = {
       title: "Merma",
       url: "/waste",
       icon: <Trash2Icon />,
+    },
+    {
+      title: "Benchmark",
+      url: "/reports/benchmark",
+      icon: <BarChart3Icon />,
     },
   ],
   navSecondary: [
