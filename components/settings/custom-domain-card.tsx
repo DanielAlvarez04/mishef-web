@@ -26,6 +26,8 @@ export interface CustomDomainProps {
   domain: string | null
   domainToken: string | null
   domainVerifiedAt: string | null
+  /** El plan contratado incluye dominio propio. */
+  enabled: boolean
   cnameTarget: string
   canManage: boolean
 }
@@ -41,6 +43,7 @@ export function CustomDomainCard({
   domain,
   domainToken,
   domainVerifiedAt,
+  enabled,
   cnameTarget,
   canManage,
 }: CustomDomainProps) {
@@ -117,7 +120,13 @@ export function CustomDomainCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
-        {!domain ? (
+        {!enabled ? (
+          <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Tu plan actual no incluye dominio propio. Puedes seguir usando tu
+            dirección <code>{cnameTarget.replace(/^[^.]*\./, "")}</code> y, si
+            quieres conectar <code>app.tunegocio.com</code>, actualiza tu plan.
+          </div>
+        ) : !domain ? (
           <form className="flex flex-col gap-3" onSubmit={connect}>
             <Field>
               <FieldLabel htmlFor="custom-domain">Dominio</FieldLabel>

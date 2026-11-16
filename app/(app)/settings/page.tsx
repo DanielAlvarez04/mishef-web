@@ -189,6 +189,7 @@ export default async function SettingsPage({
         domain: string | null
         domainToken: string | null
         domainVerifiedAt: string | null
+        customDomainEnabled: boolean
       })
     : null
   const practiceExpired =
@@ -479,6 +480,7 @@ export default async function SettingsPage({
                   domain={organization?.domain ?? null}
                   domainToken={organization?.domainToken ?? null}
                   domainVerifiedAt={organization?.domainVerifiedAt ?? null}
+                  enabled={organization?.customDomainEnabled ?? false}
                   cnameTarget={`${organization?.slug ?? "mi-negocio"}.${process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"}`}
                   canManage={admin}
                 />
