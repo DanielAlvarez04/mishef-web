@@ -61,6 +61,12 @@ export default async function PublicMenuPage() {
         ) : null}
       </header>
 
+      {data.menus.length === 0 ? (
+        <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+          Este negocio todavía no publicó su menú digital.
+        </div>
+      ) : null}
+
       {data.menus.map((menu) => (
         <section key={menu.id} className="flex flex-col gap-6">
           <div className="flex flex-col gap-1">
