@@ -29,6 +29,7 @@ import {
   LayoutDashboardIcon,
   NotebookTextIcon,
   PackageIcon,
+  PercentIcon,
   Settings2Icon,
   ShoppingBasketIcon,
   UsersIcon,
@@ -72,6 +73,11 @@ const data = {
       title: "Reportes",
       url: "/reports",
       icon: <ChartBarIcon />,
+    },
+    {
+      title: "Food cost",
+      url: "/reports/food-cost",
+      icon: <PercentIcon />,
     },
   ],
   navSecondary: [
