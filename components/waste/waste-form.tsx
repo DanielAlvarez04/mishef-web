@@ -52,7 +52,10 @@ export function WasteForm({
 
       // Si hay foto: se firma, se sube directo a R2 y se guarda solo la clave.
       if (file) {
-        const presign = await presignWastePhoto(file.type || "image/jpeg")
+        const presign = await presignWastePhoto(
+          file.type || "image/jpeg",
+          file.size
+        )
 
         if (!presign.ok || !presign.data) {
           toast.error(presign.message ?? "No pudimos preparar la foto")

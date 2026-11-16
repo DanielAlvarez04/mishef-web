@@ -11,6 +11,7 @@ import {
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { OrganizationBrandingCard } from "@/components/settings/organization-branding-card"
 import { AddressCard } from "@/components/settings/address-card"
+import { StorageCard } from "@/components/settings/storage-card"
 import { CustomDomainCard } from "@/components/settings/custom-domain-card"
 import {
   KitchenOrderCard,
@@ -61,6 +62,7 @@ import type { KitchenSettings } from "@/lib/kitchen"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { PosPairedDevice } from "@/lib/pos-device"
 import type { PosDisplayInfo } from "@/lib/pos-display"
+import type { StorageUsage } from "@/lib/storage"
 import { cn } from "cn"
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
@@ -192,6 +194,7 @@ export default async function SettingsPage({
         domainVerifiedAt: string | null
         customDomainEnabled: boolean
         slugChanges: number
+        storage: StorageUsage | null
       })
     : null
   const practiceExpired =
@@ -483,6 +486,7 @@ export default async function SettingsPage({
                   slugChanges={organization?.slugChanges ?? 0}
                   canManage={admin}
                 />
+                <StorageCard storage={organization?.storage ?? null} />
                 <Card>
                   <CardHeader>
                     <CardTitle>Configuración inicial</CardTitle>

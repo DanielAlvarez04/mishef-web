@@ -18,7 +18,8 @@ export async function createWaste(
 }
 
 export async function presignWastePhoto(
-  contentType: string
+  contentType: string,
+  size: number
 ): Promise<ActionResult<{ key: string; uploadUrl: string; publicUrl: string }>> {
-  return mutateApi("/waste/photo", "POST", { contentType }, [])
+  return mutateApi("/waste/photo", "POST", { contentType, size }, [])
 }
