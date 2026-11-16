@@ -17,6 +17,10 @@ const PUBLIC_PATHS = [
   "/pair",
   "/pos/unlock",
   "/display",
+  // Páginas públicas: legales e ingreso por invitación.
+  "/privacidad",
+  "/terminos",
+  "/join",
 ]
 
 const API_BASE_URL =
