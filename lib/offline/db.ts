@@ -10,8 +10,9 @@ import type { QueuedRound } from "./types"
  */
 
 const DB_NAME = "np-offline"
-const DB_VERSION = 1
+const DB_VERSION = 2
 const STORE = "operations"
+const CACHE_STORE = "cache"
 const USER_INDEX = "userId"
 
 let dbPromise: Promise<IDBDatabase> | null = null
@@ -31,6 +32,11 @@ function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE)) {
         const store = db.createObjectStore(STORE, { keyPath: "id" })
         store.createIndex(USER_INDEX, "userId", { unique: false })
+      }
+
+      // Copia local de datos de lectura (catálogo, menús, turno de caja).
+      if (!db.objectStoreNames.contains(CACHE_STORE)) {
+        db.createObjectStore(CACHE_STORE, { keyPath: "key" })
       }
     }
 
@@ -109,4 +115,38 @@ export async function clearQueuedRounds(userId: string): Promise<void> {
     transaction.objectStore(STORE).delete(key)
   }
   await transactionDone(transaction)
+}
+
+/**
+ * Guarda la última copia buena de un dato de lectura.
+ *
+ * No se cachean respuestas autenticadas arbitrarias: solo lo que el POS
+ * necesita para seguir mostrando información útil sin red (catálogo, menús y
+ * el turno de caja).
+ */
+export async function putCache(key: string, value: unknown): Promise<void> {
+  if (!hasIndexedDb()) return
+
+  const db = await openDb()
+  const transaction = db.transaction(CACHE_STORE, "readwrite")
+  transaction.objectStore(CACHE_STORE).put({ key, value, savedAt: Date.now() })
+  await transactionDone(transaction)
+}
+
+export async function getCache<T>(key: string): Promise<T | null> {
+  if (!hasIndexedDb()) return null
+
+  try {
+    const db = await openDb()
+    const transaction = db.transaction(CACHE_STORE, "readonly")
+    const record = await requestResult<{ key: string; value: T } | undefined>(
+      transaction.objectStore(CACHE_STORE).get(key) as IDBRequest<
+        { key: string; value: T } | undefined
+      >
+    )
+    await transactionDone(transaction)
+    return record ? record.value : null
+  } catch {
+    return null
+  }
 }

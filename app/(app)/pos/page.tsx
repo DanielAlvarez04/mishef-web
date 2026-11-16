@@ -1,6 +1,7 @@
 import { TriangleAlertIcon } from "lucide-react"
 
 import { PosView } from "@/components/pos/pos-view"
+import { OfflineSnapshot } from "@/components/offline/offline-snapshot"
 import {
   Card,
   CardDescription,
@@ -101,7 +102,14 @@ export default async function PointOfSalePage() {
     : []
 
   return (
-    <PosView
+    <>
+      <OfflineSnapshot
+        items={products}
+        categories={categories}
+        menus={menus}
+        cashSession={cash}
+      />
+      <PosView
       products={products}
       categories={categories}
       orders={orders}
@@ -115,7 +123,8 @@ export default async function PointOfSalePage() {
       cash={cash}
       canManageCash={canManageCash(user.roles)}
       displays={displays}
-      taxRate={user.organizationTaxRate ?? "0.16"}
-    />
+        taxRate={user.organizationTaxRate ?? "0.16"}
+      />
+    </>
   )
 }
