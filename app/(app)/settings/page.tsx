@@ -10,6 +10,7 @@ import {
 
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { OrganizationBrandingCard } from "@/components/settings/organization-branding-card"
+import { CustomDomainCard } from "@/components/settings/custom-domain-card"
 import {
   KitchenOrderCard,
   KitchenPrepCard,
@@ -179,11 +180,15 @@ export default async function SettingsPage({
   const organizationResponse = await apiFetch("/organizations/current")
   const organization = organizationResponse.ok
     ? ((await organizationResponse.json()) as {
+        slug: string
         brandColor: string | null
         logoUrl: string | null
         address: string | null
         latitude: string | null
         longitude: string | null
+        domain: string | null
+        domainToken: string | null
+        domainVerifiedAt: string | null
       })
     : null
   const practiceExpired =
@@ -468,7 +473,13 @@ export default async function SettingsPage({
               <CardContent className="gap-4">
                 <OrganizationCard
                   name={user.organizationName ?? "Sin organización activa"}
-                  domain={user.organizationDomain ?? null}
+                  canManage={admin}
+                />
+                <CustomDomainCard
+                  domain={organization?.domain ?? null}
+                  domainToken={organization?.domainToken ?? null}
+                  domainVerifiedAt={organization?.domainVerifiedAt ?? null}
+                  cnameTarget={`${organization?.slug ?? "mi-negocio"}.${process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"}`}
                   canManage={admin}
                 />
                 <OrganizationBrandingCard

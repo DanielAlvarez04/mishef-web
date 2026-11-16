@@ -1,39 +1,33 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { Building2Icon } from "lucide-react"
 import { toast } from "sonner"
 
 import { renameOrganization } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useActionForm } from "@/hooks/use-action-form"
-import { AvailabilityLabel } from "@/components/availability-field"
 import { FieldDescription } from "@/components/ui/field"
-import { useDomainStatus } from "@/components/onboarding/domain-field"
-import { isEmptyPatch, sameText } from "@/lib/diff"
+import { sameText } from "@/lib/diff"
 
+/**
+ * Nombre visible del negocio.
+ *
+ * El dominio ya no se edita aquí como texto libre: tiene su propio flujo con
+ * CNAME y verificación por TXT (`CustomDomainCard`). Un dominio escrito a mano
+ * sin verificar permitía reclamar el de otro negocio.
+ */
 export function OrganizationCard({
   name,
-  domain,
   canManage,
 }: {
   name: string
-  domain: string | null
   canManage: boolean
 }) {
   const router = useRouter()
-  const form = useActionForm(() => router.refresh())
   const [value, setValue] = useState(name)
-  // El dominio sigue al valor actual hasta que se edita a mano.
-  const [manualDomain, setManualDomain] = useState<string | null>(
-    domain || null
-  )
-  const domainValue = manualDomain ?? domain ?? ""
-  const domainStatus = useDomainStatus(domainValue, {
-    currentDomain: domain || null,
-  })
+  const [pending, startTransition] = useTransition()
 
   if (!canManage) {
     return (
@@ -41,106 +35,51 @@ export function OrganizationCard({
         <Building2Icon className="size-4 shrink-0 text-muted-foreground" />
         <div className="flex flex-col">
           <span className="font-medium">{name}</span>
-          {domain ? (
-            <span className="text-muted-foreground">
-              Dominio: @{domain}
-            </span>
-          ) : null}
           <span className="text-muted-foreground">
-            Solo un administrador puede cambiar el nombre y el dominio del
-            negocio.
+            Solo un administrador puede cambiar el nombre del negocio.
           </span>
         </div>
       </div>
     )
   }
 
-  const nothingChanged =
-    value.trim() === name && manualDomain === null
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (sameText(name, value)) {
+      toast.info("Sin cambios")
+      return
+    }
+
+    startTransition(async () => {
+      const result = await renameOrganization({ name: value.trim() })
+
+      if (result.ok) {
+        toast.success("Nombre actualizado")
+        router.refresh()
+      } else {
+        toast.error(result.message ?? "No pudimos guardar el nombre")
+      }
+    })
+  }
 
   return (
-    <form
-      className="flex flex-col gap-3"
-      onSubmit={(event) => {
-        event.preventDefault()
-
-        const changes = {
-          ...(sameText(name, value) ? {} : { name: value.trim() }),
-          ...(sameText(domain, domainValue)
-            ? {}
-            : { domain: domainValue.trim() }),
-        }
-
-        if (isEmptyPatch(changes)) {
-          toast.info("Sin cambios")
-          return
-        }
-
-        form.run(() => renameOrganization(changes))
-      }}
-    >
-      <div className="flex flex-col gap-2">
-        <label htmlFor="organization-name" className="text-sm font-medium">
-          Nombre del negocio
-        </label>
+    <form className="flex flex-col gap-3" onSubmit={submit}>
+      <div className="flex flex-col gap-2 sm:flex-row">
         <Input
-          id="organization-name"
-          name="name"
+          aria-label="Nombre del negocio"
           value={value}
           maxLength={80}
           onChange={(event) => setValue(event.target.value)}
-          required
+          className="sm:flex-1"
         />
+        <Button type="submit" disabled={pending}>
+          {pending ? "Guardando..." : "Guardar"}
+        </Button>
       </div>
-
-      <div className="flex flex-col gap-2">
-        <AvailabilityLabel
-          htmlFor="organization-domain"
-          label="Dominio"
-          status={domainStatus}
-        />
-        <Input
-          id="organization-domain"
-          name="domain"
-          autoComplete="off"
-          autoCapitalize="none"
-          spellCheck={false}
-          maxLength={80}
-          placeholder="naranjapimienta.cafe"
-          value={domainValue}
-          onChange={(event) =>
-            setManualDomain(
-              event.target.value === "" ? null : event.target.value
-            )
-          }
-          required
-        />
-        <FieldDescription>
-          Con este dominio se crean los usuarios del equipo: nombre@dominio.
-        </FieldDescription>
-      </div>
-
-      <Button
-        type="submit"
-        disabled={
-          form.pending ||
-          value.trim().length < 2 ||
-          nothingChanged ||
-          domainStatus.state === "taken" ||
-          domainStatus.state === "invalid" ||
-          domainStatus.state === "error"
-        }
-      >
-        {form.pending ? "Guardando..." : "Guardar"}
-      </Button>
-      <p className="text-xs text-muted-foreground">
-        Aparece en la barra lateral y en los documentos del negocio.
-      </p>
-      {form.error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {form.error}
-        </p>
-      ) : null}
+      <FieldDescription>
+        Es el nombre que ven tus clientes en el menú y en los correos.
+      </FieldDescription>
     </form>
   )
 }

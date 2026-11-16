@@ -13,7 +13,6 @@ export default async function OnboardingPage() {
   return (
     <OnboardingFlow
       initialBusinessName={user.organizationName ?? ""}
-      initialDomain={user.organizationDomain ?? ""}
       initialName={user.name ?? ""}
       initialUsername={user.username ?? ""}
       initialCurrency={user.organizationCurrency}

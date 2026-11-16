@@ -16,7 +16,6 @@ import {
   updateOnboardingServiceTypes,
 } from "@/app/onboarding/actions"
 import { AvailabilityLabel } from "@/components/availability-field"
-import { useDomainStatus } from "@/components/onboarding/domain-field"
 import {
   useSuggestedUsername,
   useUsernameStatus,
@@ -29,7 +28,6 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActionForm } from "@/hooks/use-action-form"
-import { domainFromName, normalizeDomain } from "@/lib/domain"
 import { CURRENCY_OPTIONS } from "@/lib/currency-config"
 import { sameText } from "@/lib/diff"
 import { normalizeUsername } from "@/lib/username"
@@ -119,14 +117,12 @@ function splitDisplayName(name: string): { first: string; surname: string } {
 
 export function OnboardingFlow({
   initialBusinessName,
-  initialDomain,
   initialName,
   initialUsername,
   initialCurrency,
   currentUsername,
 }: {
   initialBusinessName: string
-  initialDomain: string
   initialName: string
   initialUsername: string
   /** Moneda configurada; MXN si la organización aún no eligió otra. */
@@ -139,12 +135,6 @@ export function OnboardingFlow({
   // State
   const [businessType, setBusinessType] = useState("")
   const [businessName, setBusinessName] = useState(initialBusinessName)
-  // Dominio completo (con TLD) editable. `null` = sigue al nombre del negocio.
-  const [manualDomain, setManualDomain] = useState<string | null>(null)
-  const domain = manualDomain ?? (domainFromName(businessName) || initialDomain)
-  const domainStatus = useDomainStatus(domain, {
-    currentDomain: initialDomain || null,
-  })
   const [hasBranches, setHasBranches] = useState(false)
 
   const accountName = splitDisplayName(initialName)
@@ -158,11 +148,13 @@ export function OnboardingFlow({
   const initialLocal = localPart(initialUsername)
   const suggestion = useSuggestedUsername(`${firstName} ${lastName}`, {
     enabled: manualLocal === null,
-    resetKey: domain,
+    resetKey: businessName,
   })
   const suggestedLocal = suggestion ? localPart(suggestion) : ""
   const local = manualLocal ?? (suggestedLocal || initialLocal)
-  const username = local && domain ? `${local}@${domain}` : ""
+  // El usuario ya no incluye dominio: el correo es el identificador y el
+  // subdominio resuelve el negocio.
+  const username = local
   const usernameStatus = useUsernameStatus(username, { currentUsername })
 
   const [serviceTypes, setServiceTypes] = useState<string[]>([])
@@ -192,7 +184,6 @@ export function OnboardingFlow({
   const handleBusinessSubmit = () => {
     const fd = new FormData()
     fd.append("name", businessName)
-    fd.append("domain", domain)
     fd.append("hasBranches", hasBranches.toString())
     return businessForm.run(() => updateOnboardingBusiness(fd))
   }
@@ -335,35 +326,6 @@ export function OnboardingFlow({
                   Puedes cambiarlo luego desde Configuración.
                 </FieldDescription>
               </Field>
-
-              <Field>
-                <AvailabilityLabel
-                  htmlFor="business-domain"
-                  label="Dominio"
-                  status={domainStatus}
-                />
-                <Input
-                  id="business-domain"
-                  name="domain"
-                  autoComplete="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  maxLength={80}
-                  placeholder={domainFromName(businessName) || "tunegocio.com"}
-                  value={domain}
-                  onChange={(e) =>
-                    setManualDomain(
-                      normalizeDomain(e.target.value).replace(/\s+/g, "")
-                    )
-                  }
-                  required
-                  className="text-base py-2.5"
-                />
-                <FieldDescription>
-                  Incluye el TLD (por ejemplo .com o .mx). Tus usuarios serán
-                  nombre@{domain || "tunegocio.com"}.
-                </FieldDescription>
-              </Field>
             </div>
 
             <div className="flex items-start gap-3 rounded-lg border bg-muted/40 p-3">
@@ -488,13 +450,9 @@ export function OnboardingFlow({
                   required
                   className="h-11 min-w-0 flex-1 bg-transparent px-3 text-base outline-none placeholder:text-muted-foreground"
                 />
-                <span className="flex max-w-[55%] shrink-0 items-center truncate border-l bg-muted px-3 text-sm text-muted-foreground">
-                  @{domain || "tunegocio.com"}
-                </span>
               </div>
               <FieldDescription>
-                Solo la parte antes de la @; se combina con el dominio del
-                negocio.
+                Tu identificador interno. Para entrar siempre usarás tu correo.
               </FieldDescription>
             </Field>
 
@@ -606,10 +564,6 @@ export function OnboardingFlow({
               <div className="flex items-center justify-center gap-4">
                 <dt className="text-muted-foreground">Negocio</dt>
                 <dd className="font-medium">{businessName.trim()}</dd>
-              </div>
-              <div className="flex items-center justify-center gap-4">
-                <dt className="text-muted-foreground">Dominio</dt>
-                <dd className="font-medium">{domain.trim().toLowerCase()}</dd>
               </div>
               <div className="flex items-center justify-center gap-4">
                 <dt className="text-muted-foreground">Moneda</dt>

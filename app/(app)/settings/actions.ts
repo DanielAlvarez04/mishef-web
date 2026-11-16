@@ -364,3 +364,51 @@ export async function updateOrganizationBranding(
     "/dashboard",
   ])
 }
+
+export interface CustomDomainInstructions {
+  domain: string
+  status: "pending" | "verified"
+  verifiedAt: string | null
+  cname: { name: string; value: string }
+  txt: { name: string; value: string }
+}
+
+export interface CustomDomainCheck {
+  verified: boolean
+  checks: { txt: boolean; cname: boolean }
+}
+
+/** Conecta un dominio propio. Queda pendiente hasta verificar el DNS. */
+export async function connectCustomDomain(
+  domain: string
+): Promise<ActionResult<CustomDomainInstructions>> {
+  const value = domain.trim().toLowerCase()
+
+  if (!value.includes(".")) {
+    return { ok: false, message: "Escribe un dominio válido, por ejemplo app.micafeteria.com" }
+  }
+
+  return mutateApi<CustomDomainInstructions>(
+    "/organizations/domain",
+    "PUT",
+    { domain: value },
+    ["/settings"]
+  )
+}
+
+/** Consulta el DNS real y marca el dominio como verificado si coincide. */
+export async function verifyCustomDomain(): Promise<
+  ActionResult<CustomDomainCheck>
+> {
+  return mutateApi<CustomDomainCheck>(
+    "/organizations/domain/verify",
+    "POST",
+    undefined,
+    ["/settings"]
+  )
+}
+
+/** Desconecta el dominio y borra el token. */
+export async function removeCustomDomain(): Promise<ActionResult> {
+  return mutateApi("/organizations/domain", "DELETE", undefined, ["/settings"])
+}

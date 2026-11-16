@@ -1,10 +1,6 @@
 "use server"
 
-import { apiFetch } from "@/lib/api"
 import { isSupportedCurrency } from "@/lib/currency-config"
-import type { DomainAvailability } from "@/lib/domain"
-import { apiErrorMessage } from "@/lib/http-error"
-import { requireUser } from "@/lib/session"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 
 function text(formData: FormData, key: string): string | undefined {
@@ -38,50 +34,23 @@ export async function updateOnboardingBusinessType(
   )
 }
 
-/** Paso 2: datos del negocio (nombre, dominio, sucursales). */
+/** Paso 2: datos del negocio (nombre y sucursales). */
 export async function updateOnboardingBusiness(
   formData: FormData
 ): Promise<ActionResult> {
   const name = text(formData, "name")
-  const domain = text(formData, "domain")
   const hasBranches = formData.get("hasBranches") === "true"
 
   if (!name || name.length < 2) {
     return { ok: false, message: "Escribe el nombre de tu negocio." }
   }
 
-  if (!domain) {
-    return { ok: false, message: "Escribe el dominio de tu negocio." }
-  }
-
   return mutateApi(
     "/organizations/current",
     "PATCH",
-    { name, domain, hasBranches },
+    { name, hasBranches },
     ["/onboarding", "/dashboard", "/settings"]
   )
-}
-
-/** Comprueba si el dominio está libre entre las organizaciones. */
-export async function checkDomainAvailability(
-  domain: string
-): Promise<DomainAvailability> {
-  await requireUser()
-
-  const response = await apiFetch(
-    `/organizations/domain-available?domain=${encodeURIComponent(domain)}`
-  )
-
-  if (!response.ok) {
-    throw new Error(
-      apiErrorMessage(
-        await response.json().catch(() => null),
-        "No pudimos verificar el dominio"
-      )
-    )
-  }
-
-  return (await response.json()) as DomainAvailability
 }
 
 /** Paso 3: moneda del negocio (MXN o USD). */

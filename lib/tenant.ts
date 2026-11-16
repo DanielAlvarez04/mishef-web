@@ -35,14 +35,20 @@ export async function getTenantSlug(): Promise<string | null> {
  * misma página la usa en varios componentes.
  */
 export const getTenant = cache(async (): Promise<TenantInfo | null> => {
+  const requestHeaders = await headers()
   const slug = await getTenantSlug()
-  if (!slug) return null
+  const host = requestHeaders.get("x-tenant-domain")?.trim().toLowerCase()
+
+  if (!slug && !host) return null
 
   try {
-    const response = await fetch(
-      `${SERVER_API_URL}/public/tenant/${encodeURIComponent(slug)}`,
-      { cache: "no-store" }
-    )
+    const path = slug
+      ? `/public/tenant/${encodeURIComponent(slug)}`
+      : `/public/tenant-by-domain?host=${encodeURIComponent(host ?? "")}`
+
+    const response = await fetch(`${SERVER_API_URL}${path}`, {
+      cache: "no-store",
+    })
 
     if (!response.ok) return null
 

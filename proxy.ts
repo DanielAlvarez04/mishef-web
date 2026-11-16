@@ -143,6 +143,8 @@ function lockRefresh(response: NextResponse): NextResponse {
  * página pide sus datos.
  */
 const TENANT_HEADER = "x-tenant";
+/** Dominio propio (`app.micafeteria.com`) cuando no es un subdominio de Mishef. */
+const TENANT_DOMAIN_HEADER = "x-tenant-domain";
 
 const BASE_DOMAIN = (
   process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
@@ -189,6 +191,23 @@ function tenantOf(request: NextRequest): string | null {
   return tenantFromHost(host);
 }
 
+/** Host público que no es ni el dominio base ni un subdominio suyo. */
+function customDomainOf(request: NextRequest): string | null {
+  const host = (request.headers.get("host") ?? "")
+    .split(":")[0]
+    .trim()
+    .toLowerCase()
+
+  if (!host || host === BASE_DOMAIN) return null
+  if (host.endsWith(`.${BASE_DOMAIN}`)) return null
+  // Desarrollo local y hosts internos: no son dominios de un negocio.
+  if (host === "localhost" || host.endsWith(".local") || /^\d+\.\d+\.\d+\.\d+$/.test(host)) {
+    return null
+  }
+  // Solo nombres con al menos un punto (`app.micafeteria.com`).
+  return host.includes(".") ? host : null
+}
+
 /**
  * `NextResponse.next` con el negocio resuelto.
  *
@@ -198,11 +217,21 @@ function tenantOf(request: NextRequest): string | null {
 function pass(request: NextRequest, headers?: Headers): NextResponse {
   const next = headers ? new Headers(headers) : new Headers(request.headers);
   const slug = tenantOf(request);
+  const customDomain = customDomainOf(request);
 
   if (slug) {
     next.set(TENANT_HEADER, slug);
   } else {
     next.delete(TENANT_HEADER);
+  }
+
+  // Dominio propio: la página lo resuelve contra la API (solo si está
+  // verificado). El middleware no consulta la base para no añadir latencia a
+  // cada petición.
+  if (!slug && customDomain) {
+    next.set(TENANT_DOMAIN_HEADER, customDomain);
+  } else {
+    next.delete(TENANT_DOMAIN_HEADER);
   }
 
   return NextResponse.next({ request: { headers: next } });
