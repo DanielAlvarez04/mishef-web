@@ -20,6 +20,6 @@ export async function createWaste(
 export async function presignWastePhoto(
   contentType: string,
   size: number
-): Promise<ActionResult<{ key: string; uploadUrl: string; publicUrl: string }>> {
+): Promise<ActionResult<{ key: string; uploadUrl: string }>> {
   return mutateApi("/waste/photo", "POST", { contentType, size }, [])
 }
