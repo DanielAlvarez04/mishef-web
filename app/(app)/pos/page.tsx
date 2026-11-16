@@ -50,7 +50,12 @@ export default async function PointOfSalePage() {
     !ordersResponse.ok ||
     !menusResponse.ok
   ) {
-    return <PosOfflineFallback />
+    return (
+      <PosOfflineFallback
+        organizationId={user.organizationId ?? ""}
+        branchId={branch?.id ?? null}
+      />
+    )
   }
 
   const [products, categories, orders, menus] = await Promise.all([
@@ -84,6 +89,8 @@ export default async function PointOfSalePage() {
   return (
     <>
       <OfflineSnapshot
+        organizationId={user.organizationId ?? ""}
+        branchId={branch?.id ?? null}
         items={products}
         categories={categories}
         menus={menus}

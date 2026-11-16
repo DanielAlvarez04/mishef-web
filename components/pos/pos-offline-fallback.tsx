@@ -9,6 +9,7 @@ import { useOfflineSync } from "@/components/offline/offline-provider"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { getCache } from "@/lib/offline/db"
+import { POS_CACHE_SCOPES, tenantCacheKey } from "@/lib/offline/cache-keys"
 
 interface CachedItem {
   id: string
@@ -24,7 +25,13 @@ interface CachedItem {
  * cuenta completa: al volver la conexión, la cola crea la cuenta y la ronda con
  * las claves de idempotencia que ya usa el proveedor offline.
  */
-export function PosOfflineFallback() {
+export function PosOfflineFallback({
+  organizationId,
+  branchId,
+}: {
+  organizationId: string
+  branchId: string | null
+}) {
   const router = useRouter()
   const { enqueueRound, isOnline } = useOfflineSync()
   const [pending, startTransition] = useTransition()
@@ -38,7 +45,9 @@ export function PosOfflineFallback() {
   useEffect(() => {
     let cancelled = false
 
-    void getCache<CachedItem[]>("pos.items")
+    void getCache<CachedItem[]>(
+      tenantCacheKey(POS_CACHE_SCOPES.items, organizationId, branchId)
+    )
       .then((cached) => {
         if (cancelled) return
         setItems(Array.isArray(cached) ? cached : [])
@@ -50,7 +59,7 @@ export function PosOfflineFallback() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [organizationId, branchId])
 
   const lines = items
     .filter((item) => (cart[item.id] ?? 0) > 0)

@@ -6,7 +6,8 @@
     "build": "next build",
     "start": "next start",
     "dev": "next dev -p 3000",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -39,15 +40,18 @@
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.3",
     "@tailwindcss/postcss": "^4.3.3",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "autoprefixer": "^10",
     "eslint": "^9",
     "eslint-config-next": "16.4.3",
+    "jest": "^30.5.2",
     "postcss": "^8.5.31",
     "shadcn": "^4.22.1",
     "tailwindcss": "^4.3.3",
+    "ts-jest": "^29.4.15",
     "typescript": "^5"
   }
 }
