@@ -412,3 +412,15 @@ export async function verifyCustomDomain(): Promise<
 export async function removeCustomDomain(): Promise<ActionResult> {
   return mutateApi("/organizations/domain", "DELETE", undefined, ["/settings"])
 }
+
+/** Cambia la dirección del negocio (una sola vez después del onboarding). */
+export async function changeOrganizationSlug(
+  slug: string
+): Promise<ActionResult<{ slug: string; slugChanges: number }>> {
+  return mutateApi<{ slug: string; slugChanges: number }>(
+    "/organizations/slug",
+    "PATCH",
+    { slug },
+    ["/settings", "/dashboard"]
+  )
+}

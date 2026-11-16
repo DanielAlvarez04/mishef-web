@@ -149,6 +149,8 @@ function lockRefresh(response: NextResponse): NextResponse {
  * página pide sus datos.
  */
 const TENANT_HEADER = "x-tenant";
+/** Ruta original de la petición, para redirecciones entre hosts. */
+const PATH_HEADER = "x-pathname";
 /** Dominio propio (`app.micafeteria.com`) cuando no es un subdominio de Mishef. */
 const TENANT_DOMAIN_HEADER = "x-tenant-domain";
 
@@ -230,6 +232,9 @@ function pass(request: NextRequest, headers?: Headers): NextResponse {
   } else {
     next.delete(TENANT_HEADER);
   }
+
+  // Ruta original: la usan las redirecciones por cambio de dirección.
+  next.set(PATH_HEADER, `${request.nextUrl.pathname}${request.nextUrl.search}`);
 
   // Dominio propio: la página lo resuelve contra la API (solo si está
   // verificado). El middleware no consulta la base para no añadir latencia a

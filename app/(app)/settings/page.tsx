@@ -10,6 +10,7 @@ import {
 
 import { OrganizationCard } from "@/components/settings/organization-card"
 import { OrganizationBrandingCard } from "@/components/settings/organization-branding-card"
+import { AddressCard } from "@/components/settings/address-card"
 import { CustomDomainCard } from "@/components/settings/custom-domain-card"
 import {
   KitchenOrderCard,
@@ -190,6 +191,7 @@ export default async function SettingsPage({
         domainToken: string | null
         domainVerifiedAt: string | null
         customDomainEnabled: boolean
+        slugChanges: number
       })
     : null
   const practiceExpired =
@@ -476,6 +478,28 @@ export default async function SettingsPage({
                   name={user.organizationName ?? "Sin organización activa"}
                   canManage={admin}
                 />
+                <AddressCard
+                  slug={organization?.slug ?? ""}
+                  slugChanges={organization?.slugChanges ?? 0}
+                  canManage={admin}
+                />
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Configuración inicial</CardTitle>
+                    <CardDescription>
+                      Puedes repetir el asistente para revisar o cambiar los
+                      datos del negocio. Nada de lo que ya funciona se borra.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Link
+                      href="/onboarding"
+                      className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+                    >
+                      Volver a ejecutar la configuración
+                    </Link>
+                  </CardContent>
+                </Card>
                 <CustomDomainCard
                   domain={organization?.domain ?? null}
                   domainToken={organization?.domainToken ?? null}

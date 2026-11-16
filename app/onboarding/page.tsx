@@ -6,7 +6,9 @@ import { isAdmin, requireUser } from "@/lib/session"
 export default async function OnboardingPage() {
   const user = await requireUser()
 
-  if (user.onboarded || !isAdmin(user)) {
+  // Se puede repetir como asistente de configuración; solo los administradores
+  // pueden hacerlo.
+  if (!isAdmin(user)) {
     redirect("/dashboard")
   }
 

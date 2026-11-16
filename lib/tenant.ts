@@ -1,5 +1,6 @@
 import { cache } from "react"
 import { headers } from "next/headers"
+import { redirect } from "next/navigation"
 
 /**
  * Resolución del negocio a partir del subdominio.
@@ -11,12 +12,17 @@ import { headers } from "next/headers"
 export interface TenantInfo {
   name: string
   slug: string
+  /** Dirección usada en la petición; si difiere de `slug`, se redirige. */
+  requestedSlug?: string
   brandColor: string | null
   logoUrl: string | null
   address: string | null
   latitude: string | null
   longitude: string | null
 }
+
+/** Dominio base de los negocios. */
+const TENANT_DOMAIN = process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
 
 const SERVER_API_URL =
   process.env.API_URL ??
@@ -60,6 +66,14 @@ export const getTenant = cache(async (): Promise<TenantInfo | null> => {
     if (!response.ok) return null
 
     const data = (await response.json()) as TenantInfo
+
+    // El negocio cambió de dirección: se redirige 301 al host nuevo
+    // conservando la ruta, para que los QR y enlaces viejos sigan sirviendo.
+    if (slug && data.requestedSlug && data.requestedSlug !== data.slug) {
+      const path = requestHeaders.get("x-pathname") ?? "/"
+      redirect(`https://${data.slug}.${TENANT_DOMAIN}${path}`)
+    }
+
     return data?.slug ? data : null
   } catch {
     return null
