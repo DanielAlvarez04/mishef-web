@@ -1,6 +1,7 @@
 import "./globals.css";
 
 import { Inter } from "next/font/google";
+import Script from "next/script";
 import { cn } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
@@ -63,6 +64,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </TooltipProvider>
           </KeyboardShortcutsProvider>
         </ThemeProvider>
+        {/*
+          Cloudflare Web Analytics (RUM + Core Web Vitals). La inyección
+          automática de Cloudflare no entra en las respuestas HTML que Next
+          envía en streaming, así que el beacon se carga aquí. `afterInteractive`
+          no bloquea el render y el script es asíncrono.
+        */}
+        {process.env.NODE_ENV === "production" ? (
+          <Script
+            src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon={JSON.stringify({
+              token: "291a83099c0c4751bf581e99f8eacf3c",
+            })}
+            strategy="afterInteractive"
+          />
+        ) : null}
       </body>
     </html>
   );
