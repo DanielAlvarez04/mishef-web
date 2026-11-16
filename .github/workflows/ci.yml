@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck + lint + build
+    runs-on: ubuntu-latest
+
+    env:
+      # Valores públicos de producción: solo se usan para compilar. Los
+      # NEXT_PUBLIC_* se incrustan en el bundle, así que el build necesita
+      # alguno definido para no caer en el fallback de localhost.
+      NEXT_PUBLIC_API_URL: https://api.mishef.co/v1
+      NEXT_PUBLIC_R2_PUBLIC_URL: https://img.mishef.co
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # @hookform/resolvers@6 declara peer deps de React 18.
+      - run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
