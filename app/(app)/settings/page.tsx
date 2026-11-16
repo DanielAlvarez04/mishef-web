@@ -481,7 +481,9 @@ export default async function SettingsPage({
                   domainToken={organization?.domainToken ?? null}
                   domainVerifiedAt={organization?.domainVerifiedAt ?? null}
                   enabled={organization?.customDomainEnabled ?? false}
-                  cnameTarget={`${organization?.slug ?? "mi-negocio"}.${process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"}`}
+                  cnameTarget={
+                    process.env.NEXT_PUBLIC_SAAS_ORIGIN ?? "saas.mishef.co"
+                  }
                   canManage={admin}
                 />
                 <OrganizationBrandingCard
