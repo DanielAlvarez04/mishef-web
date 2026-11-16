@@ -162,10 +162,20 @@ export function OfflineProvider({
             tableNumber: attempt.order.tableNumber,
             isTakeaway: attempt.order.isTakeaway,
             idempotencyKey: attempt.order.idempotencyKey,
+            // Si otro dispositivo ya abrió la mesa sin red, la ronda se une a
+            // esa cuenta en lugar de crear una segunda.
+            reuseOpenTable: true,
           })
 
           if (!created.ok || !created.data) {
             return await fail(attempt, created)
+          }
+
+          if (created.data.reconciled) {
+            toast.info(
+              `La mesa ${attempt.order.tableNumber ?? ""} ya estaba abierta`,
+              { description: "La ronda se unió a la cuenta existente." }
+            )
           }
 
           orderId = created.data.id

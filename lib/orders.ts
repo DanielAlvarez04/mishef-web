@@ -341,6 +341,8 @@ export const GUEST_TITLES: GuestTitle[] = [
 
 export interface Order {
   id: string
+  /** `true` cuando la API la devolvió por reconciliación de mesa offline. */
+  reconciled?: boolean
   tableNumber: string | null
   /** Número de comensales de la mesa. */
   partySize: number

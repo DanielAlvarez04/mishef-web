@@ -52,6 +52,11 @@ export interface CreateOrderInput {
   /** Personas de la cuenta. */
   guests?: CreateOrderGuestInput[]
   idempotencyKey?: string
+  /**
+   * Sincronización offline: si la mesa ya tiene una cuenta abierta en el
+   * servidor, unirse a ella en vez de abrir otra.
+   */
+  reuseOpenTable?: boolean
 }
 
 export async function createOrder(
