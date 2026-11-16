@@ -115,7 +115,7 @@ function withSessionCookies(
     cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join("; ")
   )
 
-  const response = NextResponse.next({ request: { headers } })
+  const response = pass(request, headers);
   for (const raw of setCookies) {
     response.headers.append("set-cookie", raw)
   }
@@ -131,6 +131,81 @@ function lockRefresh(response: NextResponse): NextResponse {
   )
 
   return response
+}
+
+/**
+ * Resolución del negocio por dominio.
+ *
+ * `micafeteria.mishef.co`  → cabecera `x-tenant: micafeteria`
+ * `app.mishef.co`          → sin cabecera (panel de la cuenta)
+ *
+ * No consulta la base: solo extrae el slug. La API valida que exista cuando la
+ * página pide sus datos.
+ */
+const TENANT_HEADER = "x-tenant";
+
+const BASE_DOMAIN = (
+  process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
+)
+  .trim()
+  .toLowerCase();
+
+/** Subdominios de infraestructura: nunca son de un negocio. */
+const RESERVED_SUBDOMAINS = new Set([
+  "admin",
+  "api",
+  "app",
+  "auth",
+  "cdn",
+  "dokploy",
+  "docs",
+  "img",
+  "mail",
+  "static",
+  "status",
+  "support",
+  "www",
+]);
+
+function tenantFromHost(host: string): string | null {
+  if (host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`) return null;
+
+  const suffix = `.${BASE_DOMAIN}`;
+  if (!host.endsWith(suffix)) return null;
+
+  const sub = host.slice(0, -suffix.length);
+  if (!sub || sub.includes(".")) return null;
+  if (RESERVED_SUBDOMAINS.has(sub)) return null;
+
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(sub) ? sub : null;
+}
+
+function tenantOf(request: NextRequest): string | null {
+  const host = (request.headers.get("host") ?? "")
+    .split(":")[0]
+    .trim()
+    .toLowerCase();
+
+  return tenantFromHost(host);
+}
+
+/**
+ * `NextResponse.next` con el negocio resuelto.
+ *
+ * Todas las salidas que renderizan pasan por aquí; si no, una página de
+ * subdominio no vería la cabecera `x-tenant`.
+ */
+function pass(request: NextRequest, headers?: Headers): NextResponse {
+  const next = headers ? new Headers(headers) : new Headers(request.headers);
+  const slug = tenantOf(request);
+
+  if (slug) {
+    next.set(TENANT_HEADER, slug);
+  } else {
+    next.delete(TENANT_HEADER);
+  }
+
+  return NextResponse.next({ request: { headers: next } });
 }
 
 function redirectToLogin(request: NextRequest): NextResponse {
@@ -200,7 +275,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/api") ||
     pathname.includes(".")
   ) {
-    return NextResponse.next()
+    return pass(request)
   }
 
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value
@@ -217,18 +292,18 @@ export async function proxy(request: NextRequest) {
     // La pantalla del cliente se abre en un monitor sin sesión y nunca debe
     // redirigirse al panel.
     if (pathname.startsWith("/display")) {
-      return NextResponse.next()
+      return pass(request)
     }
 
     if (!accessToken || isJwtExpired(accessToken)) {
-      return NextResponse.next()
+      return pass(request)
     }
 
     if (await accessTokenIsValid(accessToken)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
     }
 
-    const response = NextResponse.next()
+    const response = pass(request)
     response.cookies.delete(ACCESS_TOKEN_COOKIE)
     response.cookies.delete(REFRESH_TOKEN_COOKIE)
     return response
@@ -245,7 +320,7 @@ export async function proxy(request: NextRequest) {
 
   // Token todavía válido y fuera de la ventana de renovación: nada que hacer.
   if (accessToken && !expiresSoon) {
-    return NextResponse.next()
+    return pass(request)
   }
 
   // Otra petición está renovando y el token actual aún sirve: se deja pasar
@@ -256,7 +331,7 @@ export async function proxy(request: NextRequest) {
     accessToken &&
     !isJwtExpired(accessToken)
   ) {
-    return NextResponse.next()
+    return pass(request)
   }
 
   if (!refreshToken) {
@@ -286,7 +361,7 @@ export async function proxy(request: NextRequest) {
     // Sin conexión con la API: si el access token aún es válido seguimos; si no,
     // el usuario tendrá que volver a entrar.
     if (accessToken && !isJwtExpired(accessToken)) {
-      return NextResponse.next()
+      return pass(request)
     }
   }
 

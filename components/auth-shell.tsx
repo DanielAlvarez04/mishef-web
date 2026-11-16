@@ -5,7 +5,14 @@ import { GalleryVerticalEndIcon } from "lucide-react"
  * Marco visual compartido por las pantallas de autenticación:
  * panel de formulario + panel con el degradado del tema.
  */
-export function AuthShell({ children }: { children: React.ReactNode }) {
+export function AuthShell({
+  children,
+  name = "Mishef",
+}: {
+  children: React.ReactNode
+  /** Nombre visible del negocio (marca blanca en subdominios). */
+  name?: string
+}) {
   return (
     <div className="grid h-svh overflow-y-auto lg:grid-cols-2">
       <div className="flex flex-col gap-4 p-6 md:p-10">
@@ -16,7 +23,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <div className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground">
             <GalleryVerticalEndIcon className="size-4" />
           </div>
-          Naranja Pimienta
+          {name}
         </Link>
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm">{children}</div>

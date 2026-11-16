@@ -22,6 +22,8 @@ interface LoginFormProps extends React.ComponentProps<"form"> {
   initialChallenge?: { challengeId: string; email: string }
   initialError?: string | null
   notice?: string | null
+  /** Slug del negocio cuando se entra por su subdominio. */
+  tenant?: string
 }
 
 export function LoginForm({
@@ -30,6 +32,7 @@ export function LoginForm({
   initialChallenge,
   initialError,
   notice,
+  tenant,
   ...props
 }: LoginFormProps) {
   const router = useRouter()
@@ -60,7 +63,7 @@ export function LoginForm({
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({ identifier, password, tenant }),
       })
 
       const data = await response.json().catch(() => null)

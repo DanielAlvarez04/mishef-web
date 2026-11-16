@@ -4,6 +4,7 @@ import { AuthShell } from "@/components/auth-shell"
 import { LoginForm } from "@/components/login-form"
 import { oauthErrorMessage } from "@/lib/auth-errors"
 import { getCurrentUser } from "@/lib/session"
+import { getTenant } from "@/lib/tenant"
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>
 
@@ -22,6 +23,7 @@ export default async function LoginPage({
   }
 
   const params = await searchParams
+  const tenant = await getTenant()
   const error = oauthErrorMessage(first(params.error))
   const challengeId = first(params.challengeId)
   const email = first(params.email)
@@ -33,8 +35,9 @@ export default async function LoginPage({
       : null
 
   return (
-    <AuthShell>
+    <AuthShell name={tenant?.name}>
       <LoginForm
+        tenant={tenant?.slug}
         initialIdentifier={email}
         initialError={error}
         notice={notice}

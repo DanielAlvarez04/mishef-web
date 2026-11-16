@@ -48,7 +48,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
   const [businessName, setBusinessName] = useState("")
   const [slug, setSlug] = useState("")
   const [slugEdited, setSlugEdited] = useState(false)
-  const [slugStatus, setSlugStatus] = useState<
+  const [checkedStatus, setCheckedStatus] = useState<
     "idle" | "checking" | "free" | "taken" | "invalid"
   >("idle")
   const [name, setName] = useState("")
@@ -61,31 +61,22 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
     ? `${GOOGLE_PATH}?business=${encodeURIComponent(businessName.trim())}`
     : GOOGLE_PATH
 
-  // Mientras el usuario no escriba su propia dirección, se sugiere a partir del
-  // nombre del negocio.
-  useEffect(() => {
-    if (slugEdited) return
-    setSlug(slugifyClient(businessName))
-  }, [businessName, slugEdited])
+  // Sugerencia derivada: mientras el usuario no escriba su propia dirección, se
+  // calcula a partir del nombre. Sin efecto ni estado duplicado.
+  const effectiveSlug = slugEdited ? slug : slugifyClient(businessName)
+  const candidate = effectiveSlug.trim()
+  const localStatus =
+    candidate.length === 0 ? "idle" : candidate.length < 3 ? "invalid" : null
 
   // Disponibilidad con debounce: una petición por pausa de tecleo, no por tecla.
   useEffect(() => {
-    const candidate = slug.trim()
-
-    if (!candidate) {
-      setSlugStatus("idle")
-      return
-    }
-
-    if (candidate.length < 3) {
-      setSlugStatus("invalid")
-      return
-    }
+    if (localStatus) return
 
     let cancelled = false
-    setSlugStatus("checking")
 
     const timer = setTimeout(async () => {
+      setCheckedStatus("checking")
+
       try {
         const response = await fetch(
           `${API_BASE_URL}/public/slug-available?slug=${encodeURIComponent(candidate)}`
@@ -97,14 +88,14 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
         if (cancelled) return
 
         if (data?.available) {
-          setSlugStatus("free")
+          setCheckedStatus("free")
         } else if (data?.reason === "invalid" || data?.reason === "reserved") {
-          setSlugStatus("invalid")
+          setCheckedStatus("invalid")
         } else {
-          setSlugStatus("taken")
+          setCheckedStatus("taken")
         }
       } catch {
-        if (!cancelled) setSlugStatus("idle")
+        if (!cancelled) setCheckedStatus("idle")
       }
     }, 350)
 
@@ -112,7 +103,9 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
       cancelled = true
       clearTimeout(timer)
     }
-  }, [slug])
+  }, [candidate, localStatus])
+
+  const slugStatus = localStatus ?? checkedStatus
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -142,7 +135,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           organizationName: businessName.trim(),
-          slug: slug.trim() || undefined,
+          slug: effectiveSlug.trim() || undefined,
           name: name.trim() || undefined,
           email: email.trim(),
           password,
@@ -213,7 +206,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
               spellCheck={false}
               placeholder="mi-cafeteria"
               maxLength={32}
-              value={slug}
+              value={effectiveSlug}
               onChange={(event) => {
                 setSlugEdited(true)
                 setSlug(slugifyClient(event.target.value))
@@ -237,7 +230,7 @@ export function RegisterForm({ className, ...props }: React.ComponentProps<"form
               </span>
             ) : slugStatus === "free" ? (
               <span className="text-emerald-600 dark:text-emerald-400">
-                Disponible: https://{slug}.{TENANT_DOMAIN}
+                Disponible: https://{effectiveSlug}.{TENANT_DOMAIN}
               </span>
             ) : (
               "Así entrarán tu equipo y tus clientes. Puedes cambiarla."

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { UsersTable } from "@/components/users/users-table"
+import { InviteTeamForm } from "@/components/users/invite-team-form"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { isAdmin, requireUser } from "@/lib/session"
@@ -36,12 +37,15 @@ export default async function UsersPage() {
   const users = (await response.json()) as InternalUser[]
 
   return (
-    <UsersTable
-      users={users}
-      branches={branches}
-      activeBranch={activeBranch}
-      currentUserId={user.id}
-      organizationDomain={user.organizationDomain ?? ""}
-    />
+    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
+      <InviteTeamForm />
+      <UsersTable
+        users={users}
+        branches={branches}
+        activeBranch={activeBranch}
+        currentUserId={user.id}
+        organizationDomain={user.organizationDomain ?? ""}
+      />
+    </div>
   )
 }

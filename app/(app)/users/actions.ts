@@ -212,3 +212,27 @@ export async function purgeDeletedUsers(): Promise<
     USER_PATHS
   )
 }
+
+/**
+ * Invita a una persona por correo. La API crea un token de un solo uso y envía
+ * el enlace; la persona lo canjea en `/join/<token>`.
+ */
+export async function inviteTeamMember(
+  formData: FormData
+): Promise<ActionResult> {
+  return mutateApi(
+    "/users/invitations",
+    "POST",
+    {
+      email: text(formData, "email"),
+      roles: roles(formData),
+      branchId: text(formData, "branchId"),
+    },
+    USER_PATHS
+  )
+}
+
+/** Cancela una invitación que todavía no se aceptó. */
+export async function cancelTeamInvitation(id: string): Promise<ActionResult> {
+  return mutateApi(`/users/invitations/${id}`, "DELETE", undefined, USER_PATHS)
+}
