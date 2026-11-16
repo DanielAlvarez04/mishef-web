@@ -33,6 +33,7 @@ import {
   PercentIcon,
   Settings2Icon,
   ShieldAlertIcon,
+  Trash2Icon,
   ShoppingBasketIcon,
   UsersIcon,
 } from "lucide-react"
@@ -90,6 +91,11 @@ const data = {
       title: "Asistencia",
       url: "/attendance",
       icon: <ClockIcon />,
+    },
+    {
+      title: "Merma",
+      url: "/waste",
+      icon: <Trash2Icon />,
     },
   ],
   navSecondary: [
