@@ -11,7 +11,7 @@ import {
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { formatMoney } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { QUEUED_STATUS_LABELS, type QueuedRound } from "@/lib/offline/types"
 import { cn } from "cn"
 
@@ -28,6 +28,7 @@ function statusVariant(status: QueuedRound["status"]) {
  * el envío: aquí nunca se usa la palabra "enviada" para una operación local.
  */
 export function PendingOperations() {
+  const money = useMoney()
   const { operations, isOnline, syncing, syncNow, retryOperation, discardOperation } =
     useOfflineSync()
 
@@ -68,7 +69,7 @@ export function PendingOperations() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{operation.label}</p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {formatMoney(operation.total)} · {operation.attempts}{" "}
+                  {money(operation.total)} · {operation.attempts}{" "}
                   {operation.attempts === 1 ? "intento" : "intentos"}
                 </p>
               </div>

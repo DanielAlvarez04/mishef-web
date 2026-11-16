@@ -27,7 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { formatMoney } from "@/lib/catalog"
+import { useMoney, type MoneyFormatter } from "@/lib/currency"
 import type { PosOperationsReport } from "@/lib/dashboard"
 
 /** Preferencia manual: `1` = visible, `0` = oculto. */
@@ -100,6 +100,7 @@ export function OperationsReport({
 }: {
   report: PosOperationsReport
 }) {
+  const money = useMoney()
   const manual = React.useSyncExternalStore(
     subscribeVisibility,
     readVisibility,
@@ -415,19 +416,19 @@ export function OperationsReport({
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <Metric
                   label="Por cliente · con IVA"
-                  value={formatMoneyValue(report.guests.averageGrossPerGuest)}
+                  value={formatMoneyValue(report.guests.averageGrossPerGuest, money)}
                 />
                 <Metric
                   label="Por cliente · sin IVA"
-                  value={formatMoneyValue(report.guests.averageNetPerGuest)}
+                  value={formatMoneyValue(report.guests.averageNetPerGuest, money)}
                 />
                 <Metric
                   label="Por mesa (asiento) · con IVA"
-                  value={formatMoneyValue(report.guests.averageGrossPerSeat)}
+                  value={formatMoneyValue(report.guests.averageGrossPerSeat, money)}
                 />
                 <Metric
                   label="Por mesa (asiento) · sin IVA"
-                  value={formatMoneyValue(report.guests.averageNetPerSeat)}
+                  value={formatMoneyValue(report.guests.averageNetPerSeat, money)}
                 />
               </div>
 
@@ -478,8 +479,8 @@ export function OperationsReport({
                   <TableRow>
                     <TableCell>Sin asignar (General)</TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(report.guests.generalGross)} con IVA ·{" "}
-                      {formatMoney(report.guests.generalNet)} sin IVA
+                      {money(report.guests.generalGross)} con IVA ·{" "}
+                      {money(report.guests.generalNet)} sin IVA
                     </TableCell>
                   </TableRow>
                 </TableBody>
@@ -545,10 +546,13 @@ function formatNumber(value: number | null, digits: number): string {
   return value.toFixed(digits)
 }
 
-function formatMoneyValue(value: number | null): string {
+function formatMoneyValue(
+  value: number | null,
+  money: MoneyFormatter
+): string {
   if (value === null || !Number.isFinite(value)) return "Sin datos"
 
-  return formatMoney(value)
+  return money(value)
 }
 
 function formatDay(value: string): string {

@@ -29,6 +29,8 @@ export interface PosDisplayState {
 
 export interface PosDisplayPublic {
   organizationName: string
+  /** Moneda del negocio para formatear los importes en la pantalla. */
+  currency: string
   branchName: string | null
   displayName: string
   state: PosDisplayState | null

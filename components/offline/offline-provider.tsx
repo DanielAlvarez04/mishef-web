@@ -4,7 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 
-import { formatMoney } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import {
   deleteQueuedRound,
   listQueuedRounds,
@@ -89,6 +89,7 @@ export function OfflineProvider({
   children: React.ReactNode
 }) {
   const router = useRouter()
+  const money = useMoney()
   const isOnline = React.useSyncExternalStore(
     subscribeToConnectivity,
     readOnline,
@@ -183,7 +184,7 @@ export function OfflineProvider({
         await deleteQueuedRound(attempt.id)
         await refresh()
 
-        toast.success(`Ronda sincronizada · ${formatMoney(attempt.total)}`, {
+        toast.success(`Ronda sincronizada · ${money(attempt.total)}`, {
           description: attempt.label,
         })
 
@@ -200,7 +201,7 @@ export function OfflineProvider({
         return "offline"
       }
     },
-    [fail, persist, refresh, router]
+    [fail, persist, refresh, router, money]
   )
 
   const flush = React.useCallback(async () => {

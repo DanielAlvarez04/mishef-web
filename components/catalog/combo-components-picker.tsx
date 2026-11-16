@@ -16,7 +16,8 @@ import {
   ComboboxList,
 } from "@/components/ui/combobox"
 import { EntityImage } from "@/components/ui/entity-image"
-import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { type ArticleListItem } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { CARD_IMAGE_SIZES, type ImageAssets } from "@/lib/images"
 import { cn } from "cn"
 
@@ -87,6 +88,7 @@ export function ComboComponentsPicker({
   onChange: (next: ComboComponentRow[]) => void
   disabled?: boolean
 }) {
+  const money = useMoney()
   const presentations = React.useMemo(
     () => flattenPresentations(products),
     [products]
@@ -203,7 +205,7 @@ export function ComboComponentsPicker({
                   {presentation.name}
                 </span>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  {formatMoney(presentation.price)}
+                  {money(presentation.price)}
                 </span>
               </ComboboxItem>
             )}
@@ -281,7 +283,7 @@ export function ComboComponentsPicker({
 
                       <div className="mt-auto flex min-w-0 flex-col gap-1">
                         <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
-                          {formatMoney(presentation.price)}
+                          {money(presentation.price)}
                         </span>
                         <p
                           className="line-clamp-2 text-pretty text-sm font-semibold leading-snug drop-shadow-sm"

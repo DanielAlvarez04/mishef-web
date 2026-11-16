@@ -1,8 +1,11 @@
 "use server"
 
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 import type {
+  ChargeSummary,
   ConsumptionWarning,
+  GuestAgeRange,
+  GuestSex,
   GuestTitle,
   Order,
   OrderChannel,
@@ -32,6 +35,8 @@ export interface SendRoundInput {
 export interface CreateOrderGuestInput {
   name?: string
   title?: GuestTitle | null
+  sex?: GuestSex | null
+  ageRange?: GuestAgeRange | null
 }
 
 export interface CreateOrderInput {
@@ -53,6 +58,30 @@ export async function createOrder(
   input: CreateOrderInput
 ): Promise<ActionResult<Order>> {
   return mutateApi<Order>("/orders", "POST", input, ORDER_PATHS)
+}
+
+/**
+ * Detalle de una cuenta con sus rondas y artículos.
+ *
+ * La lista de cuentas del POS llega con rondas resumidas (solo conteos), así
+ * que el repaso de cobro pide el detalle al abrir el diálogo.
+ */
+export async function getOrderDetail(
+  orderId: string
+): Promise<ActionResult<Order>> {
+  return readApi<Order>(`/orders/${orderId}`)
+}
+
+/**
+ * Resumen ligero para el diálogo de cobro (artículos, clientes y partes).
+ *
+ * Evita el detalle completo (historial, extras, opciones y exclusiones), que
+ * es lo que hacía lento el repaso.
+ */
+export async function getChargeSummary(
+  orderId: string
+): Promise<ActionResult<ChargeSummary>> {
+  return readApi<ChargeSummary>(`/orders/${orderId}/charge-summary`)
 }
 
 export async function sendRound(

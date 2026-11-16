@@ -45,6 +45,7 @@ import {
   type Recipe,
 } from "@/lib/catalog"
 import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
+import { useMoney } from "@/lib/currency"
 
 import { ComboCards } from "./combo-cards"
 import {
@@ -80,6 +81,7 @@ export function CombosTable({
   onDeactivate: (combo: ArticleListItem) => Promise<boolean>
   onDelete: (combos: ArticleListItem[]) => Promise<boolean>
 }) {
+  const money = useMoney()
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [promotionFilter, setPromotionFilter] =
     React.useState<string>(DATA_TABLE_ALL)
@@ -205,8 +207,9 @@ export function CombosTable({
       createComboColumns(actions, {
         selectable: canManage,
         recipes,
+        money,
       }),
-    [actions, canManage, recipes]
+    [actions, canManage, recipes, money]
   )
 
   async function confirmPendingAction() {

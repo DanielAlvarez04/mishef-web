@@ -8,7 +8,8 @@ import {
   HoverCardContent,
   HoverCardTrigger,
 } from "@/components/ui/hover-card"
-import { formatMoney, type ComboComponent } from "@/lib/catalog"
+import { type ComboComponent } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { cn } from "cn"
 
 import { comboComponentPrice } from "./combo-metrics"
@@ -19,6 +20,7 @@ export function ComboComponentsPreview({
 }: {
   components: ComboComponent[]
 }) {
+  const money = useMoney()
   const count = components.length
 
   if (count === 0) {
@@ -63,7 +65,7 @@ export function ComboComponentsPreview({
                 ) : null}
               </span>
               <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                {formatMoney(comboComponentPrice(component))}
+                {money(comboComponentPrice(component))}
               </span>
             </div>
           ))}

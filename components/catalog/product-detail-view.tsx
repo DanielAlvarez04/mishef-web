@@ -27,6 +27,7 @@ export function ProductDetailView({
   optionGroups,
   optionPresets,
   organizationTaxRate,
+  organizationCurrency,
   canManage,
 }: {
   product: ItemDetail
@@ -36,6 +37,8 @@ export function ProductDetailView({
   optionGroups: OptionGroup[]
   optionPresets: OptionGroupPreset[]
   organizationTaxRate: string
+  /** Moneda del negocio (código ISO 4217). */
+  organizationCurrency: string
   canManage: boolean
 }) {
   return (
@@ -64,7 +67,7 @@ export function ProductDetailView({
             <p className="text-sm text-muted-foreground">
               {product.sku ?? "Sin SKU"} ·{" "}
               {product.category?.name ?? "Sin categoría"} ·{" "}
-              {formatMoney(product.price)} · IVA{" "}
+              {formatMoney(product.price, organizationCurrency)} · IVA{" "}
               {formatPercent(product.taxRate ?? organizationTaxRate)}
             </p>
           </div>

@@ -99,6 +99,7 @@ export default async function ProductDetailPage({
         user.organizationUseCoreOptionGroups ? optionPresets : []
       }
       organizationTaxRate={user.organizationTaxRate}
+      organizationCurrency={user.organizationCurrency}
       canManage={canManageCatalog(user.roles)}
     />
   )

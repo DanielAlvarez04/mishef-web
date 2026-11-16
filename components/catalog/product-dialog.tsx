@@ -113,6 +113,7 @@ import {
   isNoPriceOptionGroup,
   roundQuantity,
 } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import type {
   ArticleListItem,
   Category,
@@ -394,6 +395,7 @@ export function ProductDialog({
   onSaved?: (saveAs: ProductSaveAs) => void
 }) {
   const router = useRouter()
+  const currency = useCurrency()
   const isNew = !article && !recipe
   const [saveAs, setSaveAs] = useState<ProductSaveAs>(() =>
     initialProductSaveAs(recipe, article, initialSaveAs)
@@ -2327,7 +2329,7 @@ export function ProductDialog({
                         placeholder="0.00"
                       />
                       <InputGroupAddon align="inline-end">
-                        <InputGroupText>MXN</InputGroupText>
+                        <InputGroupText>{currency}</InputGroupText>
                       </InputGroupAddon>
                     </InputGroup>
                   </Field>

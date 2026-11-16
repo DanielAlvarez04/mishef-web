@@ -38,6 +38,9 @@ export interface Payment {
   method: PaymentMethod
   amount: string
   tipAmount?: string
+  tipPercent?: string | null
+  tipSource?: TipSource | null
+  tipBaseAmount?: string | null
   tipRecipientId?: string | null
   cashReceived?: string | null
   changeGiven?: string | null
@@ -51,6 +54,13 @@ export interface Payment {
   providerStatus?: string | null
   providerStatusDetail?: string | null
   terminalId?: string | null
+  splitId?: string | null
+  split?: {
+    id: string
+    label: string | null
+    expectedAmount: string
+    status: SplitStatus
+  } | null
   user: { id: string; name: string | null; username: string | null } | null
   confirmedBy: { id: string; name: string | null; username: string | null } | null
   tipRecipient?: {
@@ -58,6 +68,76 @@ export interface Payment {
     name: string | null
     username: string | null
   } | null
+}
+
+export type TipSource = "NONE" | "SUGGESTED" | "CUSTOM" | "CUSTOMER_DISPLAY"
+
+export type SplitMode = "BY_GUEST" | "EQUAL" | "CUSTOM"
+export type SplitStatus = "OPEN" | "PAID" | "CANCELLED"
+
+/** Parte de una cuenta dividida para cobrarla. */
+export interface OrderSplit {
+  id: string
+  label: string | null
+  mode: SplitMode
+  status: SplitStatus
+  guestId: string | null
+  guestName: string | null
+  expectedAmount: number
+  paidAmount: number
+  pendingAmount: number
+  remainingAmount: number
+  sortOrder: number
+  payments?: Array<{
+    id: string
+    amount: string
+    status: PaymentStatus
+    method: PaymentMethod
+  }>
+}
+
+/** Pago tal como lo entrega el resumen de cobro (sin relaciones). */
+export interface ChargeSummaryPayment {
+  id: string
+  method: PaymentMethod
+  amount: string
+  tipAmount: string
+  status: PaymentStatus
+  splitId: string | null
+  provider: string | null
+  createdAt: string
+  confirmedAt: string | null
+}
+
+/** Resumen ligero que consume el diálogo de cobro. */
+export interface ChargeSummary {
+  id: string
+  tableNumber: string | null
+  partySize: number
+  channel: OrderChannel
+  customerName: string | null
+  total: string
+  subtotal: string
+  taxTotal: string
+  deliveryFee: string
+  paidTotal: string
+  balance: string
+  payments: ChargeSummaryPayment[]
+  guests: OrderGuest[]
+  rounds: Array<{
+    id: string
+    items: Array<{
+      id: string
+      itemName: string
+      variantName: string | null
+      quantity: number
+      subtotal: string
+      guestId: string | null
+      guestName: string | null
+      notes: string | null
+    }>
+  }>
+  splits: OrderSplit[]
 }
 
 
@@ -196,8 +276,36 @@ export interface OrderGuest {
   id: string
   name: string
   title: GuestTitle | null
+  sex: GuestSex | null
+  ageRange: GuestAgeRange | null
   sortOrder: number
 }
+
+export type GuestSex = "MASCULINO" | "FEMENINO" | "LGBT"
+
+export const GUEST_SEX_LABELS: Record<GuestSex, string> = {
+  MASCULINO: "Masculino",
+  FEMENINO: "Femenino",
+  LGBT: "LGBT+",
+}
+
+export const GUEST_SEXES: GuestSex[] = ["MASCULINO", "FEMENINO", "LGBT"]
+
+export type GuestAgeRange = "NINO" | "JOVEN" | "ADULTO" | "ADULTO_MAYOR"
+
+export const GUEST_AGE_RANGE_LABELS: Record<GuestAgeRange, string> = {
+  NINO: "Niño/a",
+  JOVEN: "Joven",
+  ADULTO: "Adulto",
+  ADULTO_MAYOR: "Adulto mayor",
+}
+
+export const GUEST_AGE_RANGES: GuestAgeRange[] = [
+  "NINO",
+  "JOVEN",
+  "ADULTO",
+  "ADULTO_MAYOR",
+]
 
 export type GuestTitle =
   | "NINO"

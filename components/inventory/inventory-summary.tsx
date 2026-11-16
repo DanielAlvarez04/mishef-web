@@ -18,12 +18,12 @@ import {
 } from "@/components/ui/card"
 import type { Branch } from "@/lib/branches"
 import {
-  formatMoney,
   formatQuantity,
   unitLabel,
   type Ingredient,
   type UnitCode,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import type { InventoryReport } from "@/lib/dashboard"
 
 const CONSUMPTION_DAYS = 30
@@ -54,6 +54,7 @@ export function InventorySummary({
   /** Sucursales activas; en Modo Global se evalúa cada una. */
   branches: Branch[]
 }) {
+  const money = useMoney()
   const isGlobal = branch === null
 
   const metrics = React.useMemo(() => {
@@ -173,7 +174,7 @@ export function InventorySummary({
             Valor del inventario
           </CardDescription>
           <CardTitle className="text-2xl tabular-nums">
-            {formatMoney(metrics.value)}
+            {money(metrics.value)}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">

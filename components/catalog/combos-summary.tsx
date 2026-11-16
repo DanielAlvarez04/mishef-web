@@ -17,10 +17,10 @@ import {
 } from "@/components/ui/card"
 import {
   formatMarginPercent,
-  formatMoney,
   type ArticleListItem,
   type Recipe,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 import { comboCost, comboPricing } from "./combo-metrics"
 
@@ -31,6 +31,7 @@ export function CombosSummary({
   combos: ArticleListItem[]
   recipes: Recipe[]
 }) {
+  const money = useMoney()
   const metrics = React.useMemo(() => {
     const active = combos.filter((combo) => combo.isActive)
     const withPromotion = combos.filter(
@@ -109,7 +110,7 @@ export function CombosSummary({
           <CardTitle className="text-2xl tabular-nums">
             {metrics.averagePrice === null
               ? "—"
-              : formatMoney(metrics.averagePrice)}
+              : money(metrics.averagePrice)}
           </CardTitle>
         </CardHeader>
         <CardContent className="text-xs text-muted-foreground">
@@ -132,7 +133,7 @@ export function CombosSummary({
         <CardContent className="text-xs text-muted-foreground">
           {metrics.averageMargin === null
             ? "Sin costos completos."
-            : `${formatMoney(metrics.averageMargin)} por combo, sobre el precio efectivo.`}
+            : `${money(metrics.averageMargin)} por combo, sobre el precio efectivo.`}
         </CardContent>
       </Card>
     </div>

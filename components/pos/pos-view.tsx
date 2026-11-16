@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowUpDownIcon,
   CakeIcon,
+  CopyIcon,
   CreditCardIcon,
   GroupIcon,
   LayoutGridIcon,
@@ -91,15 +92,16 @@ import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
 import { usePersistentNumber } from "@/hooks/use-persistent-number"
 import {
   PROMOTION_TYPE_LABELS,
-  formatMoney,
   isItemOptionValueAvailable,
   itemOptionValueName,
   type Category,
   type ItemListItem,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import {
   addOrderGuest,
   createOrder,
+  getChargeSummary,
   removeOrderGuest,
   sendRound,
   updateOrderGuest,
@@ -112,11 +114,15 @@ import type { Menu } from "@/lib/menus"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import type { PosDisplayInfo, PosDisplayState } from "@/lib/pos-display"
 import {
-  GUEST_TITLES,
-  GUEST_TITLE_LABELS,
+  GUEST_AGE_RANGES,
+  GUEST_AGE_RANGE_LABELS,
+  GUEST_SEXES,
+  GUEST_SEX_LABELS,
   ORDER_CHANNEL_LABELS,
   orderLabel,
-  type GuestTitle,
+  type ChargeSummary,
+  type GuestAgeRange,
+  type GuestSex,
   type Order,
   type OrderChannel,
   type OrderGuest,
@@ -200,7 +206,10 @@ interface GuestDraft {
   name: string
   /** Último nombre confirmado en el servidor. */
   savedName: string
-  title: GuestTitle | null
+  /** Sexo declarado (opcional). */
+  sex: GuestSex | null
+  /** Rango de edad declarado (opcional). */
+  ageRange: GuestAgeRange | null
 }
 
 /**
@@ -215,7 +224,8 @@ interface OrderDraft {
   channel: OrderChannel
   tableNumber: string
   customerName: string
-  customerTitle: GuestTitle | null
+  customerSex: GuestSex | null
+  customerAgeRange: GuestAgeRange | null
   customerPhone: string
   deliveryAddress: string
   deliveryFee: string
@@ -231,6 +241,13 @@ function newGuestKey() {
 
 function cartLineTotal(line: CartLine): number {
   return line.unitPrice * line.quantity
+}
+
+/** Firma del resumen de cobro para invalidar el caché cuando cambia la cuenta. */
+function chargeSummaryCacheKey(order: Order): string {
+  return `${order.id}:${order.total}:${order.rounds.length}:${
+    order.payments?.length ?? 0
+  }`
 }
 
 function newCartKey() {
@@ -399,6 +416,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   onOpen: (product: ItemListItem) => void
 }) {
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
+  const money = useMoney()
   useShake(shakeRef, selected)
 
   const promotion = product.promotions?.find((entry) => entry.isActive)
@@ -416,7 +434,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
       >
         <ArticleCardVisual
           name={product.name}
-          price={formatMoney(product.price)}
+          price={money(product.price)}
           imageUrl={product.imageUrl}
           imageVariants={product.imageVariants}
           isActive={product.isActive}
@@ -476,7 +494,6 @@ export function PosView({
   canSend,
   canRegister,
   canConfirm,
-  canRefund,
   branch,
   mercadoPago,
   cash,
@@ -492,7 +509,6 @@ export function PosView({
   canSend: boolean
   canRegister: boolean
   canConfirm: boolean
-  canRefund: boolean
   /** Sucursal activa; `null` = vista consolidada. */
   branch: Branch | null
   /** Terminales Point disponibles para cobrar. */
@@ -507,6 +523,7 @@ export function PosView({
   taxRate: string
 }) {
   const router = useRouter()
+  const money = useMoney()
   const offline = useOfflineSync()
 
   const [search, setSearch] = React.useState("")
@@ -560,9 +577,9 @@ export function PosView({
   const [channel, setChannel] = React.useState<OrderChannel>("DINE_IN")
   const [tableNumber, setTableNumber] = React.useState("1")
   const [customerName, setCustomerName] = React.useState("")
-  const [customerTitle, setCustomerTitle] = React.useState<GuestTitle | null>(
-    null
-  )
+  const [customerSex, setCustomerSex] = React.useState<GuestSex | null>(null)
+  const [customerAgeRange, setCustomerAgeRange] =
+    React.useState<GuestAgeRange | null>(null)
   const [customerPhone, setCustomerPhone] = React.useState("")
   const [deliveryAddress, setDeliveryAddress] = React.useState("")
   const [deliveryFee, setDeliveryFee] = React.useState("0")
@@ -597,6 +614,40 @@ export function PosView({
   )
 
   const activeOrder = orders.find((order) => order.id === orderId) ?? null
+  const chargeSnapshot = React.useRef(new Map<string, ChargeSummary>())
+
+  const activePayments = activeOrder?.payments ?? []
+  const activePendingTotal = activePayments
+    .filter((payment) => payment.status === "PENDING")
+    .reduce((sum, payment) => sum + Number(payment.amount), 0)
+  const activeConfirmedCount = activePayments.filter(
+    (payment) => payment.status === "CONFIRMED"
+  ).length
+
+  // Precarga el resumen de cobro al seleccionar una cuenta: el diálogo abre
+  // con datos y, si el usuario espera, se refresca en segundo plano.
+  //
+  // La dependencia es la firma de la cuenta, no el objeto `activeOrder`: cada
+  // render del POS crea objetos nuevos y precargar en cada uno satura la API.
+  const activeOrderId = activeOrder?.id ?? null
+  const activeSummaryKey = activeOrder ? chargeSummaryCacheKey(activeOrder) : null
+
+  React.useEffect(() => {
+    if (!activeOrderId || !activeSummaryKey) return
+
+    let cancelled = false
+
+    getChargeSummary(activeOrderId).then((result) => {
+      if (!cancelled && result.ok && result.data) {
+        chargeSnapshot.current.set(activeSummaryKey, result.data)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeOrderId, activeSummaryKey])
+
   const activeGuest =
     activeGuestKey === null
       ? null
@@ -645,7 +696,7 @@ export function PosView({
       setGuests((current) =>
         current.length > 0
           ? current
-          : [{ key: newGuestKey(), name: "", savedName: "", title: null }]
+          : [{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }]
       )
       setPartySize((current) => Math.max(1, current))
       return
@@ -673,7 +724,8 @@ export function PosView({
         id: guest.id,
         name: guest.name,
         savedName: guest.name,
-        title: guest.title,
+        sex: guest.sex ?? null,
+        ageRange: guest.ageRange ?? null,
       }))
     )
     setPartySize(
@@ -686,7 +738,8 @@ export function PosView({
     )
 
     if ((activeOrder.channel ?? "DINE_IN") !== "DINE_IN") {
-      setCustomerTitle(serverGuests[0]?.title ?? null)
+      setCustomerSex(serverGuests[0]?.sex ?? null)
+      setCustomerAgeRange(serverGuests[0]?.ageRange ?? null)
     }
   }, [activeOrder])
   /* eslint-enable react-hooks/set-state-in-effect */
@@ -718,11 +771,12 @@ export function PosView({
     setChannel("DINE_IN")
     setTableNumber("1")
     setCustomerName("")
-    setCustomerTitle(null)
+    setCustomerSex(null)
+    setCustomerAgeRange(null)
     setCustomerPhone("")
     setDeliveryAddress("")
     setDeliveryFee("0")
-    setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
+    setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
     setPartySize(1)
     setPartySizeDraft("1")
     setActiveGuestKey(null)
@@ -855,10 +909,10 @@ export function PosView({
     const difference = match.componentsTotal - match.comboPrice
     const message =
       difference > 0
-        ? `Se aplicó el combo «${match.combo.name}»: ${formatMoney(
+        ? `Se aplicó el combo «${match.combo.name}»: ${money(
             match.comboPrice
-          )} en lugar de ${formatMoney(match.componentsTotal)}.`
-        : `Se aplicó el combo «${match.combo.name}» por ${formatMoney(
+          )} en lugar de ${money(match.componentsTotal)}.`
+        : `Se aplicó el combo «${match.combo.name}» por ${money(
             match.comboPrice
           )}.`
 
@@ -1105,6 +1159,31 @@ export function PosView({
     }
   }
 
+  /**
+   * Abre el artículo de una línea del carrito para editar sus opciones.
+   *
+   * El diálogo trabaja por artículo y comensal, así que se activa el cliente de
+   * la línea antes de abrirlo.
+   */
+  const openCartLineEditor = (line: CartLine) => {
+    const item = products.find((candidate) => candidate.id === line.itemId)
+
+    if (!item) {
+      toast.info("El artículo ya no está en el catálogo")
+      return
+    }
+
+    posCapture.noteItemOpened(item.id)
+    dialogOpenedAtRef.current = Date.now()
+    dialogSavedRef.current = false
+
+    if (line.guestKey) setActiveGuestKey(line.guestKey)
+    else setActiveGuestKey(null)
+
+    setPendingProductId(item.id)
+    setSelectedProduct(item)
+  }
+
   const changeQuantity = (key: string, delta: number) => {
     const line = cart.find((candidate) => candidate.key === key)
     if (!line) return
@@ -1152,7 +1231,8 @@ export function PosView({
       channel,
       tableNumber,
       customerName,
-      customerTitle,
+      customerSex,
+      customerAgeRange,
       customerPhone,
       deliveryAddress,
       deliveryFee,
@@ -1193,14 +1273,15 @@ export function PosView({
       setChannel(draft.channel)
       setTableNumber(draft.tableNumber)
       setCustomerName(draft.customerName)
-      setCustomerTitle(draft.customerTitle)
+      setCustomerSex(draft.customerSex)
+      setCustomerAgeRange(draft.customerAgeRange)
       setCustomerPhone(draft.customerPhone)
       setDeliveryAddress(draft.deliveryAddress)
       setDeliveryFee(draft.deliveryFee)
       setGuests(
         draft.guests.length > 0
           ? draft.guests
-          : [{ key: newGuestKey(), name: "", savedName: "", title: null }]
+          : [{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }]
       )
       setPartySize(Math.max(1, draft.partySize))
       setPartySizeDraft(draft.partySizeDraft)
@@ -1210,12 +1291,13 @@ export function PosView({
     setCart([])
 
     if (!value) {
-      setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
+      setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
       setPartySize(1)
       setChannel("DINE_IN")
       setTableNumber("1")
       setCustomerName("")
-      setCustomerTitle(null)
+      setCustomerSex(null)
+      setCustomerAgeRange(null)
       setCustomerPhone("")
       setDeliveryAddress("")
       setDeliveryFee("0")
@@ -1282,11 +1364,12 @@ export function PosView({
       setChannel("DINE_IN")
       setTableNumber("1")
       setCustomerName("")
-      setCustomerTitle(null)
+      setCustomerSex(null)
+      setCustomerAgeRange(null)
       setCustomerPhone("")
       setDeliveryAddress("")
       setDeliveryFee("0")
-      setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
+      setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
       setPartySize(1)
       setActiveGuestKey(null)
       setPendingProductId(null)
@@ -1368,13 +1451,15 @@ export function PosView({
             channel === "DINE_IN"
               ? guests.map((guest) => ({
                   name: guest.name.trim() || undefined,
-                  title: guest.title,
+                  sex: guest.sex,
+                  ageRange: guest.ageRange,
                 }))
-              : customerName.trim() || customerTitle
+              : customerName.trim() || customerSex || customerAgeRange
                 ? [
                     {
                       name: customerName.trim() || undefined,
-                      title: customerTitle,
+                      sex: customerSex,
+                      ageRange: customerAgeRange,
                     },
                   ]
                 : undefined,
@@ -1417,7 +1502,8 @@ export function PosView({
             id: guest.id,
             name: guest.name,
             savedName: guest.name,
-            title: guest.title,
+            sex: guest.sex ?? null,
+            ageRange: guest.ageRange ?? null,
           }))
         )
         setCart((current) =>
@@ -1467,7 +1553,7 @@ export function PosView({
         return
       }
 
-      toast.success(`Ronda enviada · ${formatMoney(total)}`)
+      toast.success(`Ronda enviada · ${money(total)}`)
 
       const warnings = result.data?.warnings ?? []
       if (warnings.length > 0) {
@@ -1528,7 +1614,11 @@ export function PosView({
 
   const updateGuest = async (
     guest: GuestDraft,
-    changes: { name?: string; title?: GuestTitle | null }
+    changes: {
+      name?: string
+      sex?: GuestSex | null
+      ageRange?: GuestAgeRange | null
+    }
   ) => {
     posCapture.noteComandaInteraction()
     setGuests((current) =>
@@ -1608,7 +1698,8 @@ export function PosView({
                 id: created.id,
                 name: created.name,
                 savedName: created.name,
-                title: created.title,
+                sex: created.sex ?? null,
+                ageRange: created.ageRange ?? null,
               },
             ])
           }
@@ -1624,7 +1715,8 @@ export function PosView({
             key: newGuestKey(),
             name: "",
             savedName: "",
-            title: null,
+            sex: null,
+            ageRange: null,
           })),
         ])
       }
@@ -1818,6 +1910,7 @@ export function PosView({
                         max={priceBounds.max}
                         value={priceRange}
                         onChange={setPriceRange}
+                        formatPrice={money}
                       />
                     ) : null}
 
@@ -2084,7 +2177,7 @@ export function PosView({
                 { value: "new", label: "Nueva cuenta" },
                 ...orders.map((order) => ({
                   value: order.id,
-                  label: `${orderLabel(order)} · ${formatMoney(order.total)}${
+                  label: `${orderLabel(order)} · ${money(order.total)}${
                     branch || !order.branch ? "" : ` · ${order.branch.name}`
                   }`,
                 })),
@@ -2097,7 +2190,7 @@ export function PosView({
                 <SelectItem value="new">Nueva cuenta</SelectItem>
                 {orders.map((order) => (
                   <SelectItem key={order.id} value={order.id}>
-                    {orderLabel(order)} · {formatMoney(order.total)}
+                    {orderLabel(order)} · {money(order.total)}
                     {branch || !order.branch ? "" : ` · ${order.branch.name}`}
                   </SelectItem>
                 ))}
@@ -2304,11 +2397,12 @@ export function PosView({
                           />
                         </div>
 
-                        <AgeRangePopover
-                          value={activeGuest.title}
+                        <GuestProfilePopover
+                          sex={activeGuest.sex}
+                          ageRange={activeGuest.ageRange}
                           disabled={guestBusy}
-                          onChange={(title) =>
-                            void updateGuest(activeGuest, { title })
+                          onChange={(changes) =>
+                            void updateGuest(activeGuest, changes)
                           }
                         />
                       </div>
@@ -2338,11 +2432,15 @@ export function PosView({
                     placeholder="Nombre"
                   />
                 </div>
-                <AgeRangePopover
-                  value={customerTitle}
-                  onChange={(title) => {
+                <GuestProfilePopover
+                  sex={customerSex}
+                  ageRange={customerAgeRange}
+                  onChange={(changes) => {
                     posCapture.noteComandaInteraction()
-                    setCustomerTitle(title)
+                    if (changes.sex !== undefined) setCustomerSex(changes.sex)
+                    if (changes.ageRange !== undefined) {
+                      setCustomerAgeRange(changes.ageRange)
+                    }
                   }}
                 />
               </div>
@@ -2466,7 +2564,7 @@ export function PosView({
                       ) : null}
                     </div>
                     <span className="text-sm font-medium tabular-nums">
-                      {formatMoney(cartLineTotal(line))}
+                      {money(cartLineTotal(line))}
                     </span>
                   </div>
 
@@ -2497,6 +2595,15 @@ export function PosView({
                       variant="ghost"
                       size="icon-sm"
                       className="ml-auto"
+                      aria-label={`Editar opciones de ${line.itemName}`}
+                      onClick={() => openCartLineEditor(line)}
+                    >
+                      <PencilLineIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
                       aria-label={`Quitar ${line.itemName} de la comanda`}
                       onClick={() => removeLine(line.key)}
                     >
@@ -2514,33 +2621,43 @@ export function PosView({
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Subtotal</span>
               <span className="tabular-nums">
-                {formatMoney(taxBreakdown.subtotal)}
+                {money(taxBreakdown.subtotal)}
               </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">IVA</span>
-              <span className="tabular-nums">{formatMoney(taxBreakdown.tax)}</span>
+              <span className="tabular-nums">{money(taxBreakdown.tax)}</span>
             </div>
             <div className="flex items-center justify-between border-t pt-1">
               <span className="font-medium">Total</span>
               <span className="text-base font-semibold tabular-nums">
-                {formatMoney(total)}
+                {money(total)}
               </span>
             </div>
           </div>
 
           {activeOrder ? (
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                Pagado {formatMoney(activeOrder.paidTotal ?? 0)}
-                {activeOrder.payments && activeOrder.payments.length > 0
-                  ? ` · ${activeOrder.payments.length} pago(s)`
-                  : ""}
-              </span>
-              <span className="font-medium text-foreground tabular-nums">
-                Saldo {formatMoney(Math.max(Number(activeOrder.balance ?? 0), 0))}
-              </span>
-            </div>
+            <>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Pagado {money(activeOrder.paidTotal ?? 0)}
+                  {activeConfirmedCount > 0
+                    ? ` · ${activeConfirmedCount} pago(s)`
+                    : ""}
+                </span>
+                <span className="font-medium text-foreground tabular-nums">
+                  Saldo {money(Math.max(Number(activeOrder.balance ?? 0), 0))}
+                </span>
+              </div>
+              {activePendingTotal > 0 ? (
+                <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
+                  <span>Por confirmar</span>
+                  <span className="font-medium tabular-nums">
+                    {money(activePendingTotal)}
+                  </span>
+                </div>
+              ) : null}
+            </>
           ) : null}
 
           <PendingOperations />
@@ -2651,7 +2768,7 @@ export function PosView({
                     </span>
                   </span>
                   <span className="shrink-0 font-medium tabular-nums">
-                    {formatMoney(match.comboPrice)}
+                    {money(match.comboPrice)}
                   </span>
                 </Button>
               )
@@ -2745,22 +2862,31 @@ export function PosView({
         <ChargeDialog
           order={activeOrder}
           canConfirm={canConfirm}
-          canRefund={canRefund}
           mercadoPago={mercadoPago}
+          initialSummary={
+            chargeSnapshot.current.get(chargeSummaryCacheKey(activeOrder)) ??
+            null
+          }
           defaultTipPercent={branch?.defaultTipPercent ?? 0}
           displayTipPercent={displayState?.tipPercent ?? null}
-          onClose={() => setCharging(false)}
+          onClose={() => {
+            setCharging(false)
+            // Los cobros se reflejan en el diálogo sin revalidar el POS; al
+            // cerrarlo se trae la lista de cuentas con los saldos reales.
+            router.refresh()
+          }}
           onClosed={() => {
             setCharging(false)
             setOrderId("")
             setCart([])
-            setGuests([{ key: newGuestKey(), name: "", savedName: "", title: null }])
+            setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
             setPartySize(1)
             setActiveGuestKey(null)
             setTableNumber("1")
             setChannel("DINE_IN")
             setCustomerName("")
-            setCustomerTitle(null)
+            setCustomerSex(null)
+            setCustomerAgeRange(null)
             setCustomerPhone("")
             setDeliveryAddress("")
             setDeliveryFee("0")
@@ -2775,48 +2901,82 @@ export function PosView({
   )
 }
 
-function AgeRangePopover({
-  value,
+function GuestProfilePopover({
+  sex,
+  ageRange,
   disabled,
   onChange,
 }: {
-  value: GuestTitle | null
+  sex: GuestSex | null
+  ageRange: GuestAgeRange | null
   disabled?: boolean
-  onChange: (title: GuestTitle | null) => void
+  onChange: (changes: {
+    sex?: GuestSex | null
+    ageRange?: GuestAgeRange | null
+  }) => void
 }) {
+  const summary = [sex ? GUEST_SEX_LABELS[sex] : null, ageRange ? GUEST_AGE_RANGE_LABELS[ageRange] : null]
+    .filter(Boolean)
+    .join(" · ")
+
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button type="button" variant="outline" className="gap-1.5">
             <CakeIcon className="size-4" />
-            Edad
+            {summary || "Edad"}
           </Button>
         }
       />
-      <PopoverContent align="end" className="w-64">
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium">
-            Rango de edad <span className="text-destructive">*</span>
-          </span>
-          <div className="flex flex-wrap gap-1">
-            {GUEST_TITLES.map((title) => (
-              <Button
-                key={title}
-                type="button"
-                variant="outline"
-                size="sm"
-                className={jalapenoChipClass(value === title)}
-                aria-pressed={value === title}
-                disabled={disabled}
-                onClick={() => onChange(value === title ? null : title)}
-              >
-                {GUEST_TITLE_LABELS[title]}
-              </Button>
-            ))}
+      <PopoverContent align="end" className="w-72">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium">Sexo</span>
+            <div className="flex flex-wrap gap-1">
+              {GUEST_SEXES.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={jalapenoChipClass(sex === value)}
+                  aria-pressed={sex === value}
+                  disabled={disabled}
+                  onClick={() => onChange({ sex: sex === value ? null : value })}
+                >
+                  {GUEST_SEX_LABELS[value]}
+                </Button>
+              ))}
+            </div>
           </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-xs font-medium">Rango de edad</span>
+            <div className="flex flex-wrap gap-1">
+              {GUEST_AGE_RANGES.map((value) => (
+                <Button
+                  key={value}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className={jalapenoChipClass(ageRange === value)}
+                  aria-pressed={ageRange === value}
+                  disabled={disabled}
+                  onClick={() =>
+                    onChange({
+                      ageRange: ageRange === value ? null : value,
+                    })
+                  }
+                >
+                  {GUEST_AGE_RANGE_LABELS[value]}
+                </Button>
+              ))}
+            </div>
+          </div>
+
           <p className="text-[10px] text-muted-foreground">
-            * Dato para estadísticas. No cambia el trato al cliente.
+            Datos opcionales para el servicio. No cambian el trato al cliente.
           </p>
         </div>
       </PopoverContent>
@@ -2871,10 +3031,27 @@ function GuestNameField({
 
 const GENERAL_GUEST_KEY = "__general__"
 
+/**
+ * Una preparación del artículo con sus propias opciones.
+ *
+ * Por defecto todas las unidades comparten la configuración del comensal; al
+ * personalizar, cada preparación puede tener variante, opciones, extras,
+ * exclusiones y nota distintas. `quantity` agrupa unidades idénticas.
+ */
+interface Preparation {
+  id: string
+  variantId: string | null
+  quantity: number
+  selectedOptions: Record<string, string[]>
+  extraIds: string[]
+  excludedIds: string[]
+  notes: string
+}
+
 interface GuestConfig {
-  /** Cantidad por presentación elegida. */
+  /** Cantidad por presentación elegida (modo compartido). */
   variantQuantities: Record<string, number>
-  /** Cantidad cuando el artículo no tiene presentaciones. */
+  /** Cantidad cuando el artículo no tiene presentaciones (modo compartido). */
   quantity: number
   extraIds: string[]
   excludedIds: string[]
@@ -2882,6 +3059,12 @@ interface GuestConfig {
   notes: string
   /** El tab ya tenía líneas guardadas en la comanda. */
   hasLines: boolean
+  /** Preparaciones con opciones distintas; `null` = todas comparten. */
+  preparations: Preparation[] | null
+}
+
+function newPreparationKey() {
+  return `prep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
 function AddItemDialog({
@@ -2915,6 +3098,7 @@ function AddItemDialog({
     }>
   ) => void
 }) {
+  const money = useMoney()
   const variants = product.variants.filter((variant) => variant.isActive)
   const extras = product.extras.filter((extra) => extra.isActive)
   const exclusions = product.ingredientExclusions ?? []
@@ -2952,6 +3136,42 @@ function AddItemDialog({
       })
     ) as Record<string, string[]>
 
+  /** Opciones de una línea existente, en el formato del formulario. */
+  const selectedFromLine = (line: CartLine) =>
+    Object.fromEntries(
+      groups.map((group) => [
+        group.id,
+        group.values
+          .filter((value) =>
+            line.options.some(
+              (option) => option.itemOptionValueId === value.id
+            )
+          )
+          .map((value) => value.id),
+      ])
+    ) as Record<string, string[]>
+
+  /** Firma de una preparación: lo que la hace distinta de otra. */
+  const prepSignature = (prep: {
+    selectedOptions: Record<string, string[]>
+    extraIds: string[]
+    excludedIds: string[]
+    notes: string
+  }) =>
+    [
+      groups
+        .map(
+          (group) =>
+            `${group.id}:${[...(prep.selectedOptions[group.id] ?? [])]
+              .sort()
+              .join(",")}`
+        )
+        .join("|"),
+      [...prep.extraIds].sort().join(","),
+      [...prep.excludedIds].sort().join(","),
+      prep.notes.trim(),
+    ].join("::")
+
   const configFromLines = (lines: CartLine[]): GuestConfig => {
     const variantQuantities: Record<string, number> = {}
     let quantity = 0
@@ -2961,34 +3181,48 @@ function AddItemDialog({
         variantQuantities[line.variantId] =
           (variantQuantities[line.variantId] ?? 0) + line.quantity
       } else {
-        quantity = line.quantity
+        quantity += line.quantity
       }
     }
 
     const first = lines[0]
-    const selectedOptions = first
-      ? (Object.fromEntries(
-          groups.map((group) => [
-            group.id,
-            group.values
-              .filter((value) =>
-                first.options.some(
-                  (option) => option.itemOptionValueId === value.id
-                )
-              )
-              .map((value) => value.id),
-          ])
-        ) as Record<string, string[]>)
-      : emptySelectedOptions()
+    const shared = {
+      selectedOptions: first ? selectedFromLine(first) : emptySelectedOptions(),
+      extraIds: first?.extras.map((extra) => extra.id) ?? [],
+      excludedIds: first?.excludedIngredientIds ?? [],
+      notes: first?.notes ?? "",
+    }
+    const sharedSignature = prepSignature(shared)
+
+    // Si todas las líneas comparten configuración (salvo la presentación), se
+    // siguen editando en bloque; si difieren, se reconstruyen por preparación.
+    const homogeneous = lines.every(
+      (line) =>
+        prepSignature({
+          selectedOptions: selectedFromLine(line),
+          extraIds: line.extras.map((extra) => extra.id),
+          excludedIds: line.excludedIngredientIds,
+          notes: line.notes ?? "",
+        }) === sharedSignature
+    )
 
     return {
       variantQuantities,
       quantity,
-      extraIds: first?.extras.map((extra) => extra.id) ?? [],
-      excludedIds: first?.excludedIngredientIds ?? [],
-      selectedOptions,
-      notes: first?.notes ?? "",
+      ...shared,
       hasLines: lines.length > 0,
+      preparations:
+        homogeneous || lines.length === 0
+          ? null
+          : lines.map((line) => ({
+              id: newPreparationKey(),
+              variantId: line.variantId ?? null,
+              quantity: line.quantity,
+              selectedOptions: selectedFromLine(line),
+              extraIds: line.extras.map((extra) => extra.id),
+              excludedIds: line.excludedIngredientIds,
+              notes: line.notes ?? "",
+            })),
     }
   }
 
@@ -3034,69 +3268,392 @@ function AddItemDialog({
     })
   }
 
-  const selectedExtras = extras.filter((extra) =>
-    config.extraIds.includes(extra.id)
-  )
-  const selectedCartOptions = groups.flatMap((group) =>
-    group.values
-      .filter((value) => config.selectedOptions[group.id]?.includes(value.id))
-      .map((value) => ({
-        itemOptionValueId: value.id,
-        groupName: group.group.name,
-        name: itemOptionValueName(value),
-        price: Number(value.priceDelta),
-      }))
-  )
+  const [prepIndex, setPrepIndex] = React.useState(0)
+  const [collapseOpen, setCollapseOpen] = React.useState(false)
 
-  const baseUnitPrice =
-    Number(product.price) +
-    selectedExtras.reduce((sum, extra) => sum + Number(extra.price), 0) +
-    selectedCartOptions.reduce((sum, option) => sum + option.price, 0)
+  /** Preparaciones efectivas del comensal: compartidas o personalizadas. */
+  const effectivePreparations = (candidate: GuestConfig): Preparation[] => {
+    if (candidate.preparations) return candidate.preparations
 
-  const unitPriceFor = (priceAdjust: string | number | null | undefined) =>
-    baseUnitPrice + Number(priceAdjust ?? 0)
+    const shared = {
+      selectedOptions: candidate.selectedOptions,
+      extraIds: candidate.extraIds,
+      excludedIds: candidate.excludedIds,
+      notes: candidate.notes,
+    }
 
-  const total =
-    variants.length > 0
-      ? variants.reduce(
-          (sum, candidate) =>
-            sum +
-            (config.variantQuantities[candidate.id] ?? 0) *
-              unitPriceFor(candidate.priceAdjust),
-          0
-        )
-      : config.quantity * unitPriceFor(0)
+    if (variants.length > 0) {
+      return variants
+        .filter((variant) => (candidate.variantQuantities[variant.id] ?? 0) > 0)
+        .map((variant) => ({
+          id: `shared-${variant.id}`,
+          variantId: variant.id,
+          quantity: candidate.variantQuantities[variant.id] ?? 0,
+          ...shared,
+        }))
+    }
 
-  const variantQuantityTotal = (candidate: GuestConfig) =>
-    variants.reduce(
-      (sum, variant) => sum + (candidate.variantQuantities[variant.id] ?? 0),
-      0
-    )
+    return candidate.quantity > 0
+      ? [
+          {
+            id: "shared",
+            variantId: null,
+            quantity: candidate.quantity,
+            ...shared,
+          },
+        ]
+      : []
+  }
+
+  const configQuantity = (candidate: GuestConfig) =>
+    candidate.preparations
+      ? candidate.preparations.reduce((sum, prep) => sum + prep.quantity, 0)
+      : variants.length > 0
+        ? variants.reduce(
+            (sum, variant) =>
+              sum + (candidate.variantQuantities[variant.id] ?? 0),
+            0
+          )
+        : candidate.quantity
 
   const configHasContent = (candidate: GuestConfig) =>
-    candidate.hasLines ||
-    (variants.length > 0
-      ? variantQuantityTotal(candidate) > 0
-      : candidate.quantity > 0)
+    candidate.hasLines || configQuantity(candidate) > 0
 
-  const setVariantQuantity = (variantId: string, next: number) => {
+  const variantCount = (candidate: GuestConfig, variantId: string) =>
+    candidate.preparations
+      ? candidate.preparations
+          .filter((prep) => prep.variantId === variantId)
+          .reduce((sum, prep) => sum + prep.quantity, 0)
+      : (candidate.variantQuantities[variantId] ?? 0)
+
+  const activePreparations = config.preparations
+  const editingPrep =
+    activePreparations && activePreparations.length > 0
+      ? activePreparations[Math.min(prepIndex, activePreparations.length - 1)]
+      : null
+
+  /** Campos que edita el formulario: la preparación activa o los compartidos. */
+  const editing = {
+    selectedOptions: editingPrep?.selectedOptions ?? config.selectedOptions,
+    extraIds: editingPrep?.extraIds ?? config.extraIds,
+    excludedIds: editingPrep?.excludedIds ?? config.excludedIds,
+    notes: editingPrep?.notes ?? config.notes,
+  }
+
+  const updateEditing = (
+    updater: (current: {
+      selectedOptions: Record<string, string[]>
+      extraIds: string[]
+      excludedIds: string[]
+      notes: string
+    }) => {
+      selectedOptions: Record<string, string[]>
+      extraIds: string[]
+      excludedIds: string[]
+      notes: string
+    }
+  ) => {
+    updateConfig((current) => {
+      const preps = current.preparations
+
+      if (!preps || preps.length === 0) {
+        return {
+          ...current,
+          ...updater({
+            selectedOptions: current.selectedOptions,
+            extraIds: current.extraIds,
+            excludedIds: current.excludedIds,
+            notes: current.notes,
+          }),
+        }
+      }
+
+      const index = Math.min(prepIndex, preps.length - 1)
+
+      return {
+        ...current,
+        preparations: preps.map((prep, position) =>
+          position === index ? { ...prep, ...updater(prep) } : prep
+        ),
+      }
+    })
+  }
+
+  const templatePreparation = (
+    candidate: GuestConfig,
+    variantId: string | null
+  ): Preparation => ({
+    id: newPreparationKey(),
+    variantId,
+    quantity: 1,
+    selectedOptions: { ...candidate.selectedOptions },
+    extraIds: [...candidate.extraIds],
+    excludedIds: [...candidate.excludedIds],
+    notes: candidate.notes,
+  })
+
+  /** Convierte la configuración compartida en una preparación por unidad. */
+  const personalize = () => {
+    updateConfig((current) => {
+      if (current.preparations) return current
+
+      const preparations =
+        variants.length > 0
+          ? variants.flatMap((variant) =>
+              Array.from(
+                { length: current.variantQuantities[variant.id] ?? 0 },
+                () => templatePreparation(current, variant.id)
+              )
+            )
+          : Array.from({ length: current.quantity }, () =>
+              templatePreparation(current, null)
+            )
+
+      return { ...current, preparations }
+    })
+    setPrepIndex(0)
+  }
+
+  const addPreparation = (variantId: string | null = null) => {
+    updateConfig((current) => {
+      if (!current.preparations) return current
+      if (current.preparations.length >= 99) return current
+
+      // La nueva preparación parte de la que se está editando.
+      const index = Math.min(prepIndex, current.preparations.length - 1)
+      const source = current.preparations[index]
+
+      const preparation: Preparation = source
+        ? {
+            id: newPreparationKey(),
+            variantId,
+            quantity: 1,
+            selectedOptions: { ...source.selectedOptions },
+            extraIds: [...source.extraIds],
+            excludedIds: [...source.excludedIds],
+            notes: source.notes,
+          }
+        : templatePreparation(current, variantId)
+
+      return {
+        ...current,
+        preparations: [...current.preparations, preparation],
+      }
+    })
+  }
+
+  const updatePreparation = (
+    index: number,
+    updater: (prep: Preparation) => Preparation
+  ) => {
+    updateConfig((current) => {
+      if (!current.preparations) return current
+
+      return {
+        ...current,
+        preparations: current.preparations.map((prep, position) =>
+          position === index ? updater(prep) : prep
+        ),
+      }
+    })
+  }
+
+  const removePreparation = (index: number) => {
+    updateConfig((current) => {
+      if (!current.preparations) return current
+
+      const preparations = current.preparations.filter(
+        (_, position) => position !== index
+      )
+
+      return preparations.length > 0
+        ? { ...current, preparations }
+        : {
+            ...current,
+            preparations: null,
+            quantity: 0,
+            variantQuantities: {},
+          }
+    })
+    setPrepIndex(0)
+  }
+
+  const duplicatePreparation = (index: number) => {
+    updateConfig((current) => {
+      if (!current.preparations) return current
+
+      const source = current.preparations[index]
+      if (!source) return current
+
+      return {
+        ...current,
+        preparations: [
+          ...current.preparations,
+          {
+            ...source,
+            id: newPreparationKey(),
+            selectedOptions: { ...source.selectedOptions },
+            extraIds: [...source.extraIds],
+            excludedIds: [...source.excludedIds],
+          },
+        ],
+      }
+    })
+  }
+
+  const applyPreparationToAll = () => {
+    updateConfig((current) => {
+      if (!current.preparations || current.preparations.length === 0) {
+        return current
+      }
+
+      const index = Math.min(prepIndex, current.preparations.length - 1)
+      const source = current.preparations[index]
+
+      return {
+        ...current,
+        preparations: current.preparations.map((prep) => ({
+          ...prep,
+          selectedOptions: { ...source.selectedOptions },
+          extraIds: [...source.extraIds],
+          excludedIds: [...source.excludedIds],
+          notes: source.notes,
+        })),
+      }
+    })
+  }
+
+  const decrementVariantUnit = (variantId: string | null) => {
+    updateConfig((current) => {
+      if (!current.preparations) return current
+
+      const positions = current.preparations
+        .map((prep, position) => ({ prep, position }))
+        .filter((entry) => entry.prep.variantId === variantId)
+
+      const last = positions[positions.length - 1]
+      if (!last) return current
+
+      if (last.prep.quantity > 1) {
+        return {
+          ...current,
+          preparations: current.preparations.map((prep, position) =>
+            position === last.position
+              ? { ...prep, quantity: prep.quantity - 1 }
+              : prep
+          ),
+        }
+      }
+
+      const preparations = current.preparations.filter(
+        (_, position) => position !== last.position
+      )
+
+      return preparations.length > 0 ? { ...current, preparations } : current
+    })
+  }
+
+  const changeVariantQuantity = (variantId: string, delta: number) => {
+    if (config.preparations) {
+      if (delta > 0) addPreparation(variantId)
+      else decrementVariantUnit(variantId)
+      return
+    }
+
     updateConfig((current) => ({
       ...current,
       variantQuantities: {
         ...current.variantQuantities,
-        [variantId]: Math.min(99, Math.max(0, next)),
+        [variantId]: Math.min(
+          99,
+          Math.max(0, (current.variantQuantities[variantId] ?? 0) + delta)
+        ),
       },
     }))
   }
 
-  const changeVariantQuantity = (variantId: string, delta: number) => {
-    const current = config.variantQuantities[variantId] ?? 0
-    setVariantQuantity(variantId, current + delta)
+  const toggleVariant = (variantId: string) => {
+    changeVariantQuantity(variantId, variantCount(config, variantId) === 1 ? -1 : 1)
   }
 
-  const toggleVariant = (variantId: string) => {
-    const current = config.variantQuantities[variantId] ?? 0
-    setVariantQuantity(variantId, current === 1 ? 0 : current === 0 ? 1 : current)
+  const changeSimpleQuantity = (delta: number) => {
+    if (config.preparations) {
+      if (delta > 0) addPreparation(null)
+      else decrementVariantUnit(null)
+      return
+    }
+
+    updateConfig((current) => ({
+      ...current,
+      quantity: Math.min(99, Math.max(0, current.quantity + delta)),
+    }))
+  }
+
+  const setEditingVariant = (variantId: string) => {
+    updateConfig((current) => {
+      if (!current.preparations || current.preparations.length === 0) {
+        return current
+      }
+
+      const index = Math.min(prepIndex, current.preparations.length - 1)
+
+      return {
+        ...current,
+        preparations: current.preparations.map((prep, position) =>
+          position === index ? { ...prep, variantId } : prep
+        ),
+      }
+    })
+  }
+
+  const preparationsHomogeneous = (candidate: GuestConfig) =>
+    !candidate.preparations ||
+    new Set(candidate.preparations.map((prep) => prepSignature(prep))).size <= 1
+
+  const applyCollapse = () => {
+    updateConfig((current) => {
+      if (!current.preparations || current.preparations.length === 0) {
+        return current
+      }
+
+      const variantQuantities: Record<string, number> = {}
+      let quantity = 0
+
+      for (const prep of current.preparations) {
+        if (prep.variantId) {
+          variantQuantities[prep.variantId] =
+            (variantQuantities[prep.variantId] ?? 0) + prep.quantity
+        } else {
+          quantity += prep.quantity
+        }
+      }
+
+      const first = current.preparations[0]
+
+      return {
+        ...current,
+        preparations: null,
+        variantQuantities,
+        quantity,
+        selectedOptions: { ...first.selectedOptions },
+        extraIds: [...first.extraIds],
+        excludedIds: [...first.excludedIds],
+        notes: first.notes,
+      }
+    })
+    setPrepIndex(0)
+    setCollapseOpen(false)
+  }
+
+  const collapsePreparations = () => {
+    if (!config.preparations) return
+
+    if (!preparationsHomogeneous(config)) {
+      setCollapseOpen(true)
+      return
+    }
+
+    applyCollapse()
   }
 
   function chooseOption(
@@ -3105,7 +3662,7 @@ function AddItemDialog({
     multiple: boolean,
     required: boolean
   ) {
-    updateConfig((current) => {
+    updateEditing((current) => {
       const ids = current.selectedOptions[groupId] ?? []
 
       if (multiple) {
@@ -3135,7 +3692,7 @@ function AddItemDialog({
   }
 
   const toggleExtra = (extraId: string) => {
-    updateConfig((current) => ({
+    updateEditing((current) => ({
       ...current,
       extraIds: current.extraIds.includes(extraId)
         ? current.extraIds.filter((id) => id !== extraId)
@@ -3144,7 +3701,7 @@ function AddItemDialog({
   }
 
   const toggleExclusion = (ingredientId: string) => {
-    updateConfig((current) => ({
+    updateEditing((current) => ({
       ...current,
       excludedIds: current.excludedIds.includes(ingredientId)
         ? current.excludedIds.filter((id) => id !== ingredientId)
@@ -3152,38 +3709,63 @@ function AddItemDialog({
     }))
   }
 
+  const preparationPrice = (prep: Preparation) => {
+    const variant = prep.variantId
+      ? variants.find((candidate) => candidate.id === prep.variantId)
+      : null
+    const prepExtras = extras.filter((extra) =>
+      prep.extraIds.includes(extra.id)
+    )
+    const optionsTotal = groups.flatMap((group) =>
+      group.values
+        .filter((value) => prep.selectedOptions[group.id]?.includes(value.id))
+        .map((value) => Number(value.priceDelta))
+    )
+
+    return (
+      Number(product.price) +
+      prepExtras.reduce((sum, extra) => sum + Number(extra.price), 0) +
+      optionsTotal.reduce((sum, price) => sum + price, 0) +
+      Number(variant?.priceAdjust ?? 0)
+    )
+  }
+
+  const total = effectivePreparations(config).reduce(
+    (sum, prep) => sum + prep.quantity * preparationPrice(prep),
+    0
+  )
+
   const save = () => {
     for (const [key, candidate] of Object.entries(configs)) {
-      const quantity =
-        variants.length > 0
-          ? variantQuantityTotal(candidate)
-          : candidate.quantity
+      const preparations = effectivePreparations(candidate)
 
       // Un tab que se vació solo elimina sus líneas; no exige opciones.
-      if (quantity <= 0) continue
+      if (preparations.length === 0) continue
 
-      const missing = groups.find((group) => {
-        const min = group.isRequired
-          ? Math.max(1, group.minSelect ?? 1)
-          : Math.max(0, group.minSelect ?? 0)
+      for (const [index, prep] of preparations.entries()) {
+        const missing = groups.find((group) => {
+          const min = group.isRequired
+            ? Math.max(1, group.minSelect ?? 1)
+            : Math.max(0, group.minSelect ?? 0)
 
-        return (
-          min > 0 &&
-          (candidate.selectedOptions[group.id]?.length ?? 0) < min
-        )
-      })
+          return (
+            min > 0 && (prep.selectedOptions[group.id]?.length ?? 0) < min
+          )
+        })
 
-      if (missing) {
-        setActiveKey(key)
-        onValidationError(missing.group.name)
+        if (missing) {
+          setActiveKey(key)
+          if (candidate.preparations) setPrepIndex(index)
+          onValidationError(missing.group.name)
 
-        const min = Math.max(1, missing.minSelect ?? 1)
-        toast.error(
-          min > 1
-            ? `Elige al menos ${min} opciones de ${missing.group.name}`
-            : `Elige ${missing.group.name}`
-        )
-        return
+          const min = Math.max(1, missing.minSelect ?? 1)
+          toast.error(
+            min > 1
+              ? `Elige al menos ${min} opciones de ${missing.group.name}`
+              : `Elige ${missing.group.name}`
+          )
+          return
+        }
       }
     }
 
@@ -3194,71 +3776,88 @@ function AddItemDialog({
 
     for (const [key, candidate] of Object.entries(configs)) {
       const guestKey = key === GENERAL_GUEST_KEY ? null : key
-      const totalQuantity =
-        variants.length > 0
-          ? variantQuantityTotal(candidate)
-          : candidate.quantity
+      const preparations = effectivePreparations(candidate)
 
-      if (totalQuantity <= 0 && !candidate.hasLines) continue
+      if (preparations.length === 0 && !candidate.hasLines) continue
 
-      const candidateExtras = extras.filter((extra) =>
-        candidate.extraIds.includes(extra.id)
-      )
-      const candidateOptions = groups.flatMap((group) =>
-        group.values
-          .filter((value) =>
-            candidate.selectedOptions[group.id]?.includes(value.id)
-          )
-          .map((value) => ({
-            itemOptionValueId: value.id,
-            groupName: group.group.name,
-            name: itemOptionValueName(value),
-            price: Number(value.priceDelta),
-          }))
-      )
-      const candidateBase =
-        Number(product.price) +
-        candidateExtras.reduce((sum, extra) => sum + Number(extra.price), 0) +
-        candidateOptions.reduce((sum, option) => sum + option.price, 0)
-      const shared = {
-        notes: candidate.notes.trim() || undefined,
-        extras: candidateExtras.map((extra) => ({
-          id: extra.id,
-          name: extra.name,
-          price: Number(extra.price),
-        })),
-        options: candidateOptions,
-        excludedIngredientIds: candidate.excludedIds,
-        excludedNames: exclusions
-          .filter((exclusion) =>
-            candidate.excludedIds.includes(exclusion.ingredient.id)
-          )
-          .map((exclusion) => exclusion.ingredient.name),
-      }
-      const lines: Array<Omit<CartLine, "key">> = []
+      // Las preparaciones idénticas se agrupan en un solo renglón.
+      const grouped = new Map<
+        string,
+        {
+          variantId: string | null
+          quantity: number
+          selectedOptions: Record<string, string[]>
+          extraIds: string[]
+          excludedIds: string[]
+          notes: string
+        }
+      >()
 
-      if (variants.length > 0) {
-        for (const variant of variants) {
-          const count = candidate.variantQuantities[variant.id] ?? 0
-          if (count <= 0) continue
+      for (const prep of preparations) {
+        const signature = `${prep.variantId ?? "none"}::${prepSignature(prep)}`
+        const existing = grouped.get(signature)
 
-          lines.push({
-            itemId: product.id,
-            itemName: product.name,
-            variantId: variant.id,
-            variantName: variant.name,
-            unitPrice: candidateBase + Number(variant.priceAdjust),
-            quantity: count,
-            ...shared,
+        if (existing) {
+          existing.quantity += prep.quantity
+        } else {
+          grouped.set(signature, {
+            variantId: prep.variantId,
+            quantity: prep.quantity,
+            selectedOptions: prep.selectedOptions,
+            extraIds: prep.extraIds,
+            excludedIds: prep.excludedIds,
+            notes: prep.notes,
           })
         }
-      } else if (candidate.quantity > 0) {
+      }
+
+      const lines: Array<Omit<CartLine, "key">> = []
+
+      for (const prep of grouped.values()) {
+        const variant = prep.variantId
+          ? variants.find((candidate) => candidate.id === prep.variantId)
+          : null
+        const prepExtras = extras.filter((extra) =>
+          prep.extraIds.includes(extra.id)
+        )
+        const prepOptions = groups.flatMap((group) =>
+          group.values
+            .filter((value) =>
+              prep.selectedOptions[group.id]?.includes(value.id)
+            )
+            .map((value) => ({
+              itemOptionValueId: value.id,
+              groupName: group.group.name,
+              name: itemOptionValueName(value),
+              price: Number(value.priceDelta),
+            }))
+        )
+        const unitPrice =
+          Number(product.price) +
+          prepExtras.reduce((sum, extra) => sum + Number(extra.price), 0) +
+          prepOptions.reduce((sum, option) => sum + option.price, 0) +
+          Number(variant?.priceAdjust ?? 0)
+
         lines.push({
           itemId: product.id,
           itemName: product.name,
-          unitPrice: candidateBase,
-          quantity: candidate.quantity,
-          ...shared,
+          variantId: variant?.id,
+          variantName: variant?.name,
+          unitPrice,
+          quantity: prep.quantity,
+          notes: prep.notes.trim() || undefined,
+          extras: prepExtras.map((extra) => ({
+            id: extra.id,
+            name: extra.name,
+            price: Number(extra.price),
+          })),
+          options: prepOptions,
+          excludedIngredientIds: prep.excludedIds,
+          excludedNames: exclusions
+            .filter((exclusion) =>
+              prep.excludedIds.includes(exclusion.ingredient.id)
+            )
+            .map((exclusion) => exclusion.ingredient.name),
         })
       }
 
@@ -3292,8 +3891,9 @@ function AddItemDialog({
     : []
 
   return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+    <>
+      <Dialog open onOpenChange={(open) => !open && onClose()}>
+        <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{product.name}</DialogTitle>
           {product.description ? (
@@ -3327,6 +3927,7 @@ function AddItemDialog({
                       className={jalapenoChipClass(active)}
                       onClick={() => {
                         setActiveKey(tab.key)
+                        setPrepIndex(0)
                         onSelectGuest(
                           tab.key === GENERAL_GUEST_KEY ? null : tab.key
                         )
@@ -3351,7 +3952,7 @@ function AddItemDialog({
           {variants.length > 0 ? (
             <div className="grid grid-cols-3 gap-2">
               {variants.map((candidate) => {
-                const count = config.variantQuantities[candidate.id] ?? 0
+                const count = variantCount(config, candidate.id)
                 const selected = count > 0
                 const candidatePrice =
                   Number(product.price) + Number(candidate.priceAdjust)
@@ -3373,7 +3974,7 @@ function AddItemDialog({
                     >
                       <ArticleCardVisual
                         name={candidate.name}
-                        price={formatMoney(candidatePrice)}
+                        price={money(candidatePrice)}
                         imageUrl={candidate.imageUrl ?? product.imageUrl}
                         imageVariants={
                           candidate.imageVariants ?? product.imageVariants
@@ -3432,12 +4033,14 @@ function AddItemDialog({
               <div
                 className={cn(
                   "flex flex-col overflow-hidden rounded-xl border bg-card transition-shadow",
-                  config.quantity > 0 && "ring-2 ring-primary"
+                  configQuantity(config) > 0 && "ring-2 ring-primary"
                 )}
               >
                 <button
                   type="button"
-                  onClick={() =>
+                  onClick={() => {
+                    if (config.preparations) return
+
                     updateConfig((current) => ({
                       ...current,
                       quantity:
@@ -3447,14 +4050,14 @@ function AddItemDialog({
                             ? 1
                             : current.quantity,
                     }))
-                  }
-                  aria-pressed={config.quantity > 0}
+                  }}
+                  aria-pressed={configQuantity(config) > 0}
                   aria-label={`Elegir ${product.name}`}
                   className="block w-full text-left focus-visible:outline-none"
                 >
                   <ArticleCardVisual
                     name={product.name}
-                    price={formatMoney(Number(product.price))}
+                    price={money(Number(product.price))}
                     imageUrl={product.imageUrl}
                     imageVariants={product.imageVariants}
                     selected={false}
@@ -3470,30 +4073,20 @@ function AddItemDialog({
                     variant="outline"
                     size="icon-sm"
                     aria-label={`Quitar una unidad de ${product.name}`}
-                    disabled={config.quantity <= 0}
-                    onClick={() =>
-                      updateConfig((current) => ({
-                        ...current,
-                        quantity: Math.max(0, current.quantity - 1),
-                      }))
-                    }
+                    disabled={configQuantity(config) <= 0}
+                    onClick={() => changeSimpleQuantity(-1)}
                   >
                     <MinusIcon />
                   </Button>
                   <span className="min-w-6 text-center text-sm tabular-nums">
-                    {config.quantity}
+                    {configQuantity(config)}
                   </span>
                   <Button
                     type="button"
                     variant="outline"
                     size="icon-sm"
                     aria-label={`Añadir una unidad de ${product.name}`}
-                    onClick={() =>
-                      updateConfig((current) => ({
-                        ...current,
-                        quantity: Math.min(99, current.quantity + 1),
-                      }))
-                    }
+                    onClick={() => changeSimpleQuantity(1)}
                   >
                     <PlusIcon />
                   </Button>
@@ -3502,11 +4095,230 @@ function AddItemDialog({
             </div>
           )}
 
+          {configQuantity(config) > 1 || config.preparations ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-dashed p-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">Preparaciones</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {config.preparations
+                      ? "Cada una puede tener opciones distintas."
+                      : "Todas las unidades comparten las mismas opciones."}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    config.preparations
+                      ? collapsePreparations()
+                      : personalize()
+                  }
+                >
+                  {config.preparations
+                    ? "Configurar todas juntas"
+                    : "Personalizar unidades"}
+                </Button>
+              </div>
+
+              {config.preparations ? (
+                <>
+                  <ul className="flex flex-col gap-1.5">
+                    {config.preparations.map((prep, index) => {
+                      const variant = prep.variantId
+                        ? variants.find(
+                            (candidate) => candidate.id === prep.variantId
+                          )
+                        : null
+                      const active =
+                        index ===
+                        Math.min(
+                          prepIndex,
+                          (config.preparations?.length ?? 1) - 1
+                        )
+                      const summary = [
+                        variant?.name,
+                        ...groups.map((group) =>
+                          group.values
+                            .filter((value) =>
+                              prep.selectedOptions[group.id]?.includes(
+                                value.id
+                              )
+                            )
+                            .map((value) => itemOptionValueName(value))
+                            .join(", ")
+                        ),
+                        prep.extraIds.length > 0
+                          ? `+${prep.extraIds.length} extra(s)`
+                          : null,
+                        prep.excludedIds.length > 0
+                          ? `sin ${exclusions
+                              .filter((exclusion) =>
+                                prep.excludedIds.includes(
+                                  exclusion.ingredient.id
+                                )
+                              )
+                              .map((exclusion) => exclusion.ingredient.name)
+                              .join(", ")}`
+                          : null,
+                        prep.notes.trim() ? `“${prep.notes.trim()}”` : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+
+                      return (
+                        <li
+                          key={prep.id}
+                          className={cn(
+                            "flex flex-wrap items-center gap-1.5 rounded-md border px-2 py-1.5",
+                            active && "border-primary bg-primary/5"
+                          )}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => setPrepIndex(index)}
+                            className="min-w-0 flex-1 text-left text-xs"
+                          >
+                            <span className="font-medium">
+                              Preparación {index + 1}
+                            </span>
+                            {summary ? (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                · {summary}
+                              </span>
+                            ) : null}
+                          </button>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Quitar una unidad de la preparación ${index + 1}`}
+                              disabled={prep.quantity <= 1}
+                              onClick={() =>
+                                updatePreparation(index, (current) => ({
+                                  ...current,
+                                  quantity: Math.max(1, current.quantity - 1),
+                                }))
+                              }
+                            >
+                              <MinusIcon />
+                            </Button>
+                            <span className="w-5 text-center text-xs tabular-nums">
+                              {prep.quantity}
+                            </span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon-sm"
+                              aria-label={`Añadir una unidad a la preparación ${index + 1}`}
+                              disabled={configQuantity(config) >= 99}
+                              onClick={() =>
+                                updatePreparation(index, (current) => ({
+                                  ...current,
+                                  quantity: Math.min(
+                                    99,
+                                    current.quantity + 1
+                                  ),
+                                }))
+                              }
+                            >
+                              <PlusIcon />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Duplicar la preparación ${index + 1}`}
+                              disabled={configQuantity(config) >= 99}
+                              onClick={() => duplicatePreparation(index)}
+                            >
+                              <CopyIcon />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-sm"
+                              aria-label={`Quitar la preparación ${index + 1}`}
+                              onClick={() => removePreparation(index)}
+                            >
+                              <Trash2Icon />
+                            </Button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div className="flex flex-wrap gap-1.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={configQuantity(config) >= 99}
+                      onClick={() =>
+                        addPreparation(editingPrep?.variantId ?? null)
+                      }
+                    >
+                      <PlusIcon />
+                      Agregar otra
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={applyPreparationToAll}
+                    >
+                      Aplicar a todas
+                    </Button>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {config.preparations && editingPrep ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/40 px-2 py-1.5 text-xs">
+              <span className="font-medium">
+                Editando preparación{" "}
+                {Math.min(prepIndex, config.preparations.length - 1) + 1}
+              </span>
+              {variants.length > 0 ? (
+                <Select
+                  value={editingPrep.variantId ?? undefined}
+                  onValueChange={(value) =>
+                    value && setEditingVariant(value)
+                  }
+                >
+                  <SelectTrigger
+                    size="sm"
+                    className="ml-auto h-8 w-40"
+                    aria-label="Presentación de la preparación"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {variants.map((variant) => (
+                      <SelectItem key={variant.id} value={variant.id}>
+                        {variant.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span className="text-muted-foreground">
+                  Los cambios aplican solo a esta preparación.
+                </span>
+              )}
+            </div>
+          ) : null}
+
           {groups.map((group) => {
             const availableValues = group.values.filter((value) =>
               isItemOptionValueAvailable(value)
             )
-            const chosen = config.selectedOptions[group.id] ?? []
+            const chosen = editing.selectedOptions[group.id] ?? []
             const chosenCount = chosen.filter((id) =>
               availableValues.some((value) => value.id === id)
             ).length
@@ -3564,7 +4376,7 @@ function AddItemDialog({
                         {valueName}
                         {delta !== 0 ? (
                           <span className="tabular-nums opacity-80">
-                            +{formatMoney(value.priceDelta)}
+                            +{money(value.priceDelta)}
                           </span>
                         ) : null}
                       </Button>
@@ -3580,7 +4392,7 @@ function AddItemDialog({
               <span className="text-sm font-medium">Extras</span>
               <div className="flex flex-wrap gap-1.5">
                 {extras.map((extra) => {
-                  const active = config.extraIds.includes(extra.id)
+                  const active = editing.extraIds.includes(extra.id)
 
                   return (
                     <Button
@@ -3595,7 +4407,7 @@ function AddItemDialog({
                       {extra.name}
                       {Number(extra.price) !== 0 ? (
                         <span className="tabular-nums opacity-80">
-                          +{formatMoney(extra.price)}
+                          +{money(extra.price)}
                         </span>
                       ) : null}
                     </Button>
@@ -3610,7 +4422,7 @@ function AddItemDialog({
               <span className="text-sm font-medium">Sin…</span>
               <div className="flex flex-wrap gap-1.5">
                 {exclusions.map((exclusion) => {
-                  const active = config.excludedIds.includes(
+                  const active = editing.excludedIds.includes(
                     exclusion.ingredient.id
                   )
 
@@ -3638,13 +4450,12 @@ function AddItemDialog({
             <Label htmlFor="pos-notes">Notas para cocina</Label>
             <Textarea
               id="pos-notes"
-              value={config.notes}
-              onChange={(event) =>
-                updateConfig((current) => ({
-                  ...current,
-                  notes: event.target.value,
-                }))
-              }
+              value={editing.notes}
+              onChange={(event) => {
+                const value = event.target.value
+
+                updateEditing((current) => ({ ...current, notes: value }))
+              }}
               placeholder="Ej. sin azúcar, bien caliente…"
               maxLength={200}
               rows={3}
@@ -3655,7 +4466,7 @@ function AddItemDialog({
           <div className="flex items-center justify-between text-sm">
             <span className="text-muted-foreground">Total</span>
             <span className="font-semibold tabular-nums">
-              {formatMoney(total)}
+              {money(total)}
             </span>
           </div>
         </div>
@@ -3669,6 +4480,29 @@ function AddItemDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <AlertDialog open={collapseOpen} onOpenChange={setCollapseOpen}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <Undo2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Configurar todas juntas</AlertDialogTitle>
+            <AlertDialogDescription>
+              Las preparaciones tienen opciones distintas. Al unirlas se
+              conservará la configuración de la primera y se perderán las
+              demás diferencias.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={applyCollapse}>
+              Unir preparaciones
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }

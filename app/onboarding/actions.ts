@@ -1,6 +1,7 @@
 "use server"
 
 import { apiFetch } from "@/lib/api"
+import { isSupportedCurrency } from "@/lib/currency-config"
 import type { DomainAvailability } from "@/lib/domain"
 import { apiErrorMessage } from "@/lib/http-error"
 import { requireUser } from "@/lib/session"
@@ -83,7 +84,29 @@ export async function checkDomainAvailability(
   return (await response.json()) as DomainAvailability
 }
 
-/** Paso 3: datos del usuario (nombre, apellido, usuario). */
+/** Paso 3: moneda del negocio (MXN o USD). */
+export async function updateOnboardingCurrency(
+  formData: FormData
+): Promise<ActionResult> {
+  const currency = text(formData, "currency")
+
+  if (!currency) {
+    return { ok: false, message: "Selecciona la moneda de tu negocio." }
+  }
+
+  if (!isSupportedCurrency(currency)) {
+    return { ok: false, message: "Esa moneda no está disponible." }
+  }
+
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { currency },
+    ["/onboarding", "/dashboard", "/settings"]
+  )
+}
+
+/** Paso 4: datos del usuario (nombre, apellido, usuario). */
 export async function updateOnboardingProfile(
   formData: FormData
 ): Promise<ActionResult> {
@@ -113,7 +136,7 @@ export async function updateOnboardingProfile(
   )
 }
 
-/** Paso 4: tipo de servicio (skippable, multiple). */
+/** Paso 5: tipo de servicio (skippable, multiple). */
 export async function updateOnboardingServiceTypes(
   formData: FormData
 ): Promise<ActionResult> {
@@ -127,7 +150,7 @@ export async function updateOnboardingServiceTypes(
   )
 }
 
-/** Paso 5: objetivos del negocio (skippable, multiple). */
+/** Paso 6: objetivos del negocio (skippable, multiple). */
 export async function updateOnboardingGoals(
   formData: FormData
 ): Promise<ActionResult> {

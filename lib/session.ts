@@ -20,6 +20,8 @@ export interface SessionUser {
   organizationDomain: string | null
   /** IVA por defecto del negocio como fracción (`0.16` = 16 %). */
   organizationTaxRate: string
+  /** Moneda del negocio (código ISO 4217, p. ej. `MXN`). */
+  organizationCurrency: string
   /** La organización usa la sección de insumos core sugeridos. */
   organizationUseCoreSuggestions: boolean
   /** La organización usa los grupos de opciones core sugeridos. */
@@ -49,6 +51,7 @@ interface MeResponse {
     name: string
     domain?: string | null
     taxRate?: string | null
+    currency?: string | null
     useCoreSuggestions?: boolean | null
     useCoreOptionGroups?: boolean | null
     practiceMode?: boolean | null
@@ -88,6 +91,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       organizationName: data.organization?.name ?? null,
       organizationDomain: data.organization?.domain ?? null,
       organizationTaxRate: data.organization?.taxRate ?? "0.16",
+      organizationCurrency: data.organization?.currency ?? "MXN",
       organizationUseCoreSuggestions:
         data.organization?.useCoreSuggestions ?? true,
       organizationUseCoreOptionGroups:

@@ -16,6 +16,7 @@ export default async function OnboardingPage() {
       initialDomain={user.organizationDomain ?? ""}
       initialName={user.name ?? ""}
       initialUsername={user.username ?? ""}
+      initialCurrency={user.organizationCurrency}
       currentUsername={user.username}
     />
   )

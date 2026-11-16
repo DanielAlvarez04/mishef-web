@@ -1,5 +1,6 @@
 import { CustomerDisplay } from "@/components/pos/customer-display"
 import { API_BASE_URL } from "@/lib/api-base"
+import { CurrencyProvider } from "@/lib/currency"
 import type { PosDisplayPublic } from "@/lib/pos-display"
 
 /**
@@ -17,7 +18,11 @@ export default async function DisplayPage({
   const { token } = await params
   const initialData = await loadDisplay(token)
 
-  return <CustomerDisplay token={token} initialData={initialData} />
+  return (
+    <CurrencyProvider currency={initialData?.currency ?? "MXN"}>
+      <CustomerDisplay token={token} initialData={initialData} />
+    </CurrencyProvider>
+  )
 }
 
 async function loadDisplay(token: string): Promise<PosDisplayPublic | null> {

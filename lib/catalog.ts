@@ -502,7 +502,7 @@ export interface Recipe {
   yieldQuantity: string | null
   yieldUnit: UnitCode | null
   ingredients: RecipeIngredient[]
-  /** Costo estimado de la presentación principal (en MXN). */
+  /** Costo estimado de la presentación principal (en la moneda del negocio). */
   estimatedCost: string | null
   hasCompleteCost: boolean
   canComputeConsumption?: boolean
@@ -670,10 +670,33 @@ export function unitLabel(unit: UnitCode): string {
   return UNIT_LABELS[unit] ?? unit
 }
 
-const moneyFormatter = new Intl.NumberFormat("es-MX", {
-  style: "currency",
-  currency: "MXN",
-})
+const moneyFormatters = new Map<string, Intl.NumberFormat>()
+
+/** Formateador por moneda; se cachea porque `Intl` es costoso de crear. */
+function moneyFormatter(currency: string): Intl.NumberFormat {
+  const code = currency || "MXN"
+  const cached = moneyFormatters.get(code)
+  if (cached) return cached
+
+  let formatter: Intl.NumberFormat
+  try {
+    formatter = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: code,
+      currencyDisplay: "code",
+    })
+  } catch {
+    // Código inválido: se cae a la moneda por defecto del negocio.
+    formatter = new Intl.NumberFormat("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      currencyDisplay: "code",
+    })
+  }
+
+  moneyFormatters.set(code, formatter)
+  return formatter
+}
 
 const quantityFormatter = new Intl.NumberFormat("es-MX", {
   maximumFractionDigits: 4,
@@ -694,8 +717,21 @@ export function formatTime(value: string): string {
   return timeFormatter.format(new Date(value))
 }
 
-export function formatMoney(value: string | number): string {
-  return moneyFormatter.format(Number(value))
+/** Importe con el código de la moneda (`MXN 500.00` / `USD 500.00`). */
+export type MoneyFormatter = (value: string | number) => string
+
+/**
+ * Formatea un importe con la moneda indicada (código ISO 4217).
+ *
+ * Usa el código (`currencyDisplay: "code"`) en toda la app para no confundir
+ * el símbolo «$» entre monedas. En componentes cliente preferir `useMoney()`,
+ * que ya trae la moneda de la organización.
+ */
+export function formatMoney(
+  value: string | number,
+  currency = "MXN"
+): string {
+  return moneyFormatter(currency).format(Number(value))
 }
 
 /**

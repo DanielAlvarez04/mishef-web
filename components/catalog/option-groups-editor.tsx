@@ -63,6 +63,7 @@ import {
   isNoPriceOptionGroup,
   type Ingredient,
 } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import {
   Collapsible,
   CollapsibleContent,
@@ -1476,6 +1477,8 @@ function SortableOptionValue({
     isDragging,
   } = useSortable({ id: item.key, disabled })
 
+  const currency = useCurrency()
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -1554,7 +1557,7 @@ function SortableOptionValue({
               onUpdateValue({ priceDelta: event.target.value })
             }
           />
-          <span className="text-xs text-muted-foreground">MXN</span>
+          <span className="text-xs text-muted-foreground">{currency}</span>
         </div>
       )}
 

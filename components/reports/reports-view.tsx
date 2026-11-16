@@ -24,12 +24,14 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
-import { formatMoney, formatQuantity } from "@/lib/catalog"
+import { formatQuantity } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import type { Branch } from "@/lib/branches"
 import type { CashSessionList, ChargesReport } from "@/lib/cash"
 import type {
   InventoryReport,
   KitchenReport,
+  PaymentAnalyticsReport,
   PosOperationsReport,
   SalesReport,
 } from "@/lib/dashboard"
@@ -41,8 +43,16 @@ import {
 
 import { CashReport } from "./cash-report"
 import { OperationsReport } from "./operations-report"
+import { PaymentsReport } from "./payments-report"
 
-const REPORT_TABS = ["sales", "operations", "inventory", "kitchen", "cash"] as const
+const REPORT_TABS = [
+  "sales",
+  "operations",
+  "payments",
+  "inventory",
+  "kitchen",
+  "cash",
+] as const
 
 const MOVEMENT_LABELS: Record<string, string> = {
   ADJUSTMENT: "Ajuste",
@@ -60,6 +70,7 @@ export function ReportsView({
   inventory,
   kitchen,
   operations,
+  payments,
   sessions,
   charges,
   branch,
@@ -69,21 +80,24 @@ export function ReportsView({
   inventory: InventoryReport | null
   kitchen: KitchenReport | null
   operations: PosOperationsReport | null
+  payments: PaymentAnalyticsReport | null
   sessions: CashSessionList | null
   charges: ChargesReport | null
   /** Sucursal activa; `null` = vista consolidada. */
   branch: Branch | null
 }) {
+  const money = useMoney()
   const availableTabs = useMemo(
     () =>
       REPORT_TABS.filter((tab) => {
         if (tab === "sales") return Boolean(sales)
         if (tab === "operations") return Boolean(operations)
+        if (tab === "payments") return Boolean(payments)
         if (tab === "inventory") return Boolean(inventory)
         if (tab === "kitchen") return Boolean(kitchen)
         return Boolean(sessions || charges)
       }),
-    [sales, operations, inventory, kitchen, sessions, charges]
+    [sales, operations, payments, inventory, kitchen, sessions, charges]
   )
   const defaultTab = availableTabs[0] ?? "sales"
   const [tab, setTab] = usePersistentTab(
@@ -122,6 +136,9 @@ export function ReportsView({
           {operations ? (
             <TabsTrigger value="operations">Operación</TabsTrigger>
           ) : null}
+          {payments ? (
+            <TabsTrigger value="payments">Pagos</TabsTrigger>
+          ) : null}
           {inventory ? (
             <TabsTrigger value="inventory">Inventario</TabsTrigger>
           ) : null}
@@ -136,7 +153,7 @@ export function ReportsView({
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <Metric
                 label="Ventas confirmadas"
-                value={formatMoney(sales.totals.sales)}
+                value={money(sales.totals.sales)}
               />
               <Metric
                 label="Pagos"
@@ -145,7 +162,7 @@ export function ReportsView({
               <Metric label="Cuentas" value={String(sales.totals.orders)} />
               <Metric
                 label="Ticket promedio"
-                value={formatMoney(sales.totals.averageTicket)}
+                value={money(sales.totals.averageTicket)}
               />
             </div>
 
@@ -177,7 +194,7 @@ export function ReportsView({
                               {row.count}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatMoney(row.sales)}
+                              {money(row.sales)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -214,7 +231,7 @@ export function ReportsView({
                               {row.count}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatMoney(row.total)}
+                              {money(row.total)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -253,7 +270,7 @@ export function ReportsView({
                               {formatQuantity(row.quantity)}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatMoney(row.revenue)}
+                              {money(row.revenue)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -290,7 +307,7 @@ export function ReportsView({
                               {row.count}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
-                              {formatMoney(row.total)}
+                              {money(row.total)}
                             </TableCell>
                           </TableRow>
                         ))
@@ -306,6 +323,12 @@ export function ReportsView({
         {operations ? (
           <TabsContent value="operations" className="flex flex-col gap-4">
             <OperationsReport report={operations} />
+          </TabsContent>
+        ) : null}
+
+        {payments ? (
+          <TabsContent value="payments" className="flex flex-col gap-4">
+            <PaymentsReport report={payments} />
           </TabsContent>
         ) : null}
 

@@ -20,12 +20,12 @@ import {
 } from "@/components/ui/card"
 import {
   formatMarginPercent,
-  formatMoney,
   priceWithoutTax,
   suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { Separator } from "@/components/ui/separator"
 
 export function CatalogSummary({
@@ -40,6 +40,7 @@ export function CatalogSummary({
   /** Tasa de IVA por defecto de la organización (fracción). */
   taxRate: string
 }) {
+  const money = useMoney()
   const metrics = React.useMemo(() => {
     const activeRecipes = recipes.filter((recipe) => recipe.isActive)
     const published = recipes.filter((recipe) => recipe.itemId)
@@ -245,7 +246,7 @@ export function CatalogSummary({
             <CardTitle className="flex items-center gap-2 text-xl tabular-nums">
               {metrics.averageCost === null
                 ? "—"
-                : formatMoney(metrics.averageCost)}
+                : money(metrics.averageCost)}
               <Separator orientation="vertical" className="h-5 self-center" />
               {metrics.averageCostPercent === null
                 ? "—"
@@ -322,7 +323,7 @@ export function CatalogSummary({
           <CardTitle className="flex items-center gap-2 text-xl tabular-nums">
             {metrics.averageMargin === null
               ? "—"
-              : formatMoney(metrics.averageMargin)}
+              : money(metrics.averageMargin)}
             <Separator orientation="vertical" className="h-5 self-center" />
             {metrics.averageMarginPercent === null
               ? "—"

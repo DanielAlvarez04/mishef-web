@@ -58,6 +58,7 @@ export default async function Page({
       userName={displayName(user)}
       branch={branch}
       days={days}
+      currency={user.organizationCurrency}
     />
   )
 }

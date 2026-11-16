@@ -36,13 +36,13 @@ import {
 } from "@/components/ui/hover-card"
 import {
   formatMarginPercent,
-  formatMoney,
   priceWithoutTax,
   suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
   type Variant,
 } from "@/lib/catalog"
+import { useMoney, type MoneyFormatter } from "@/lib/currency"
 import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
@@ -229,6 +229,7 @@ export function PresentationPreview({
   /** Estilos extra del badge (p. ej. sobre una imagen oscura). */
   className?: string
 }) {
+  const money = useMoney()
   const variants = allVariants.filter((variant) => variant.isActive)
 
   if (variants.length === 0) {
@@ -292,7 +293,7 @@ export function PresentationPreview({
                     {variant.name}
                   </span>
                   <span className="shrink-0 font-medium tabular-nums">
-                    {formatMoney(base + Number(variant.priceAdjust))}
+                    {money(base + Number(variant.priceAdjust))}
                   </span>
                 </div>
               </div>
@@ -365,8 +366,11 @@ export function createArticleColumns(
     variant?: "full" | "selection"
     /** Selector de grupo por fila; solo se usa en la variante `selection`. */
     renderGroup?: (article: ArticleListItem) => ReactNode
+    /** Formateador de importes ligado a la moneda de la organización. */
+    money: MoneyFormatter
   }
 ) {
+  const { money } = options
   const recipeByItemId = buildRecipeMap(options.recipes)
   const isSelection = options.variant === "selection"
 
@@ -474,7 +478,7 @@ export function createArticleColumns(
         if (isSelection) {
           return (
             <span className="block text-right font-medium whitespace-nowrap tabular-nums">
-              {formatMoney(price)}
+              {money(price)}
             </span>
           )
         }
@@ -490,10 +494,10 @@ export function createArticleColumns(
             className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums"
             title="Precio/Sugerido"
           >
-            <span className="font-medium">{formatMoney(price)}</span>
+            <span className="font-medium">{money(price)}</span>
             <span className="text-muted-foreground">/</span>
             <span className="text-muted-foreground">
-              {suggested === null ? "—" : formatMoney(suggested)}
+              {suggested === null ? "—" : money(suggested)}
             </span>
           </div>
         )
@@ -535,7 +539,7 @@ export function createArticleColumns(
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
-              <span className="font-medium">{formatMoney(cost)}</span>
+              <span className="font-medium">{money(cost)}</span>
               <span className="text-muted-foreground">/</span>
               <span className={costPercentClass(share)}>
                 {formatMarginPercent(share)}
@@ -589,7 +593,7 @@ export function createArticleColumns(
                   margin < 0 && "text-destructive"
                 )}
               >
-                {formatMoney(margin)}
+                {money(margin)}
               </span>
               <span className="text-muted-foreground">/</span>
               <span className={marginPercentClass(margin / netPrice)}>

@@ -36,7 +36,6 @@ import {
 } from "@/components/ui/select"
 import { useActionForm } from "@/hooks/use-action-form"
 import {
-  formatMoney,
   formatQuantity,
   UNIT_CODES,
   UNIT_LABELS,
@@ -45,6 +44,7 @@ import {
   type Ingredient,
   type ItemDetail,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 export function ProductExtras({
   product,
@@ -98,6 +98,7 @@ function ExtraRow({
   canManage: boolean
 }) {
   const router = useRouter()
+  const money = useMoney()
   const { pending, error, run } = useActionForm(() => router.refresh())
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
 
@@ -106,7 +107,7 @@ function ExtraRow({
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <p className="font-medium">{extra.name}</p>
-          <Badge variant="outline">+{formatMoney(extra.price)}</Badge>
+          <Badge variant="outline">+{money(extra.price)}</Badge>
           {extra.isActive ? null : <Badge variant="secondary">Inactivo</Badge>}
         </div>
         <p className="text-xs text-muted-foreground">

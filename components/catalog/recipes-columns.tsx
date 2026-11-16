@@ -32,12 +32,12 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
   formatMarginPercent,
-  formatMoney,
   priceWithoutTax,
   suggestedPriceFromCost,
   type ArticleListItem,
   type Recipe,
 } from "@/lib/catalog"
+import type { MoneyFormatter } from "@/lib/currency"
 import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
@@ -294,8 +294,14 @@ const sortRecipesByName: SortFn<DataTableFeatures, Recipe> = (rowA, rowB) => {
  */
 export function createRecipeColumns(
   actions: RecipeRowActions,
-  options: { selectable: boolean; articles: ArticleListItem[]; taxRate: string }
+  options: {
+    selectable: boolean
+    articles: ArticleListItem[]
+    taxRate: string
+    money: MoneyFormatter
+  }
 ) {
+  const { money } = options
   const articleById = new Map<string, ArticleListItem>()
   const articleByCatalogEntry = new Map<string, ArticleListItem>()
 
@@ -444,7 +450,7 @@ export function createRecipeColumns(
                   !hasPrice && "text-muted-foreground"
                 )}
               >
-                {hasPrice ? formatMoney(price) : "—"}
+                {hasPrice ? money(price) : "—"}
               </span>
               <span className="text-muted-foreground">/</span>
               <span
@@ -453,7 +459,7 @@ export function createRecipeColumns(
                   !hasPrice && suggested !== null && "font-medium text-foreground"
                 )}
               >
-                {suggested === null ? "—" : formatMoney(suggested)}
+                {suggested === null ? "—" : money(suggested)}
               </span>
             </div>
           )
@@ -499,7 +505,7 @@ export function createRecipeColumns(
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
-              <span className="font-medium">{formatMoney(cost)}</span>
+              <span className="font-medium">{money(cost)}</span>
               <span className="text-muted-foreground">/</span>
               <span className={costPercentClass(share)}>
                 {formatMarginPercent(share)}
@@ -557,7 +563,7 @@ export function createRecipeColumns(
                   margin < 0 && "text-destructive"
                 )}
               >
-                {formatMoney(margin)}
+                {money(margin)}
               </span>
               <span className="text-muted-foreground">/</span>
               <span className={marginPercentClass(margin / netPrice)}>

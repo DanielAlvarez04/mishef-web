@@ -46,6 +46,7 @@ import {
   type IngredientLocation,
   type UnitCode,
 } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import { clearDraft, readDraft, writeDraft } from "@/lib/drafts"
 import { cn } from "cn"
 
@@ -135,6 +136,7 @@ export function BulkIngredientsDialog({
   onSaved?: (createdNames: string[]) => void
 }) {
   const router = useRouter()
+  const currency = useCurrency()
   const isOrgView = branchName === null
   // Con filas iniciales no se mezcla el borrador global de /inventory.
   const draftKey =
@@ -486,7 +488,7 @@ export function BulkIngredientsDialog({
                     disabled={pending}
                   />
                   <InputGroupAddon align="inline-end">
-                    <InputGroupText className="text-xs">MXN</InputGroupText>
+                    <InputGroupText className="text-xs">{currency}</InputGroupText>
                   </InputGroupAddon>
                 </InputGroup>
 

@@ -7,6 +7,7 @@ import type { CashSessionList, ChargesReport } from "@/lib/cash"
 import type {
   InventoryReport,
   KitchenReport,
+  PaymentAnalyticsReport,
   PosOperationsReport,
   SalesReport,
 } from "@/lib/dashboard"
@@ -42,7 +43,7 @@ export default async function ReportsPage({
 
   const { from, to } = range(days)
 
-  const [salesResponse, inventoryResponse, kitchenResponse, operationsResponse, sessionsResponse, chargesResponse, branch] =
+  const [salesResponse, inventoryResponse, kitchenResponse, operationsResponse, paymentsResponse, sessionsResponse, chargesResponse, branch] =
     await Promise.all([
       money
         ? apiFetch(`/reports/sales?from=${from}&to=${to}`)
@@ -55,6 +56,9 @@ export default async function ReportsPage({
         : Promise.resolve(null),
       money
         ? apiFetch(`/analytics/pos-operations?from=${from}&to=${to}`)
+        : Promise.resolve(null),
+      money
+        ? apiFetch(`/analytics/payments?from=${from}&to=${to}`)
         : Promise.resolve(null),
       money
         ? apiFetch(`/cash/sessions?from=${from}&to=${to}&limit=50`)
@@ -81,6 +85,10 @@ export default async function ReportsPage({
     operationsResponse && operationsResponse.ok
       ? ((await operationsResponse.json()) as PosOperationsReport)
       : null
+  const payments =
+    paymentsResponse && paymentsResponse.ok
+      ? ((await paymentsResponse.json()) as PaymentAnalyticsReport)
+      : null
   const sessions =
     sessionsResponse && sessionsResponse.ok
       ? ((await sessionsResponse.json()) as CashSessionList)
@@ -97,6 +105,7 @@ export default async function ReportsPage({
       inventory={inventory}
       kitchen={kitchen}
       operations={operationsReport}
+      payments={payments}
       sessions={sessions}
       charges={charges}
       branch={branch}

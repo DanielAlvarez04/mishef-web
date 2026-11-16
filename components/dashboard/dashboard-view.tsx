@@ -48,6 +48,7 @@ export function DashboardView({
   userName,
   branch,
   days,
+  currency,
 }: {
   data: DashboardOverview
   userName: string
@@ -55,6 +56,8 @@ export function DashboardView({
   branch: Branch | null
   /** Periodo seleccionado en días. */
   days: number
+  /** Moneda del negocio (código ISO 4217). */
+  currency: string
 }) {
   const kitchenActive =
     data.kitchen.pending + data.kitchen.preparing + data.kitchen.ready
@@ -104,12 +107,12 @@ export function DashboardView({
           label="Ventas de hoy"
           value={
             data.money && data.today.sales !== null
-              ? formatMoney(data.today.sales)
+              ? formatMoney(data.today.sales, currency)
               : "—"
           }
           hint={
             data.money
-              ? `IVA incluido ${formatMoney(data.today.taxTotal ?? 0)}`
+              ? `IVA incluido ${formatMoney(data.today.taxTotal ?? 0, currency)}`
               : "Tu rol no incluye importes"
           }
           icon={<CircleDollarSignIcon className="size-4" />}
@@ -124,7 +127,7 @@ export function DashboardView({
           label="Ticket promedio"
           value={
             data.money && data.today.averageTicket !== null
-              ? formatMoney(data.today.averageTicket)
+              ? formatMoney(data.today.averageTicket, currency)
               : "—"
           }
           hint={`${data.today.payments} pago(s) confirmados`}
@@ -199,7 +202,7 @@ export function DashboardView({
                   <div className="flex items-center justify-between text-sm">
                     <span>{PAYMENT_METHOD_LABELS[row.method]}</span>
                     <span className="tabular-nums">
-                      {row.total !== null ? formatMoney(row.total) : row.count}
+                      {row.total !== null ? formatMoney(row.total, currency) : row.count}
                     </span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -250,7 +253,7 @@ export function DashboardView({
                     <span className="shrink-0 text-muted-foreground tabular-nums">
                       {formatQuantity(product.quantity)} ud.
                       {product.revenue !== null
-                        ? ` · ${formatMoney(product.revenue)}`
+                        ? ` · ${formatMoney(product.revenue, currency)}`
                         : ""}
                     </span>
                   </li>
@@ -403,7 +406,7 @@ export function DashboardView({
                       {order.user ?? "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {order.total !== null ? formatMoney(order.total) : "—"}
+                      {order.total !== null ? formatMoney(order.total, currency) : "—"}
                     </TableCell>
                     <TableCell className="text-right text-muted-foreground">
                       {new Date(order.createdAt).toLocaleTimeString("es-MX", {
@@ -421,7 +424,7 @@ export function DashboardView({
           <span>
             {data.openOrders.count} cuenta(s) abierta(s)
             {data.openOrders.total !== null
-              ? ` · ${formatMoney(data.openOrders.total)} en curso`
+              ? ` · ${formatMoney(data.openOrders.total, currency)} en curso`
               : ""}
           </span>
           <Link href="/pos" className={buttonVariants({ variant: "ghost", size: "sm" })}>

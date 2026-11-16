@@ -10,9 +10,9 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { EntityImage } from "@/components/ui/entity-image"
 import {
   PROMOTION_TYPE_LABELS,
-  formatMoney,
   type ArticleListItem,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
@@ -44,6 +44,7 @@ function FullComboCard({
   selected: boolean
   onSelectedChange: (id: string, selected: boolean) => void
 }) {
+  const money = useMoney()
   const { src, assets, showFallback, handleError } = useComboImage(combo)
   const { normal, effective, promotion } = comboPricing(combo)
 
@@ -120,11 +121,11 @@ function FullComboCard({
 
               <div className="flex min-w-0 items-baseline gap-1">
                 <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
-                  {formatMoney(effective)}
+                  {money(effective)}
                 </span>
                 {effective !== normal ? (
                   <span className="text-[11px] leading-none text-white/70 line-through">
-                    {formatMoney(normal)}
+                    {money(normal)}
                   </span>
                 ) : null}
               </div>

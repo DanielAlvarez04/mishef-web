@@ -49,6 +49,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Label } from "@/components/ui/label"
 import type { ArticleListItem, Category, Recipe } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { ACTIVE_FILTER_OUTLINE, cn } from "@/lib/utils"
 
 import { ArticleCards } from "./article-cards"
@@ -123,6 +124,7 @@ export function ArticlesTable({
   /** Modo `select`: bloquea la selección mientras se guarda. */
   disabled?: boolean
 }) {
+  const money = useMoney()
   const isSelectMode = mode === "select"
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] =
@@ -341,6 +343,7 @@ export function ArticlesTable({
         recipes,
         taxRate,
         variant: isSelectMode ? "selection" : "full",
+        money,
         renderGroup: isSelectMode
           ? (article) => (
               <ArticleGroupSelect
@@ -361,6 +364,7 @@ export function ArticlesTable({
       isSelectMode,
       recipes,
       taxRate,
+      money,
       groupNames,
       groupByItemId,
       onGroupChange,

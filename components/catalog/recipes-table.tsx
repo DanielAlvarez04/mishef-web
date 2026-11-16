@@ -58,6 +58,7 @@ import {
   RECIPE_COLUMN_LABELS,
   createRecipeColumns,
 } from "./recipes-columns"
+import { useMoney } from "@/lib/currency"
 
 export function RecipesTable({
   recipes,
@@ -101,6 +102,7 @@ export function RecipesTable({
   onEditCombo: (comboId: string) => void
   onManageCategories: () => void
 }) {
+  const money = useMoney()
   const [globalFilter, setGlobalFilter] = React.useState("")
   const [categoryFilter, setCategoryFilter] =
     React.useState<string>(DATA_TABLE_ALL)
@@ -269,7 +271,7 @@ export function RecipesTable({
           canManage,
           isPending: () => false,
         },
-        { selectable: canManage, articles, taxRate }
+        { selectable: canManage, articles, taxRate, money }
       ),
     [
       onEdit,
@@ -282,6 +284,7 @@ export function RecipesTable({
       canManage,
       articles,
       taxRate,
+      money,
     ]
   )
 

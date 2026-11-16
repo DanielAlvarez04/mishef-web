@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { API_BASE_URL } from "@/lib/api-base"
 import { formatMoney } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import { apiErrorMessage } from "@/lib/http-error"
 import type { PosDisplayPublic, PosDisplayState } from "@/lib/pos-display"
 import { cn } from "@/lib/utils"
@@ -32,7 +33,15 @@ export function CustomerDisplay({
   /** Datos ya cargados en el servidor para pintar sin esperar al primer poll. */
   initialData?: PosDisplayPublic | null
 }) {
+  const fallbackCurrency = useCurrency()
   const [data, setData] = React.useState<PosDisplayPublic | null>(initialData)
+  // La moneda viaja en la respuesta pública: el poll la mantiene al día aunque
+  // la pantalla se haya abierto sin datos iniciales.
+  const money = React.useCallback(
+    (value: string | number) =>
+      formatMoney(value, data?.currency ?? fallbackCurrency),
+    [data?.currency, fallbackCurrency]
+  )
   const [error, setError] = React.useState<string | null>(null)
   const [savingTip, setSavingTip] = React.useState<number | null>(null)
   const [confirming, setConfirming] = React.useState(false)
@@ -195,7 +204,7 @@ export function CustomerDisplay({
                     {item.name}
                   </span>
                   <span className="tabular-nums">
-                    {formatMoney(item.price * item.quantity)}
+                    {money(item.price * item.quantity)}
                   </span>
                 </li>
               ))}
@@ -206,7 +215,7 @@ export function CustomerDisplay({
             <div className="flex items-baseline justify-between">
               <span className="text-sm text-muted-foreground">Total</span>
               <span className="text-4xl font-semibold tabular-nums">
-                {formatMoney(total)}
+                {money(total)}
               </span>
             </div>
 
@@ -228,9 +237,9 @@ export function CustomerDisplay({
               </div>
               {tipPercent > 0 ? (
                 <p className="text-sm text-muted-foreground">
-                  Propina {formatMoney(tip)} · total{" "}
+                  Propina {money(tip)} · total{" "}
                   <span className="font-medium text-foreground tabular-nums">
-                    {formatMoney(total + tip)}
+                    {money(total + tip)}
                   </span>
                 </p>
               ) : null}

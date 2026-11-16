@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { EntityImage } from "@/components/ui/entity-image"
-import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { type ArticleListItem } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
@@ -68,6 +69,7 @@ function FullArticleCard({
   onGroupChange?: (id: string, group: string | null) => void
 }) {
   const { showFallback, handleError } = useArticleImage(article)
+  const money = useMoney()
 
   return (
     <div
@@ -143,7 +145,7 @@ function FullArticleCard({
 
               <div className="flex min-w-0 items-center gap-1">
                 <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
-                  {formatMoney(article.price)}
+                  {money(article.price)}
                 </span>
                 <PresentationPreview
                   price={article.price}

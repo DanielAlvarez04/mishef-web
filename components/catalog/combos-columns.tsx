@@ -35,11 +35,11 @@ import {
 import {
   PROMOTION_TYPE_LABELS,
   formatMarginPercent,
-  formatMoney,
   type ArticleListItem,
   type ComboPromotion,
   type Recipe,
 } from "@/lib/catalog"
+import { useMoney, type MoneyFormatter } from "@/lib/currency"
 import { cn } from "cn"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
@@ -121,14 +121,17 @@ function ComboColumnHeader({
 }
 
 /** Resumen legible de los parámetros configurados en la promoción. */
-function promotionSummary(promotion: ComboPromotion): string {
+function promotionSummary(
+  promotion: ComboPromotion,
+  money: MoneyFormatter
+): string {
   switch (promotion.type) {
     case "PERCENT":
       return `${Number(promotion.value)} % de descuento.`
     case "FIXED":
-      return `${formatMoney(Number(promotion.value))} de descuento.`
+      return `${money(Number(promotion.value))} de descuento.`
     case "SPECIAL_PRICE":
-      return `Precio especial de ${formatMoney(Number(promotion.specialPrice ?? 0))}.`
+      return `Precio especial de ${money(Number(promotion.specialPrice ?? 0))}.`
     case "BOGO":
       return "Paga 1 y recibe 2."
     case "PAY_X_GET_Y":
@@ -143,6 +146,7 @@ function promotionSummary(promotion: ComboPromotion): string {
 }
 
 function ComboPromotionHint({ promotion }: { promotion: ComboPromotion }) {
+  const money = useMoney()
   return (
     <HoverCard>
       <HoverCardTrigger
@@ -170,7 +174,7 @@ function ComboPromotionHint({ promotion }: { promotion: ComboPromotion }) {
           )}
         </div>
         <p className="px-2 pt-1 text-xs text-muted-foreground">
-          {promotionSummary(promotion)}
+          {promotionSummary(promotion, money)}
         </p>
       </HoverCardContent>
     </HoverCard>
@@ -271,8 +275,9 @@ const sortCombosByName: SortFn<DataTableFeatures, ArticleListItem> = (
 
 export function createComboColumns(
   actions: ComboRowActions,
-  options: { selectable: boolean; recipes: Recipe[] }
+  options: { selectable: boolean; recipes: Recipe[]; money: MoneyFormatter }
 ) {
+  const { money } = options
   return columnHelper.columns([
     ...(options.selectable
       ? [
@@ -355,7 +360,7 @@ export function createComboColumns(
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
-              <span className="font-medium">{formatMoney(effective)}</span>
+              <span className="font-medium">{money(effective)}</span>
               <span className="text-muted-foreground">/</span>
               <span
                 className={cn(
@@ -363,7 +368,7 @@ export function createComboColumns(
                   effective !== normal && "line-through"
                 )}
               >
-                {formatMoney(normal)}
+                {money(normal)}
               </span>
             </div>
           )
@@ -400,7 +405,7 @@ export function createComboColumns(
 
           return (
             <div className="flex items-baseline justify-end gap-1 whitespace-nowrap tabular-nums">
-              <span className="font-medium">{formatMoney(cost)}</span>
+              <span className="font-medium">{money(cost)}</span>
               <span className="text-muted-foreground">/</span>
               <span className={costPercentClass(share)}>
                 {formatMarginPercent(share)}
@@ -447,7 +452,7 @@ export function createComboColumns(
                   margin < 0 && "text-destructive"
                 )}
               >
-                {formatMoney(margin)}
+                {money(margin)}
               </span>
               <span className="text-muted-foreground">/</span>
               <span className={marginPercentClass(margin / effective)}>

@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { EntityImage } from "@/components/ui/entity-image"
-import { formatMoney, type Recipe } from "@/lib/catalog"
+import { type Recipe } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { CARD_IMAGE_SIZES } from "@/lib/images"
 import { cn } from "cn"
 
@@ -65,6 +66,7 @@ function FullRecipeCard({
   onSelectedChange: (id: string, selected: boolean) => void
 }) {
   const { src, assets, showFallback, handleError } = useRecipeImage(recipe)
+  const money = useMoney()
   const item = recipe.item
 
   return (
@@ -145,7 +147,7 @@ function FullRecipeCard({
                 {item ? (
                   <>
                     <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
-                      {formatMoney(item.price)}
+                      {money(item.price)}
                     </span>
                     <PresentationPreview
                       price={item.price}
@@ -157,7 +159,7 @@ function FullRecipeCard({
                 ) : (
                   <span className="text-[15px] leading-none font-normal tabular-nums text-white drop-shadow-sm">
                     {recipe.estimatedCost
-                      ? `Costo ${formatMoney(recipe.estimatedCost)}`
+                      ? `Costo ${money(recipe.estimatedCost)}`
                       : "Sin costo"}
                   </span>
                 )}
@@ -166,7 +168,7 @@ function FullRecipeCard({
               {item ? (
                 <span className="text-[11px] leading-none text-white/80 drop-shadow-sm">
                   {recipe.estimatedCost
-                    ? `Costo ${formatMoney(recipe.estimatedCost)}`
+                    ? `Costo ${money(recipe.estimatedCost)}`
                     : "Sin costo"}
                 </span>
               ) : null}

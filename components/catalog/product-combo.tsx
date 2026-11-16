@@ -40,7 +40,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { useActionForm } from "@/hooks/use-action-form"
-import { formatMoney, type ItemDetail, type ItemListItem } from "@/lib/catalog"
+import { type ItemDetail, type ItemListItem } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 interface ComboRow {
   key: string
@@ -66,6 +67,7 @@ export function ProductCombo({
   canManage: boolean
 }) {
   const router = useRouter()
+  const money = useMoney()
   const { pending, error, run } = useActionForm(() => router.refresh())
   // Aviso de validación del combo, mostrado con `AlertDialog`.
   const [validationMessage, setValidationMessage] = useState<string | null>(
@@ -296,7 +298,7 @@ export function ProductCombo({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="text-sm text-muted-foreground">
             Valor de los componentes:{" "}
-            <span className="font-medium text-foreground">{formatMoney(total)}</span>
+            <span className="font-medium text-foreground">{money(total)}</span>
           </p>
 
           {canManage ? (

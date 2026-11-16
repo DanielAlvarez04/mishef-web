@@ -40,7 +40,8 @@ import {
 import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useActionForm } from "@/hooks/use-action-form"
-import { formatMoney, type ItemDetail, type Variant } from "@/lib/catalog"
+import { type ItemDetail, type Variant } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
 
 export function ProductVariants({
@@ -91,6 +92,7 @@ function VariantRow({
   canManage: boolean
 }) {
   const router = useRouter()
+  const money = useMoney()
   const saveForm = useActionForm(() => router.refresh())
   const deleteForm = useActionForm(() => router.refresh())
   const [confirmDeactivate, setConfirmDeactivate] = useState(false)
@@ -194,7 +196,7 @@ function VariantRow({
 
       <div className="flex items-center gap-2">
         <Badge variant="outline">
-          +{formatMoney(variant.priceAdjust)} · x{variant.recipeFactor}
+          +{money(variant.priceAdjust)} · x{variant.recipeFactor}
         </Badge>
         {canManage && variant.isActive ? (
           <Button

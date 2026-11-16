@@ -15,7 +15,6 @@ import {
   canConfirmPayments,
   canDraftOrders,
   canManageCash,
-  canRefundPayments,
   canRegisterPayments,
   canSendOrders,
   type Order,
@@ -111,7 +110,6 @@ export default async function PointOfSalePage() {
       canSend={canSendOrders(user.roles)}
       canRegister={canRegister}
       canConfirm={canConfirmPayments(user.roles)}
-      canRefund={canRefundPayments(user.roles)}
       branch={branch}
       mercadoPago={pointConfig}
       cash={cash}

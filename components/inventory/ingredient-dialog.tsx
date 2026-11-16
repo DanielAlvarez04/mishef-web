@@ -47,6 +47,7 @@ import {
   type IngredientLocation,
   type UnitCode,
 } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import { clearDraft, formValues, readDraft, writeDraft } from "@/lib/drafts"
 import { isCoreProductName } from "@/lib/core-products"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
@@ -68,6 +69,7 @@ export function IngredientDialog({
   branchName?: string | null
 }) {
   const router = useRouter()
+  const currency = useCurrency()
   const isEdit = Boolean(ingredient)
   const isOrgView = branchName === null
   const [formError, setFormError] = useState<string | null>(null)
@@ -439,7 +441,7 @@ export function IngredientDialog({
                       defaultValue={draft?.unitCost ?? ingredient?.unitCost ?? ""}
                     />
                     <InputGroupAddon align="inline-end">
-                      <InputGroupText>MXN</InputGroupText>
+                      <InputGroupText>{currency}</InputGroupText>
                     </InputGroupAddon>
                   </InputGroup>
                 </Field>
@@ -465,7 +467,7 @@ export function IngredientDialog({
                     defaultValue={draft?.unitCost ?? ingredient?.unitCost ?? ""}
                   />
                   <InputGroupAddon align="inline-end">
-                    <InputGroupText>MXN</InputGroupText>
+                    <InputGroupText>{currency}</InputGroupText>
                   </InputGroupAddon>
                 </InputGroup>
               </Field>

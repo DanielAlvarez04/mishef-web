@@ -18,6 +18,7 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 import type { PromotionType } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 
 interface ComboPromotionOption {
   key: string
@@ -67,6 +68,7 @@ export function ComboPromotionFields({
   components: ComboPromotionOption[]
   disabled?: boolean
 }) {
+  const currency = useCurrency()
   return (
     <section className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
@@ -180,7 +182,7 @@ export function ComboPromotionFields({
               placeholder="0.00"
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupText>MXN</InputGroupText>
+              <InputGroupText>{currency}</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
         </Field>
@@ -204,7 +206,7 @@ export function ComboPromotionFields({
               placeholder="0.00"
             />
             <InputGroupAddon align="inline-end">
-              <InputGroupText>MXN</InputGroupText>
+              <InputGroupText>{currency}</InputGroupText>
             </InputGroupAddon>
           </InputGroup>
         </Field>

@@ -7,6 +7,7 @@ import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
+import { CurrencyProvider } from "@/lib/currency"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 
 export default async function AppLayout({
@@ -34,41 +35,43 @@ export default async function AppLayout({
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
 
   return (
-    <OfflineProvider userId={user.id}>
-      <PracticeModeWatcher
-        active={user.organizationPracticeMode}
-        until={user.organizationPracticeUntil}
-      />
-      <SidebarProvider
-        defaultOpen={sidebarOpen}
-        style={
-          {
-            "--sidebar-width": "calc(var(--spacing) * 72)",
-            "--header-height": "calc(var(--spacing) * 12)",
-          } as React.CSSProperties
-        }
-      >
-        <AppSidebar
-          variant="inset"
-          organizationName={user.organizationName}
-          isAdmin={isAdmin(user)}
-          branches={branches}
-          activeBranchId={activeBranch?.id ?? user.branchId ?? null}
-          lockedBranch={Boolean(user.branchId)}
-          user={{
-            name: displayName(user),
-            email: user.email,
-            username: user.username,
-            role: user.roles[0],
-          }}
+    <CurrencyProvider currency={user.organizationCurrency}>
+      <OfflineProvider userId={user.id}>
+        <PracticeModeWatcher
+          active={user.organizationPracticeMode}
+          until={user.organizationPracticeUntil}
         />
-        <SidebarInset className="ml-0! h-svh overflow-hidden">
-          <SiteHeader branchName={activeBranch?.name ?? null} />
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            {children}
-          </div>
-        </SidebarInset>
-      </SidebarProvider>
-    </OfflineProvider>
+        <SidebarProvider
+          defaultOpen={sidebarOpen}
+          style={
+            {
+              "--sidebar-width": "calc(var(--spacing) * 72)",
+              "--header-height": "calc(var(--spacing) * 12)",
+            } as React.CSSProperties
+          }
+        >
+          <AppSidebar
+            variant="inset"
+            organizationName={user.organizationName}
+            isAdmin={isAdmin(user)}
+            branches={branches}
+            activeBranchId={activeBranch?.id ?? user.branchId ?? null}
+            lockedBranch={Boolean(user.branchId)}
+            user={{
+              name: displayName(user),
+              email: user.email,
+              username: user.username,
+              role: user.roles[0],
+            }}
+          />
+          <SidebarInset className="ml-0! h-svh overflow-hidden">
+            <SiteHeader branchName={activeBranch?.name ?? null} />
+            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {children}
+            </div>
+          </SidebarInset>
+        </SidebarProvider>
+      </OfflineProvider>
+    </CurrencyProvider>
   )
 }

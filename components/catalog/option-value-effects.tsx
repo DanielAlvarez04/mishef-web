@@ -20,13 +20,13 @@ import {
 } from "@/components/ui/select"
 import {
   convertUnitValue,
-  formatMoney,
   priceWithoutTax,
   unitsOfDimension,
   type Ingredient,
   type OptionEffect,
   type UnitCode,
 } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 /**
  * Efectos de consumo de una opción.
@@ -50,6 +50,7 @@ export function OptionValueEffects({
   disabled?: boolean
   onChange: (effects: OptionEffect[]) => void
 }) {
+  const money = useMoney()
   const addEffects = effects.filter((effect) => effect.action === "ADD")
   const otherEffects = effects.filter((effect) => effect.action !== "ADD")
 
@@ -268,9 +269,9 @@ export function OptionValueEffects({
 
       <div className="flex items-center justify-between border-t pt-2 text-xs text-muted-foreground">
         <span>
-          Costo insumos {effectCost > 0 ? formatMoney(effectCost) : "—"}
+          Costo insumos {effectCost > 0 ? money(effectCost) : "—"}
         </span>
-        <span>Margen {formatMoney(netDelta - effectCost)}</span>
+        <span>Margen {money(netDelta - effectCost)}</span>
       </div>
     </div>
   )

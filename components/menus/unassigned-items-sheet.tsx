@@ -16,7 +16,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { EntityImage } from "@/components/ui/entity-image"
-import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { type ArticleListItem } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { cn } from "@/lib/utils"
 
 export function UnassignedItemsSheet({
@@ -28,6 +29,7 @@ export function UnassignedItemsSheet({
   onOpenChange: (open: boolean) => void
   items: ArticleListItem[]
 }) {
+  const money = useMoney()
   const [search, setSearch] = React.useState("")
 
   const groups = React.useMemo(() => {
@@ -149,7 +151,7 @@ export function UnassignedItemsSheet({
                           </p>
                         </div>
                         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {formatMoney(item.price)}
+                          {money(item.price)}
                         </span>
                       </div>
                     ))}

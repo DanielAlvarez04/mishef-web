@@ -22,6 +22,7 @@ import { MercadoPagoCard } from "@/components/settings/mercadopago-card"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
+import { CurrencyCard } from "@/components/settings/currency-card"
 import { InventoryPreferencesCard } from "@/components/settings/inventory-preferences-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
 import { TaxSettingsCard } from "@/components/settings/tax-settings-card"
@@ -475,6 +476,10 @@ export default async function SettingsPage({
               </CardContent>
             </Card>
 
+            <CurrencyCard
+              currency={user.organizationCurrency}
+              canManage={admin}
+            />
             <BranchesCard branches={branches} canManage={admin} />
             <PosDevicesCard
               devices={posDevices}

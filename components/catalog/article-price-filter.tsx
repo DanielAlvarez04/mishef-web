@@ -5,7 +5,7 @@ import { cn } from "cn"
 
 import { Button } from "@/components/ui/button"
 import { Slider } from "@/components/ui/slider"
-import { formatMoney } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 /** Extremos del rango en pesos; `null` significa sin filtro. */
 export type PriceRange = [number, number]
@@ -23,6 +23,7 @@ export function ArticlePriceFilter({
   value,
   onChange,
   bare = false,
+  formatPrice,
 }: {
   /** Precio más bajo disponible (incluido). */
   min: number
@@ -35,7 +36,11 @@ export function ArticlePriceFilter({
    * icono ni botón de limpiar. `/catalog` mantiene el diseño completo.
    */
   bare?: boolean
+  /** Formato del importe; el POS usa el código de la moneda. */
+  formatPrice?: (value: number) => string
 }) {
+  const money = useMoney()
+  const format = formatPrice ?? money
   const range = value ?? [min, max]
   const active = value !== null
 
@@ -100,10 +105,10 @@ export function ArticlePriceFilter({
 
       <div className="flex items-center justify-between text-xs text-muted-foreground tabular-nums">
         <span className={cn(active && "text-foreground")}>
-          {formatMoney(range[0])}
+          {format(range[0])}
         </span>
         <span className={cn(active && "text-foreground")}>
-          {formatMoney(range[1])}
+          {format(range[1])}
         </span>
       </div>
     </div>

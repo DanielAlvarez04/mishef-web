@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button"
 import { EntityImage } from "@/components/ui/entity-image"
 import { scrollAncestorToBottom } from "@/lib/scroll"
 import { PRESENTATION_PRESETS } from "@/lib/catalog"
+import { useCurrency } from "@/lib/currency"
 import type { ImageAssets } from "@/lib/images"
 import { IMAGE_ACCEPT, validateImageFile } from "@/lib/uploads"
 import {
@@ -485,6 +486,8 @@ function SortablePresentationRow({
     isDragging,
   } = useSortable({ id: row.key, disabled })
 
+  const currency = useCurrency()
+
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
@@ -608,7 +611,7 @@ function SortablePresentationRow({
           }
         />
         <InputGroupAddon align="inline-end">
-          <InputGroupText>MXN</InputGroupText>
+          <InputGroupText>{currency}</InputGroupText>
         </InputGroupAddon>
       </InputGroup>
 

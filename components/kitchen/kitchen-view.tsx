@@ -23,7 +23,8 @@ import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { Branch } from "@/lib/branches"
-import { formatDateTime, formatMoney, formatTime } from "@/lib/catalog"
+import { formatDateTime, formatTime } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { transitionRound } from "@/lib/order-actions"
 import {
   formatDuration,
@@ -149,6 +150,7 @@ export function KitchenView({
   suggestedByDefault?: boolean
 }) {
   const router = useRouter()
+  const money = useMoney()
   const [pendingId, setPendingId] = React.useState<string | null>(null)
   const [connected, setConnected] = React.useState(false)
   const [lastEvent, setLastEvent] = React.useState<string | null>(null)
@@ -504,7 +506,7 @@ export function KitchenView({
                               ) : null}
                             </div>
                             <p className="text-xs text-muted-foreground">
-                              {formatMoney(round.order.total)}
+                              {money(round.order.total)}
                               {round.order.channel === "DELIVERY" &&
                               round.order.deliveryAddress
                                 ? ` · ${round.order.deliveryAddress}`

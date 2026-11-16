@@ -55,6 +55,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import type { Branch } from "@/lib/branches"
 import type { Ingredient } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 
 import {
   createIngredientColumns,
@@ -108,6 +109,7 @@ export function IngredientsTable({
     type: "add" | "subtract"
   } | null>(null)
   const router = useRouter()
+  const money = useMoney()
 
   const isPending = React.useCallback(
     (ingredient: Ingredient) => pendingIds.includes(ingredient.id),
@@ -201,7 +203,7 @@ export function IngredientsTable({
           canManage,
           isPending,
         },
-        { selectable: canManage, global }
+        { selectable: canManage, global, money }
       ),
     [
       onEdit,
@@ -211,6 +213,7 @@ export function IngredientsTable({
       isPending,
       canManage,
       global,
+      money,
     ]
   )
 

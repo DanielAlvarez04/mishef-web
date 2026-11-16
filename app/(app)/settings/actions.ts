@@ -5,6 +5,7 @@ import { cookies } from "next/headers"
 import { BRANCH_COOKIE } from "@/lib/api"
 import type { UnitCode } from "@/lib/catalog"
 import { CORE_PRODUCT_GROUPS } from "@/lib/core-products"
+import { isSupportedCurrency } from "@/lib/currency-config"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 
 function text(formData: FormData, key: string): string | undefined {
@@ -119,6 +120,27 @@ export async function updateOrganizationTaxRate(
     "PATCH",
     { taxRate },
     ["/settings", "/catalog", "/dashboard"]
+  )
+}
+
+/**
+ * Cambia la moneda del negocio (código ISO 4217).
+ *
+ * La validación real vive en la API; aquí se rechaza antes de llamarla para no
+ * gastar una petición con una moneda que no existe.
+ */
+export async function setOrganizationCurrency(
+  currency: string
+): Promise<ActionResult> {
+  if (!isSupportedCurrency(currency)) {
+    return { ok: false, message: "Esa moneda no está disponible." }
+  }
+
+  return mutateApi(
+    "/organizations/current",
+    "PATCH",
+    { currency },
+    ["/settings", "/dashboard", "/catalog", "/reports", "/pos"]
   )
 }
 

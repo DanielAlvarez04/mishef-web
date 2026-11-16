@@ -38,7 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { formatMoney } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import {
   addCashMovement,
   closeCashSession,
@@ -240,6 +240,7 @@ function CloseDialog({
   summary: CashSummary | null
   onDone: () => void
 }) {
+  const money = useMoney()
   const [countedCash, setCountedCash] = React.useState("")
   const [notes, setNotes] = React.useState("")
   const [pending, setPending] = React.useState(false)
@@ -279,9 +280,9 @@ function CloseDialog({
       toast.success(
         difference === 0
           ? "Caja cerrada sin diferencias"
-          : `Caja cerrada · ${difference > 0 ? "sobrante" : "faltante"} de ${formatMoney(Math.abs(difference))}`,
+          : `Caja cerrada · ${difference > 0 ? "sobrante" : "faltante"} de ${money(Math.abs(difference))}`,
         {
-          description: `Esperado ${formatMoney(expected)} · contado ${formatMoney(closed.countedCash ?? 0)}`,
+          description: `Esperado ${money(expected)} · contado ${money(closed.countedCash ?? 0)}`,
         }
       )
 
@@ -307,12 +308,12 @@ function CloseDialog({
 
         <div className="flex flex-col gap-3">
           <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            Fondo inicial {formatMoney(session.openingFloat)}
+            Fondo inicial {money(session.openingFloat)}
             {summary ? (
               <>
-                {" · "}Ventas en efectivo {formatMoney(summary.cash.sales)}
+                {" · "}Ventas en efectivo {money(summary.cash.sales)}
                 {summary.cash.withdrawals > 0
-                  ? ` · Retiros ${formatMoney(summary.cash.withdrawals)}`
+                  ? ` · Retiros ${money(summary.cash.withdrawals)}`
                   : ""}
               </>
             ) : null}

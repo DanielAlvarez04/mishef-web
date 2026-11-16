@@ -2,9 +2,11 @@
 
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 import type { MercadoPagoTerminal } from "@/lib/mercadopago"
+import type { Payment, TipSource } from "@/lib/orders"
 
 const SETTINGS_PATHS = ["/settings"]
-const POINT_PATHS = ["/pos", "/dashboard", "/reports"]
+/** Cobros con terminal: el POS se sincroniza al cerrar el diálogo. */
+const POINT_PATHS = ["/dashboard", "/reports"]
 
 export async function disconnectMercadoPago(): Promise<ActionResult> {
   return mutateApi("/mercadopago/connection", "DELETE", undefined, SETTINGS_PATHS)
@@ -59,18 +61,19 @@ export async function setMercadoPagoTerminalMode(
 }
 
 /** Pago local creado al enviar un cobro a la terminal. */
-export interface PointPayment {
-  id: string
-  status: "PENDING" | "CONFIRMED" | "CANCELLED" | "REFUNDED"
-  amount: string
-  providerStatus?: string | null
-  providerStatusDetail?: string | null
-}
+export type PointPayment = Payment
 
 export interface PointChargeInput {
   amount: number
   terminalId?: string
   idempotencyKey: string
+  /** Parte de la cuenta a la que se aplica el cobro. */
+  splitId?: string
+  /** Propina incluida en el mismo cobro de la terminal. */
+  tipAmount?: number
+  tipPercent?: number | null
+  tipSource?: TipSource
+  tipBaseAmount?: number | null
 }
 
 export async function chargeWithPoint(

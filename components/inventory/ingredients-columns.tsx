@@ -28,11 +28,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
-  formatMoney,
   formatQuantity,
   unitLabel,
   type Ingredient,
 } from "@/lib/catalog"
+import type { MoneyFormatter } from "@/lib/currency"
 
 import type { DataTableFeatures } from "@/components/data-table/data-table-features"
 
@@ -210,8 +210,13 @@ function stockPriority(ingredient: Ingredient): number {
  */
 export function createIngredientColumns(
   actions: IngredientRowActions,
-  options: { selectable?: boolean; global?: boolean } = {}
+  options: {
+    selectable?: boolean
+    global?: boolean
+    money: MoneyFormatter
+  }
 ) {
+  const { money } = options
   return columnHelper.columns([
     ...(options.selectable
       ? [
@@ -343,7 +348,7 @@ export function createIngredientColumns(
             <div className="text-right text-muted-foreground">—</div>
           ) : (
             <div className="text-right whitespace-nowrap tabular-nums">
-              {formatMoney(row.original.unitCost)}{" "}
+              {money(row.original.unitCost)}{" "}
               <span className="text-muted-foreground">
                 / {unitLabel(row.original.displayUnit)}
               </span>
@@ -374,7 +379,7 @@ export function createIngredientColumns(
                   <div className="text-right text-muted-foreground">—</div>
                 ) : (
                   <div className="text-right whitespace-nowrap font-medium tabular-nums">
-                    {formatMoney(
+                    {money(
                       Number(row.original.currentStock) *
                         Number(row.original.unitCost)
                     )}

@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { formatMoney } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import type { CashSessionList, ChargesReport } from "@/lib/cash"
 
 /** Reporte de caja: turnos y control de cobros por usuario. */
@@ -27,15 +27,16 @@ export function CashReport({
   sessions: CashSessionList | null
   charges: ChargesReport | null
 }) {
+  const money = useMoney()
   return (
     <div className="flex flex-col gap-4">
       {charges?.totals ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric label="Ventas confirmadas" value={formatMoney(charges.totals.total)} />
-          <Metric label="Propinas" value={formatMoney(charges.totals.tips)} />
+          <Metric label="Ventas confirmadas" value={money(charges.totals.total)} />
+          <Metric label="Propinas" value={money(charges.totals.tips)} />
           <Metric
             label="Reembolsos"
-            value={`${charges.totals.refundedCount} · ${formatMoney(charges.totals.refundedAmount)}`}
+            value={`${charges.totals.refundedCount} · ${money(charges.totals.refundedAmount)}`}
           />
           <Metric
             label="Cuentas canceladas"
@@ -94,14 +95,14 @@ export function CashReport({
                         {row.count}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatMoney(row.total)}
+                        {money(row.total)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatMoney(row.tips)}
+                        {money(row.tips)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {row.refundedCount > 0
-                          ? `${row.refundedCount} · ${formatMoney(row.refundedAmount)}`
+                          ? `${row.refundedCount} · ${money(row.refundedAmount)}`
                           : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
@@ -171,20 +172,20 @@ export function CashReport({
                       </div>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(session.totals.sales)}
+                      {money(session.totals.sales)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatMoney(session.totals.tips)}
+                      {money(session.totals.tips)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {session.expectedCash === null
                         ? "—"
-                        : formatMoney(session.expectedCash)}
+                        : money(session.expectedCash)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {session.countedCash === null
                         ? "—"
-                        : formatMoney(session.countedCash)}
+                        : money(session.countedCash)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {session.difference === null ? (
@@ -200,7 +201,7 @@ export function CashReport({
                           }
                         >
                           {session.difference > 0 ? "+" : ""}
-                          {formatMoney(session.difference)}
+                          {money(session.difference)}
                         </span>
                       )}
                     </TableCell>

@@ -65,7 +65,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { formatMoney, type ArticleListItem } from "@/lib/catalog"
+import { type ArticleListItem } from "@/lib/catalog"
+import { useMoney } from "@/lib/currency"
 import { jalapenoChipClass } from "@/lib/chips"
 import { useShake } from "@/hooks/use-shake"
 
@@ -215,6 +216,7 @@ export function MenuArticlesBuilder({
   disabled?: boolean
   layout?: MenuBuilderLayout
 }) {
+  const money = useMoney()
   const [search, setSearch] = React.useState("")
   const [sortModes, setSortModes] = React.useState<
     Record<string, GroupSortMode>
@@ -1667,7 +1669,7 @@ export function MenuArticlesBuilder({
                       >
                         <ArticleCardVisual
                           name={article.name}
-                          price={formatMoney(article.price)}
+                          price={money(article.price)}
                           imageUrl={article.imageUrl}
                           imageVariants={article.imageVariants}
                           isActive={article.isActive}
@@ -1712,6 +1714,7 @@ function CatalogCard({
     id: catalogDragId(article.id),
     disabled,
   })
+  const money = useMoney()
   const nodeRef = React.useRef<HTMLDivElement | null>(null)
 
   const setRefs = React.useCallback(
@@ -1744,7 +1747,7 @@ function CatalogCard({
     >
       <ArticleCardVisual
         name={article.name}
-        price={formatMoney(article.price)}
+        price={money(article.price)}
         imageUrl={article.imageUrl}
         imageVariants={article.imageVariants}
         isActive={article.isActive}
@@ -1786,6 +1789,7 @@ function SortableMenuCard({
       data: sortableData,
     })
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
+  const money = useMoney()
 
   useShake(shakeRef, pending)
 
@@ -1811,7 +1815,7 @@ function SortableMenuCard({
       >
         <ArticleCardVisual
           name={article.name}
-          price={formatMoney(article.price)}
+          price={money(article.price)}
           imageUrl={article.imageUrl}
           imageVariants={article.imageVariants}
           isActive={article.isActive}

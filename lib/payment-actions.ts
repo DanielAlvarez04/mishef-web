@@ -1,17 +1,36 @@
 "use server"
 
 import { mutateApi, type ActionResult } from "@/lib/server-api"
-import type { Order, Payment, PaymentMethod } from "@/lib/orders"
+import type {
+  Order,
+  Payment,
+  PaymentMethod,
+  TipSource,
+} from "@/lib/orders"
 
-const PAYMENT_PATHS = ["/pos", "/dashboard", "/reports"]
+/**
+ * Rutas que se revalidan tras un cobro.
+ *
+ * `/pos` queda fuera a propósito: el diálogo de cobro actualiza su saldo en
+ * cliente y el POS se refresca una sola vez al cerrarlo. Revalidar aquí
+ * re-renderizaba catálogo y cuentas en cada pago.
+ */
+const PAYMENT_PATHS = ["/dashboard", "/reports"]
 
 export interface RegisterPaymentInput {
   method: PaymentMethod
   amount: number
   tipAmount?: number
+  tipPercent?: number | null
+  tipSource?: TipSource
+  tipBaseAmount?: number | null
   tipRecipientId?: string
   cashReceived?: number
   changeGiven?: number
+  /** Parte de una cuenta dividida a la que se aplica el pago. */
+  splitId?: string
+  /** Registra y confirma en una sola petición (roles con permiso). */
+  confirm?: boolean
   idempotencyKey?: string
 }
 

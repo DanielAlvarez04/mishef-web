@@ -10,6 +10,7 @@ import {
   finishOnboarding,
   updateOnboardingBusiness,
   updateOnboardingBusinessType,
+  updateOnboardingCurrency,
   updateOnboardingGoals,
   updateOnboardingProfile,
   updateOnboardingServiceTypes,
@@ -29,6 +30,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useActionForm } from "@/hooks/use-action-form"
 import { domainFromName, normalizeDomain } from "@/lib/domain"
+import { CURRENCY_OPTIONS } from "@/lib/currency-config"
+import { sameText } from "@/lib/diff"
 import { normalizeUsername } from "@/lib/username"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -91,6 +94,7 @@ const GOALS = [
 const ONBOARDING_ITEMS = [
   { name: "businessType", required: true },
   { name: "business", required: true },
+  { name: "currency", required: true },
   { name: "profile", required: true },
   { name: "serviceTypes", required: false },
   { name: "goals", required: false },
@@ -118,12 +122,15 @@ export function OnboardingFlow({
   initialDomain,
   initialName,
   initialUsername,
+  initialCurrency,
   currentUsername,
 }: {
   initialBusinessName: string
   initialDomain: string
   initialName: string
   initialUsername: string
+  /** Moneda configurada; MXN si la organización aún no eligió otra. */
+  initialCurrency: string
   currentUsername: string | null
 }) {
   const router = useRouter()
@@ -160,10 +167,14 @@ export function OnboardingFlow({
 
   const [serviceTypes, setServiceTypes] = useState<string[]>([])
   const [goals, setGoals] = useState<string[]>([])
+  const [currency, setCurrency] = useState(initialCurrency || "MXN")
+  /** Última moneda confirmada por la API (evita repeticiones al avanzar). */
+  const [savedCurrency, setSavedCurrency] = useState(initialCurrency || "MXN")
 
   // Forms
   const businessTypeForm = useActionForm(() => {})
   const businessForm = useActionForm(() => {})
+  const currencyForm = useActionForm(() => {})
   const profileForm = useActionForm(() => {})
   const serviceTypesForm = useActionForm(() => {})
   const goalsForm = useActionForm(() => {})
@@ -184,6 +195,20 @@ export function OnboardingFlow({
     fd.append("domain", domain)
     fd.append("hasBranches", hasBranches.toString())
     return businessForm.run(() => updateOnboardingBusiness(fd))
+  }
+
+  const handleCurrencySubmit = () => {
+    if (sameText(savedCurrency, currency)) {
+      return Promise.resolve(true)
+    }
+
+    const fd = new FormData()
+    fd.append("currency", currency)
+    return currencyForm.run(async () => {
+      const result = await updateOnboardingCurrency(fd)
+      if (result.ok) setSavedCurrency(currency)
+      return result
+    })
   }
 
   const handleProfileSubmit = () => {
@@ -367,7 +392,42 @@ export function OnboardingFlow({
           </div>
         </QuestionnaireItem>
 
-        {/* Paso 3: Datos del usuario */}
+        {/* Paso 3: Moneda */}
+        <QuestionnaireItem name="currency" required>
+          <div className="flex flex-col gap-6">
+            <QuestionnaireTitle>¿Con qué moneda trabajas?</QuestionnaireTitle>
+            <p className="text-base text-muted-foreground text-center">
+              La usarás en los precios, cobros y reportes del negocio.
+            </p>
+
+            <QuestionnaireChoices>
+              {CURRENCY_OPTIONS.map((option) => (
+                <QuestionnaireChoice
+                  key={option.value}
+                  value={option.value}
+                  name="currency"
+                  checked={currency === option.value}
+                  onChange={setCurrency}
+                >
+                  {option.label}
+                </QuestionnaireChoice>
+              ))}
+            </QuestionnaireChoices>
+
+            <QuestionnaireError>{currencyForm.error}</QuestionnaireError>
+            <QuestionnaireActions>
+              <QuestionnairePrevious />
+              <QuestionnaireNext
+                onClick={handleCurrencySubmit}
+                disabled={!currency}
+              >
+                Continuar
+              </QuestionnaireNext>
+            </QuestionnaireActions>
+          </div>
+        </QuestionnaireItem>
+
+        {/* Paso 4: Datos del usuario */}
         <QuestionnaireItem name="profile" required>
           <div className="flex flex-col gap-6">
             <QuestionnaireTitle>Cuéntanos de ti</QuestionnaireTitle>
@@ -446,7 +506,7 @@ export function OnboardingFlow({
           </div>
         </QuestionnaireItem>
 
-        {/* Paso 4: Tipo de servicio (skippable) */}
+        {/* Paso 5: Tipo de servicio (skippable) */}
         <QuestionnaireItem name="serviceTypes" required={false}>
           <div className="flex flex-col gap-6">
             <QuestionnaireTitle>¿Qué tipo de servicio ofreces?</QuestionnaireTitle>
@@ -478,7 +538,7 @@ export function OnboardingFlow({
           </div>
         </QuestionnaireItem>
 
-        {/* Paso 5: Objetivos (skippable) */}
+        {/* Paso 6: Objetivos (skippable) */}
         <QuestionnaireItem name="goals" required={false}>
           <div className="flex flex-col gap-6">
             <QuestionnaireTitle>¿Cuáles son tus objetivos?</QuestionnaireTitle>
@@ -510,7 +570,7 @@ export function OnboardingFlow({
           </div>
         </QuestionnaireItem>
 
-        {/* Paso 6: Bienvenida */}
+        {/* Paso 7: Bienvenida */}
         <QuestionnaireItem name="welcome" required={false}>
           <div className="flex flex-col gap-6 text-center">
             <QuestionnaireTitle>¡Todo listo!</QuestionnaireTitle>
@@ -550,6 +610,10 @@ export function OnboardingFlow({
               <div className="flex items-center justify-center gap-4">
                 <dt className="text-muted-foreground">Dominio</dt>
                 <dd className="font-medium">{domain.trim().toLowerCase()}</dd>
+              </div>
+              <div className="flex items-center justify-center gap-4">
+                <dt className="text-muted-foreground">Moneda</dt>
+                <dd className="font-medium">{currency}</dd>
               </div>
               <div className="flex items-center justify-center gap-4">
                 <dt className="text-muted-foreground">ID de usuario</dt>

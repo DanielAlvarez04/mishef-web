@@ -98,6 +98,66 @@ export interface InventoryReport {
   }[]
 }
 
+/** Pagos, propinas y cuentas divididas del periodo. */
+export interface PaymentAnalyticsReport {
+  from: string
+  to: string
+  totals: {
+    sales: number
+    tips: number
+    /** Propinas / ventas, en porcentaje (0–100). */
+    tipRate: number | null
+    payments: number
+    averageTicket: number | null
+    /** Propina promedio de los pagos que dejaron propina. */
+    averageTip: number | null
+    withTip: number
+    /** Porcentaje de pagos con propina. */
+    tipShare: number | null
+    /** Promedio de los porcentajes registrados explícitamente. */
+    averageTipPercent: number | null
+    /** Pagos aplicados a una parte de cuenta dividida. */
+    splitPayments: number
+  }
+  byMethod: Array<{
+    method: string
+    count: number
+    sales: number
+    tips: number
+    tipRate: number | null
+  }>
+  byTipSource: Array<{
+    source: string
+    count: number
+    tips: number
+  }>
+  byDay: Array<{
+    date: string
+    sales: number
+    tips: number
+    count: number
+  }>
+  splits: {
+    orders: number
+    parts: number
+    paidParts: number
+    expectedTotal: number
+    paidTotal: number
+  }
+  topTipRecipients: Array<{
+    id: string
+    name: string
+    count: number
+    tips: number
+  }>
+  statuses: Array<{
+    status: string
+    count: number
+    amount: number
+    tips: number
+  }>
+}
+
 export interface KitchenReport {
   from: string
   to: string
