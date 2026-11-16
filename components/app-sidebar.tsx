@@ -24,6 +24,7 @@ import type { Branch } from "@/lib/branches"
 import {
   ChartBarIcon,
   ChefHatIcon,
+  ClockIcon,
   CookingPotIcon,
   GalleryVerticalEndIcon,
   LayoutDashboardIcon,
@@ -84,6 +85,11 @@ const data = {
       title: "Fuga interna",
       url: "/reports/leakage",
       icon: <ShieldAlertIcon />,
+    },
+    {
+      title: "Asistencia",
+      url: "/attendance",
+      icon: <ClockIcon />,
     },
   ],
   navSecondary: [
