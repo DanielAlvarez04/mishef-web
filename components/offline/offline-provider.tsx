@@ -11,8 +11,8 @@ import {
   putQueuedRound,
 } from "@/lib/offline/db"
 import type { QueuedRound, QueuedRoundItem } from "@/lib/offline/types"
+import { syncQueuedRound } from "@/lib/offline/sync-round"
 import { createOrder, sendRound } from "@/lib/order-actions"
-import type { ActionResult } from "@/lib/server-api"
 
 export interface EnqueueRoundInput {
   /** Cuenta ya abierta en el servidor (si se conocía al encolar). */
@@ -113,105 +113,37 @@ export function OfflineProvider({
     [refresh]
   )
 
-  const fail = React.useCallback(
-    async (
-      operation: QueuedRound,
-      result: ActionResult<unknown>
-    ): Promise<OperationOutcome> => {
-      // Un fallo de red no es un rechazo del servidor: se reintenta solo.
-      if (result.network) {
-        await persist({
-          ...operation,
-          status: "queued",
-          lastError: result.message,
-          updatedAt: Date.now(),
-        })
-        return "offline"
-      }
-
-      const message = result.message ?? "La operación fue rechazada."
-      await persist({
-        ...operation,
-        status: "error",
-        lastError: message,
-        updatedAt: Date.now(),
-      })
-
-      toast.error("Una comanda no se pudo sincronizar", { description: message })
-      return "error"
-    },
-    [persist]
-  )
-
   const runOperation = React.useCallback(
     async (operation: QueuedRound): Promise<OperationOutcome> => {
-      const attempt: QueuedRound = {
-        ...operation,
-        status: "syncing",
-        attempts: operation.attempts + 1,
-        updatedAt: Date.now(),
-      }
+      const result = await syncQueuedRound(operation, {
+        createOrder,
+        sendRound,
+        persist,
+        remove: deleteQueuedRound,
+      })
 
-      await persist(attempt)
-
-      try {
-        let orderId = attempt.orderId
-
-        if (!orderId) {
-          const created = await createOrder({
-            tableNumber: attempt.order.tableNumber,
-            isTakeaway: attempt.order.isTakeaway,
-            idempotencyKey: attempt.order.idempotencyKey,
-            // Si otro dispositivo ya abrió la mesa sin red, la ronda se une a
-            // esa cuenta en lugar de crear una segunda.
-            reuseOpenTable: true,
+      if (result.outcome === "done") {
+        if (result.reconciled) {
+          toast.info(`La mesa ${operation.order.tableNumber ?? ""} ya estaba abierta`, {
+            description: "La ronda se unió a la cuenta existente.",
           })
-
-          if (!created.ok || !created.data) {
-            return await fail(attempt, created)
-          }
-
-          if (created.data.reconciled) {
-            toast.info(
-              `La mesa ${attempt.order.tableNumber ?? ""} ya estaba abierta`,
-              { description: "La ronda se unió a la cuenta existente." }
-            )
-          }
-
-          orderId = created.data.id
-          await persist({ ...attempt, orderId })
         }
 
-        const sent = await sendRound(orderId, {
-          items: attempt.round.items,
-          idempotencyKey: attempt.round.idempotencyKey,
-        })
-
-        if (!sent.ok) {
-          return await fail(attempt, sent)
-        }
-
-        await deleteQueuedRound(attempt.id)
         await refresh()
-
-        toast.success(`Ronda sincronizada · ${money(attempt.total)}`, {
-          description: attempt.label,
+        toast.success(`Ronda sincronizada · ${money(operation.total)}`, {
+          description: operation.label,
         })
-
         // Cocina ya la recibió: refresca los datos del servidor.
         router.refresh()
-        return "done"
-      } catch {
-        await persist({
-          ...attempt,
-          status: "queued",
-          lastError: "No se pudo contactar con la API.",
-          updatedAt: Date.now(),
+      } else if (result.outcome === "error") {
+        toast.error("Una comanda no se pudo sincronizar", {
+          description: result.message,
         })
-        return "offline"
       }
+
+      return result.outcome
     },
-    [fail, persist, refresh, router, money]
+    [persist, refresh, router, money]
   )
 
   const flush = React.useCallback(async () => {
