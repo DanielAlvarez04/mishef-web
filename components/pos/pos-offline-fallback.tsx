@@ -33,7 +33,7 @@ export function PosOfflineFallback({
   branchId: string | null
 }) {
   const router = useRouter()
-  const { enqueueRound, isOnline } = useOfflineSync()
+  const { enqueueRound, enqueueCheckout, isOnline } = useOfflineSync()
   const [pending, startTransition] = useTransition()
 
   const [items, setItems] = useState<CachedItem[]>([])
@@ -41,6 +41,8 @@ export function PosOfflineFallback({
   const [cart, setCart] = useState<Record<string, number>>({})
   const [tableNumber, setTableNumber] = useState("")
   const [isTakeaway, setIsTakeaway] = useState(false)
+  const [payNow, setPayNow] = useState(false)
+  const [cashReceived, setCashReceived] = useState("")
 
   useEffect(() => {
     let cancelled = false
@@ -95,24 +97,59 @@ export function PosOfflineFallback({
     }
 
     startTransition(async () => {
-      await enqueueRound({
-        tableNumber: isTakeaway ? undefined : tableNumber.trim(),
-        isTakeaway,
-        items: lines.map((line) => ({
-          itemId: line.item.id,
-          quantity: line.quantity,
-        })),
-        total,
-        label: `${isTakeaway ? "Para llevar" : `Mesa ${tableNumber.trim()}`} · ${lines.length} línea(s)`,
-      })
+      const queuedItems = lines.map((line) => ({
+        itemId: line.item.id,
+        quantity: line.quantity,
+      }))
+      const label = `${isTakeaway ? "Para llevar" : `Mesa ${tableNumber.trim()}`} · ${lines.length} línea(s)`
 
-      toast.success("Cuenta guardada", {
-        description:
-          "Se enviará sola cuando vuelva la conexión. No la cobres hasta confirmarla.",
-      })
+      if (payNow) {
+        const cash = Number(cashReceived || total)
+
+        if (!Number.isFinite(cash) || cash < total) {
+          toast.error("El efectivo recibido no cubre el total")
+          return
+        }
+
+        await enqueueCheckout({
+          order: {
+            tableNumber: isTakeaway ? undefined : tableNumber.trim(),
+            isTakeaway,
+          },
+          round: { items: queuedItems },
+          amount: total,
+          tipAmount: 0,
+          tipSource: "NONE",
+          cashReceived: cash,
+          changeGiven: Math.max(0, Math.round((cash - total) * 100) / 100),
+          closeOrder: true,
+          total,
+          label: `${label} · efectivo sin conexión`,
+        })
+
+        toast.success("Venta guardada en este dispositivo", {
+          description:
+            "Se enviará al reconectar: primero la cuenta y la comanda, luego el pago y el cierre.",
+        })
+      } else {
+        await enqueueRound({
+          tableNumber: isTakeaway ? undefined : tableNumber.trim(),
+          isTakeaway,
+          items: queuedItems,
+          total,
+          label,
+        })
+
+        toast.success("Cuenta guardada", {
+          description:
+            "Se enviará sola cuando vuelva la conexión. No la cobres hasta confirmarla.",
+        })
+      }
 
       setCart({})
       setTableNumber("")
+      setPayNow(false)
+      setCashReceived("")
       router.refresh()
     })
   }
@@ -223,8 +260,34 @@ export function PosOfflineFallback({
               <span className="tabular-nums">${total.toFixed(2)}</span>
             </div>
 
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={payNow}
+                onChange={(event) => setPayNow(event.target.checked)}
+                className="size-4 accent-primary"
+              />
+              Cobrar en efectivo ahora
+            </label>
+
+            {payNow ? (
+              <Input
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={cashReceived}
+                placeholder={total.toFixed(2)}
+                onChange={(event) => setCashReceived(event.target.value)}
+                aria-label="Efectivo recibido"
+              />
+            ) : null}
+
             <Button type="button" onClick={enqueue} disabled={pending}>
-              {pending ? "Guardando..." : "Guardar cuenta en cola"}
+              {pending
+                ? "Guardando..."
+                : payNow
+                  ? "Guardar venta cobrada"
+                  : "Guardar cuenta en cola"}
             </Button>
           </div>
         </div>

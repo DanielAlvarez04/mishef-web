@@ -54,6 +54,20 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("message", (event) => {
   if (event.data === "SKIP_WAITING") {
     self.skipWaiting();
+    return;
+  }
+
+  if (event.data?.type === "CACHE_POS") {
+    event.waitUntil(
+      fetch(POS_PATH, { credentials: "same-origin" })
+        .then(async (response) => {
+          // Un redirect a /login no es una copia válida del POS.
+          if (!response.ok || response.redirected) return;
+          const cache = await caches.open(POS_CACHE);
+          await cache.put(POS_PATH, response);
+        })
+        .catch(() => undefined)
+    );
   }
 });
 

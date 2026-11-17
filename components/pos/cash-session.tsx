@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import { useOfflineSync } from "@/components/offline/offline-provider"
 import { useMoney } from "@/lib/currency"
 import {
   addCashMovement,
@@ -75,9 +76,13 @@ export function CashSessionActions({
   canManage: boolean
 }) {
   const router = useRouter()
+  const offline = useOfflineSync()
   const [openOpen, setOpenOpen] = React.useState(false)
   const [openClose, setOpenClose] = React.useState(false)
   const [openMovement, setOpenMovement] = React.useState(false)
+  const closePending = session
+    ? offline.hasPendingCashClose(session.id)
+    : false
 
   if (!canManage) return null
 
@@ -89,10 +94,11 @@ export function CashSessionActions({
             type="button"
             size="sm"
             variant="outline"
+            disabled={closePending}
             onClick={() => setOpenClose(true)}
           >
             <LockIcon data-icon="inline-start" />
-            Cerrar caja
+            {closePending ? "Cierre pendiente" : "Cerrar caja"}
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -134,7 +140,9 @@ export function CashSessionActions({
           onOpenChange={setOpenClose}
           session={session}
           summary={summary}
-          onDone={() => router.refresh()}
+          onDone={() => {
+            if (offline.isOnline) router.refresh()
+          }}
         />
       ) : null}
       {session ? (
@@ -243,6 +251,7 @@ function CloseDialog({
   onDone: () => void
 }) {
   const money = useMoney()
+  const offline = useOfflineSync()
   const [countedCash, setCountedCash] = React.useState("")
   const [notes, setNotes] = React.useState("")
   const [pending, setPending] = React.useState(false)
@@ -288,9 +297,32 @@ function CloseDialog({
     setPending(true)
 
     try {
+      const rounded = Math.round(value * 100) / 100
+
+      if (!offline.isOnline) {
+        await offline.enqueueCashClose({
+          sessionId: session.id,
+          countedCash: rounded,
+          notes: notes.trim() || undefined,
+          label: "Cierre de caja",
+        })
+
+        toast.success("Cierre guardado en este dispositivo", {
+          description:
+            "Se enviará al reconectar. No se podrá cobrar hasta confirmar el cierre.",
+        })
+
+        setCountedCash("")
+        setNotes("")
+        onOpenChange(false)
+        onDone()
+        return
+      }
+
       const result = await closeCashSession(session.id, {
-        countedCash: Math.round(value * 100) / 100,
+        countedCash: rounded,
         notes: notes.trim() || undefined,
+        idempotencyKey: crypto.randomUUID(),
       })
 
       if (!result.ok || !result.data) {
@@ -334,6 +366,9 @@ function CloseDialog({
           <DialogDescription>
             Cuenta el efectivo del cajón sin ver el esperado. La diferencia se
             muestra al cerrar y queda auditada.
+            {!offline.isOnline
+              ? " Sin conexión, el cierre se guarda en el dispositivo y se envía al reconectar."
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
@@ -364,17 +399,19 @@ function CloseDialog({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="self-start"
-              onClick={() => setShowReconciliation((value) => !value)}
-            >
-              {showReconciliation ? "Ocultar conciliación" : "Ver conciliación"}
-            </Button>
+            {offline.isOnline ? (
+              <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="self-start"
+                  onClick={() => setShowReconciliation((value) => !value)}
+                >
+                  {showReconciliation ? "Ocultar conciliación" : "Ver conciliación"}
+                </Button>
 
-            {showReconciliation ? (
+                {showReconciliation ? (
               <div className="flex flex-col gap-3 rounded-lg border p-3 text-sm">
                 {loadingReconciliation && !reconciliation ? (
                   <span className="text-muted-foreground">Calculando...</span>
@@ -433,7 +470,13 @@ function CloseDialog({
                   </span>
                 )}
               </div>
-            ) : null}
+                ) : null}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                La conciliación se calcula al reconectar.
+              </p>
+            )}
           </div>
 
           <div className="flex flex-col gap-2">
@@ -459,7 +502,7 @@ function CloseDialog({
           </Button>
           <Button type="button" onClick={submit} disabled={pending}>
             {pending ? <Loader2Icon className="animate-spin" /> : null}
-            Cerrar caja
+            {offline.isOnline ? "Cerrar caja" : "Guardar cierre"}
           </Button>
         </DialogFooter>
       </DialogContent>

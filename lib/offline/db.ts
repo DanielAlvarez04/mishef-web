@@ -1,4 +1,4 @@
-import type { QueuedRound } from "./types"
+import type { QueuedOperation } from "./types"
 
 /**
  * Persistencia local de la cola de sincronización.
@@ -68,14 +68,14 @@ function transactionDone(transaction: IDBTransaction): Promise<void> {
   })
 }
 
-export async function listQueuedRounds(userId: string): Promise<QueuedRound[]> {
+export async function listQueuedOperations(userId: string): Promise<QueuedOperation[]> {
   if (!hasIndexedDb()) return []
 
   try {
     const db = await openDb()
     const transaction = db.transaction(STORE, "readonly")
     const index = transaction.objectStore(STORE).index(USER_INDEX)
-    const rows = await requestResult(index.getAll(userId) as IDBRequest<QueuedRound[]>)
+    const rows = await requestResult(index.getAll(userId) as IDBRequest<QueuedOperation[]>)
     await transactionDone(transaction)
     return rows
   } catch {
@@ -83,7 +83,7 @@ export async function listQueuedRounds(userId: string): Promise<QueuedRound[]> {
   }
 }
 
-export async function putQueuedRound(operation: QueuedRound): Promise<void> {
+export async function putQueuedOperation(operation: QueuedOperation): Promise<void> {
   if (!hasIndexedDb()) return
 
   const db = await openDb()
@@ -92,7 +92,7 @@ export async function putQueuedRound(operation: QueuedRound): Promise<void> {
   await transactionDone(transaction)
 }
 
-export async function deleteQueuedRound(id: string): Promise<void> {
+export async function deleteQueuedOperation(id: string): Promise<void> {
   if (!hasIndexedDb()) return
 
   const db = await openDb()
@@ -102,7 +102,7 @@ export async function deleteQueuedRound(id: string): Promise<void> {
 }
 
 /** Borra la cola de una cuenta (por ejemplo, al descartar todo manualmente). */
-export async function clearQueuedRounds(userId: string): Promise<void> {
+export async function clearQueuedOperations(userId: string): Promise<void> {
   if (!hasIndexedDb()) return
 
   const db = await openDb()

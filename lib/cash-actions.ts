@@ -23,7 +23,7 @@ export async function openCashSession(
 
 export async function closeCashSession(
   sessionId: string,
-  input: { countedCash: number; notes?: string }
+  input: { countedCash: number; notes?: string; idempotencyKey?: string }
 ): Promise<ActionResult<CashSessionPayload>> {
   return mutateApi<CashSessionPayload>(
     `/cash/sessions/${sessionId}/close`,

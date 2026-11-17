@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   ArrowUpDownIcon,
+  BanknoteIcon,
   CakeIcon,
   CopyIcon,
   CreditCardIcon,
@@ -139,6 +140,7 @@ import {
 
 import { CashSessionActions } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
+import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
 
@@ -193,7 +195,8 @@ interface CartLine {
   options: CartOption[]
   excludedIngredientIds: string[]
   excludedNames: string[]
-  /** Cliente (comensal) al que pertenece la línea. `null` = General/Mesa. */
+  /** Cliente (comensal) al que pertenece la línea.
+ull` = General/Mesa. */
   guestKey?: string | null
 }
 
@@ -509,7 +512,8 @@ export function PosView({
   canSend: boolean
   canRegister: boolean
   canConfirm: boolean
-  /** Sucursal activa; `null` = vista consolidada. */
+  /** Sucursal activa;
+ull` = vista consolidada. */
   branch: Branch | null
   /** Terminales Point disponibles para cobrar. */
   mercadoPago: MercadoPagoPointConfig
@@ -574,6 +578,7 @@ export function PosView({
   } | null>(null)
 
   const [orderId, setOrderId] = React.useState("")
+  const [offlineCharging, setOfflineCharging] = React.useState(false)
   const [channel, setChannel] = React.useState<OrderChannel>("DINE_IN")
   const [tableNumber, setTableNumber] = React.useState("1")
   const [customerName, setCustomerName] = React.useState("")
@@ -602,18 +607,40 @@ export function PosView({
   /** Evita que el efecto de sincronización pise un borrador restaurado. */
   const restoringRef = React.useRef<string | null>(null)
 
+  const offlinePaidOrderIds = React.useMemo(
+    () =>
+      new Set(
+        offline.operations
+          .filter(
+            (operation) =>
+              operation.kind === "checkout" && Boolean(operation.orderId)
+          )
+          .map((operation) => (operation as { orderId: string }).orderId)
+      ),
+    [offline.operations]
+  )
+
+  const visibleOrders = React.useMemo(
+    () => orders.filter((order) => !offlinePaidOrderIds.has(order.id)),
+    [offlinePaidOrderIds, orders]
+  )
+
   /** Cuentas abiertas de la más antigua a la más reciente (prioridad). */
   const deckOrders = React.useMemo(
     () =>
-      [...orders].sort(
+      [...visibleOrders].sort(
         (left, right) =>
           new Date(left.createdAt).getTime() -
           new Date(right.createdAt).getTime()
       ),
-    [orders]
+    [visibleOrders]
   )
 
-  const activeOrder = orders.find((order) => order.id === orderId) ?? null
+  const activeOrder =
+    visibleOrders.find((order) => order.id === orderId) ?? null
+  const cashClosePending = cash.session
+    ? offline.hasPendingCashClose(cash.session.id)
+    : false
   const chargeSnapshot = React.useRef(new Map<string, ChargeSummary>())
 
   const activePayments = activeOrder?.payments ?? []
@@ -2691,26 +2718,44 @@ export function PosView({
             <>
               <Button
                 variant="outline"
-                disabled={!offline.isOnline || !cash.session}
+                disabled={
+                  !cash.session ||
+                  cashClosePending ||
+                  (!offline.isOnline && !canConfirm)
+                }
                 title={
                   !cash.session
                     ? "Abre la caja para cobrar"
-                    : offline.isOnline
-                      ? undefined
-                      : "El cobro requiere conexión"
+                    : cashClosePending
+                      ? "Cierre de caja pendiente de sincronizar"
+                      : !offline.isOnline && !canConfirm
+                        ? "Tu rol no puede confirmar pagos sin conexión"
+                        : undefined
                 }
-                onClick={() => setCharging(true)}
+                onClick={() => {
+                  if (offline.isOnline) setCharging(true)
+                  else setOfflineCharging(true)
+                }}
               >
-                <CreditCardIcon />
-                Cobrar cuenta
+                {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
+                {offline.isOnline
+                  ? "Cobrar cuenta"
+                  : "Cobrar en efectivo sin conexión"}
               </Button>
               {!cash.session ? (
                 <p className="text-xs text-muted-foreground">
                   Caja cerrada: caja o administración debe abrirla para cobrar.
                 </p>
+              ) : cashClosePending ? (
+                <p className="text-xs text-muted-foreground">
+                  La caja se cerró en este dispositivo; espera a sincronizar
+                  antes de cobrar otra cuenta.
+                </p>
               ) : !offline.isOnline ? (
                 <p className="text-xs text-muted-foreground">
-                  Registrar pagos y cerrar cuentas requiere conexión.
+                  {canConfirm
+                    ? "Solo efectivo: el cobro se guarda y se envía al reconectar."
+                    : "Sin conexión solo pueden cobrar roles autorizados a confirmar pagos."}
                 </p>
               ) : null}
             </>
@@ -2897,6 +2942,18 @@ export function PosView({
           }}
         />
       ) : null}
+
+      {offlineCharging && activeOrder ? (
+        <OfflineCheckoutDialog
+          order={activeOrder}
+          open
+          onOpenChange={setOfflineCharging}
+          onQueued={() => {
+            setOfflineCharging(false)
+            setOrderId("")
+          }}
+        />
+      ) : null}
     </div>
   )
 }
@@ -3059,7 +3116,8 @@ interface GuestConfig {
   notes: string
   /** El tab ya tenía líneas guardadas en la comanda. */
   hasLines: boolean
-  /** Preparaciones con opciones distintas; `null` = todas comparten. */
+  /** Preparaciones con opciones distintas;
+ull` = todas comparten. */
   preparations: Preparation[] | null
 }
 
