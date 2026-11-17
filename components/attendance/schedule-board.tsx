@@ -866,8 +866,8 @@ function KioskOperatorsDialog({
         <DialogHeader>
           <DialogTitle>Cuentas del checador</DialogTitle>
           <DialogDescription>
-            Estas cuentas podrán abrir el Checador y registrar la entrada/salida
-            de las personas asignadas hoy, con su PIN.
+            Estas cuentas podrán abrir el Checador y registrar la entrada y
+            salida de cualquier persona activa del negocio con su PIN.
           </DialogDescription>
         </DialogHeader>
 

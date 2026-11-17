@@ -144,9 +144,9 @@ export interface KioskEmployee {
   name: string | null
   username: string | null
   roles: string[]
-  scheduledStart: string
-  scheduledEnd: string
-  breakMinutes: number
+  scheduledStart: string | null
+  scheduledEnd: string | null
+  breakMinutes: number | null
   hasPin: boolean
   pinLocked: boolean
   status: "OFF" | "WORKING" | "ON_BREAK" | "DONE"

@@ -67,8 +67,9 @@ function primaryAction(status: KioskEmployee["status"]): PunchAction | null {
 /**
  * Checador operado por una cuenta habilitada.
  *
- * Solo lista a las personas con turno asignado hoy. El PIN identifica al
- * empleado; la cuenta que opera queda registrada en el log.
+ * Lista todas las cuentas activas del negocio y muestra el horario de quienes
+ * tienen turno asignado hoy. El PIN identifica al empleado; la cuenta que opera
+ * queda registrada en el log.
  */
 export function KioskDialog({
   open,
@@ -208,8 +209,8 @@ export function KioskDialog({
             <ClockIcon className="size-4" /> Checador
           </DialogTitle>
           <DialogDescription>
-            Elige a la persona y escribe su PIN. Solo aparecen los turnos
-            asignados para hoy.
+            Aparecen todas las cuentas activas. Quienes tienen turno hoy
+            muestran su horario; el PIN identifica a la persona.
           </DialogDescription>
         </DialogHeader>
 
@@ -224,8 +225,7 @@ export function KioskDialog({
           </p>
         ) : data.employees.length === 0 ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            No hay turnos guardados para hoy. Revisa Asignación → Horarios y
-            guarda el horario del día.
+            No hay cuentas activas en el negocio.
           </p>
         ) : (
           <div className="flex flex-col gap-4">
@@ -282,8 +282,9 @@ export function KioskDialog({
                       </span>
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {employee.scheduledStart}–{employee.scheduledEnd} ·{" "}
-                      {employee.breakMinutes} min comida
+                      {employee.scheduledStart && employee.scheduledEnd
+                        ? `${employee.scheduledStart}–${employee.scheduledEnd} · ${employee.breakMinutes ?? 0} min comida`
+                        : "Sin horario asignado hoy"}
                     </span>
                   </button>
                 )
@@ -313,6 +314,13 @@ export function KioskDialog({
                   </span>
                   <Badge variant="outline">{STATUS_LABEL[selected.status]}</Badge>
                 </div>
+
+                {!selected.scheduledStart ? (
+                  <p className="text-xs text-muted-foreground">
+                    Sin horario asignado hoy: se registra la hora real y un
+                    administrador puede ajustar las horas después.
+                  </p>
+                ) : null}
 
                 {selected.status === "DONE" ? (
                   <p className="text-sm text-muted-foreground">
