@@ -35,6 +35,8 @@ const nextConfig: NextConfig = {
   // necesita `public/` y `.next/static/`. Es lo que copia el Dockerfile.
   output: "standalone",
   experimental: {
+    // Marca la app como actualizada por el flujo de seguridad de Next.
+    agentUpgrade: "security",
     // Todo el panel es dinámico (datos por usuario), y por defecto el cliente
     // no reutiliza nada: cada ida y vuelta espera al servidor. Con 15 s, volver
     // a una pestaña recién vista es instantáneo y las mutaciones siguen
