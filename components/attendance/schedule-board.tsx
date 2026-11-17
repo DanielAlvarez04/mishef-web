@@ -100,11 +100,24 @@ function sameTolerance(left: unknown, right: unknown): boolean {
   return sameNumber(left as number, right as number)
 }
 
+/** Convierte las filas locales al payload que espera la API. */
+function schedulePayload(entries: ScheduleEntryRow[]) {
+  return entries.map((entry) => ({
+    userId: entry.userId,
+    date: entry.date.slice(0, 10),
+    startTime: entry.startTime,
+    endTime: entry.endTime,
+    breakMinutes: entry.breakMinutes,
+    note: entry.note ?? undefined,
+  }))
+}
+
 /**
  * Parrilla semanal de horarios.
  *
  * Empleados en filas, días en columnas. Un click en una celda abre el editor
- * de turno. Se guarda como borrador y se publica cuando está listo.
+ * de turno. Cada cambio se guarda solo; publicar lo muestra en el calendario
+ * del equipo.
  */
 export function ScheduleBoard({
   initial,
@@ -149,49 +162,56 @@ export function ScheduleBoard({
   }
 
   function saveEntry(next: ScheduleEntryRow) {
-    setEntries((current) => [
-      ...current.filter(
+    const nextEntries = [
+      ...entries.filter(
         (entry) =>
           !(entry.userId === next.userId && entry.date.slice(0, 10) === next.date.slice(0, 10)),
       ),
       next,
-    ])
+    ]
+
+    setEntries(nextEntries)
     setEditor(null)
+    void persistSchedule(nextEntries, "Horario guardado")
   }
 
   function removeEntry(userId: string, date: string) {
-    setEntries((current) =>
-      current.filter(
-        (entry) =>
-          !(entry.userId === userId && entry.date.slice(0, 10) === date),
-      ),
+    const nextEntries = entries.filter(
+      (entry) => !(entry.userId === userId && entry.date.slice(0, 10) === date),
     )
+
+    setEntries(nextEntries)
     setEditor(null)
+    void persistSchedule(nextEntries, "Horario guardado")
   }
 
-  async function saveDraft() {
-    setPending("save")
+  async function persistSchedule(
+    nextEntries: ScheduleEntryRow[],
+    successMessage?: string,
+  ): Promise<boolean> {
+    setPending("autosave")
     const result = await saveSchedule({
       weekStart,
       branchId: data.branchId,
-      entries: entries.map((entry) => ({
-        userId: entry.userId,
-        date: entry.date.slice(0, 10),
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        breakMinutes: entry.breakMinutes,
-        note: entry.note ?? undefined,
-      })),
+      entries: schedulePayload(nextEntries),
     })
 
     if (!result.ok || !result.data) {
       toast.error(result.message ?? "No pudimos guardar el horario")
-    } else {
-      setData(result.data)
-      setEntries(result.data.entries)
-      toast.success("Borrador guardado")
+      setPending(null)
+      return false
     }
+
+    setData(result.data)
+    setEntries(result.data.entries)
+    setWeekStart(result.data.weekStart)
+    if (successMessage) toast.success(successMessage)
     setPending(null)
+    return true
+  }
+
+  async function saveDraft() {
+    await persistSchedule(entries, "Horario guardado")
   }
 
   async function doPublish() {
@@ -199,14 +219,7 @@ export function ScheduleBoard({
     const saved = await saveSchedule({
       weekStart,
       branchId: data.branchId,
-      entries: entries.map((entry) => ({
-        userId: entry.userId,
-        date: entry.date.slice(0, 10),
-        startTime: entry.startTime,
-        endTime: entry.endTime,
-        breakMinutes: entry.breakMinutes,
-        note: entry.note ?? undefined,
-      })),
+      entries: schedulePayload(entries),
     })
 
     if (!saved.ok) {
@@ -259,8 +272,10 @@ export function ScheduleBoard({
             <CalendarDaysIcon className="size-4" /> Horarios
           </CardTitle>
           <CardDescription>
-            Turnos por persona y día. Un solo turno por día; la comida se
-            descuenta de las horas.
+            Turnos por persona y día. Los cambios se guardan automáticamente.
+            Un solo turno por día; la comida se descuenta de las horas. El
+            checador usa el horario guardado; publicar solo lo muestra al
+            equipo.
           </CardDescription>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -298,6 +313,11 @@ export function ScheduleBoard({
             <Badge variant={data.status === "PUBLISHED" ? "default" : "outline"}>
               {data.status === "PUBLISHED" ? "Publicado" : "Borrador"}
             </Badge>
+            {pending === "autosave" ? (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Loader2Icon className="size-3 animate-spin" /> Guardando…
+              </span>
+            ) : null}
 
             {canManage ? (
               <>
@@ -322,12 +342,12 @@ export function ScheduleBoard({
                   onClick={() => void saveDraft()}
                   disabled={pending !== null}
                 >
-                  {pending === "save" ? (
+                  {pending === "save" || pending === "autosave" ? (
                     <Loader2Icon className="animate-spin" />
                   ) : (
                     <SaveIcon />
                   )}
-                  Guardar borrador
+                  Guardar
                 </Button>
                 <Button
                   type="button"
@@ -347,6 +367,7 @@ export function ScheduleBoard({
                   size="sm"
                   variant="outline"
                   onClick={() => setKioskOpen(true)}
+                  disabled={pending !== null}
                 >
                   <ShieldCheckIcon />
                   Cuentas del checador
@@ -405,7 +426,7 @@ export function ScheduleBoard({
                           <td key={key} className="px-1 py-1 align-top">
                             <button
                               type="button"
-                              disabled={!canManage}
+                              disabled={!canManage || pending !== null}
                               onClick={() =>
                                 setEditor({ employee, date: key, entry })
                               }

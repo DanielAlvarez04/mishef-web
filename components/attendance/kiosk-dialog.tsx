@@ -8,6 +8,7 @@ import {
   Loader2Icon,
   LogInIcon,
   LogOutIcon,
+  RefreshCwIcon,
   ShieldAlertIcon,
   UtensilsIcon,
 } from "lucide-react"
@@ -25,6 +26,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { getCurrentCoordinates } from "@/lib/geolocation"
 import type { KioskData, KioskEmployee, PunchAction } from "@/lib/attendance"
 
 const STATUS_LABEL: Record<KioskEmployee["status"], string> = {
@@ -34,22 +36,32 @@ const STATUS_LABEL: Record<KioskEmployee["status"], string> = {
   DONE: "Turno cerrado",
 }
 
-function getCoords(): Promise<{ latitude?: number; longitude?: number }> {
-  if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-    return Promise.resolve({})
+/** UUID con respaldo para navegadores sin `crypto.randomUUID` (HTTP). */
+function idempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID()
   }
 
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }),
-      () => resolve({}),
-      { enableHighAccuracy: true, timeout: 5_000 },
-    )
-  })
+  return `kiosk-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+/**
+ * Acción que dispara Enter al escribir el PIN.
+ *
+ * En turno se elige "salir a comer" porque es el primer botón; la salida se
+ * registra con el botón rojo.
+ */
+function primaryAction(status: KioskEmployee["status"]): PunchAction | null {
+  switch (status) {
+    case "OFF":
+      return "CLOCK_IN"
+    case "WORKING":
+      return "LUNCH_START"
+    case "ON_BREAK":
+      return "LUNCH_END"
+    default:
+      return null
+  }
 }
 
 /**
@@ -68,6 +80,7 @@ export function KioskDialog({
   const router = useRouter()
   const [data, setData] = React.useState<KioskData | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [reloadKey, setReloadKey] = React.useState(0)
   const [selected, setSelected] = React.useState<KioskEmployee | null>(null)
   const [pin, setPin] = React.useState("")
   const [pending, setPending] = React.useState<PunchAction | null>(null)
@@ -99,10 +112,30 @@ export function KioskDialog({
     return () => {
       cancelled = true
     }
-  }, [open])
+  }, [open, reloadKey])
+
+  function reload() {
+    setLoading(true)
+    setSelected(null)
+    setPin("")
+    setMessage(null)
+    setReloadKey((current) => current + 1)
+  }
 
   async function punch(action: PunchAction) {
-    if (!selected) return
+    if (!selected || pending !== null) return
+
+    if (!selected.hasPin) {
+      toast.error(
+        "Esa cuenta no tiene PIN. Configúralo desde Usuarios o en Ajustes.",
+      )
+      return
+    }
+
+    if (selected.pinLocked) {
+      toast.error("El PIN está bloqueado por intentos fallidos. Espera unos minutos.")
+      return
+    }
 
     if (!/^\d{4,8}$/.test(pin)) {
       toast.error("Escribe el PIN de 4 a 8 dígitos")
@@ -110,17 +143,18 @@ export function KioskDialog({
     }
 
     setPending(action)
-    const coords = await getCoords()
+    const coords = await getCurrentCoordinates()
     const result = await kioskPunch({
       userId: selected.id,
       pin,
       action,
       ...coords,
-      idempotencyKey: crypto.randomUUID(),
+      idempotencyKey: idempotencyKey(),
     })
 
     if (!result.ok) {
       toast.error(result.message ?? "No se pudo registrar la checada")
+      setPin("")
       setPending(null)
       return
     }
@@ -163,6 +197,9 @@ export function KioskDialog({
     router.refresh()
   }
 
+  const needsPin = data?.employees.some((employee) => !employee.hasPin) ?? false
+  const selectedAction = selected ? primaryAction(selected.status) : null
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
@@ -187,8 +224,8 @@ export function KioskDialog({
           </p>
         ) : data.employees.length === 0 ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
-            No hay turnos asignados para hoy. Un administrador debe publicar el
-            horario del día.
+            No hay turnos guardados para hoy. Revisa Asignación → Horarios y
+            guarda el horario del día.
           </p>
         ) : (
           <div className="flex flex-col gap-4">
@@ -200,42 +237,73 @@ export function KioskDialog({
             ) : null}
 
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {data.employees.map((employee) => (
-                <button
-                  key={employee.id}
-                  type="button"
-                  onClick={() => {
-                    setSelected(employee)
-                    setPin("")
-                    setMessage(null)
-                  }}
-                  className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
-                    selected?.id === employee.id
-                      ? "border-primary bg-primary/5"
-                      : "hover:bg-muted/50"
-                  }`}
-                >
-                  <span className="flex items-center justify-between gap-2">
-                    <span className="truncate font-medium">
-                      {employee.name ?? employee.username ?? "Empleado"}
+              {data.employees.map((employee) => {
+                const blocked = !employee.hasPin || employee.pinLocked
+
+                return (
+                  <button
+                    key={employee.id}
+                    type="button"
+                    disabled={blocked}
+                    onClick={() => {
+                      if (blocked) return
+                      setSelected(employee)
+                      setPin("")
+                      setMessage(null)
+                    }}
+                    className={`flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
+                      blocked
+                        ? "cursor-not-allowed opacity-60"
+                        : selected?.id === employee.id
+                          ? "border-primary bg-primary/5"
+                          : "hover:bg-muted/50"
+                    }`}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span className="truncate font-medium">
+                        {employee.name ?? employee.username ?? "Empleado"}
+                      </span>
+                      <span className="flex shrink-0 gap-1">
+                        {!employee.hasPin ? (
+                          <Badge variant="destructive">Sin PIN</Badge>
+                        ) : null}
+                        {employee.pinLocked ? (
+                          <Badge variant="outline">PIN bloqueado</Badge>
+                        ) : null}
+                        <Badge
+                          variant={
+                            employee.status === "OFF" || employee.status === "DONE"
+                              ? "outline"
+                              : "secondary"
+                          }
+                        >
+                          {STATUS_LABEL[employee.status]}
+                        </Badge>
+                      </span>
                     </span>
-                    <Badge
-                      variant={
-                        employee.status === "OFF" || employee.status === "DONE"
-                          ? "outline"
-                          : "secondary"
-                      }
-                    >
-                      {STATUS_LABEL[employee.status]}
-                    </Badge>
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    {employee.scheduledStart}–{employee.scheduledEnd} ·{" "}
-                    {employee.breakMinutes} min comida
-                  </span>
-                </button>
-              ))}
+                    <span className="text-xs text-muted-foreground">
+                      {employee.scheduledStart}–{employee.scheduledEnd} ·{" "}
+                      {employee.breakMinutes} min comida
+                    </span>
+                  </button>
+                )
+              })}
             </div>
+
+            {needsPin ? (
+              <p className="text-xs text-muted-foreground">
+                Las cuentas con “Sin PIN” no pueden checar. Un administrador
+                puede configurarlo desde Usuarios; cada persona también puede
+                definirlo en Ajustes → PIN de caja y checador.
+              </p>
+            ) : null}
+
+            {data.employees.some((employee) => employee.pinLocked) ? (
+              <p className="text-xs text-muted-foreground">
+                Los PIN bloqueados se liberan solos después de unos minutos.
+                Pulsa Actualizar para volver a intentarlo.
+              </p>
+            ) : null}
 
             {selected ? (
               <div className="flex flex-col gap-3 rounded-xl border p-4">
@@ -246,26 +314,39 @@ export function KioskDialog({
                   <Badge variant="outline">{STATUS_LABEL[selected.status]}</Badge>
                 </div>
 
-                <Input
-                  type="password"
-                  inputMode="numeric"
-                  autoComplete="off"
-                  placeholder="PIN del empleado"
-                  maxLength={8}
-                  value={pin}
-                  onChange={(event) =>
-                    setPin(event.target.value.replace(/\D/g, "").slice(0, 8))
-                  }
-                />
+                {selected.status === "DONE" ? (
+                  <p className="text-sm text-muted-foreground">
+                    El turno de hoy ya se cerró. Si faltan horas, un
+                    administrador puede ajustarlas desde Registros.
+                  </p>
+                ) : (
+                  <>
+                    <Input
+                      type="password"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      autoFocus
+                      placeholder="PIN del empleado"
+                      maxLength={8}
+                      value={pin}
+                      onChange={(event) =>
+                        setPin(event.target.value.replace(/\D/g, "").slice(0, 8))
+                      }
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" || !selectedAction) return
+                        event.preventDefault()
+                        void punch(selectedAction)
+                      }}
+                    />
+
+                    <p className="text-xs text-muted-foreground">
+                      Escribe el PIN y pulsa Enter para registrar la acción
+                      principal, o elige un botón.
+                    </p>
+                  </>
+                )}
 
                 <div className="flex flex-wrap gap-2">
-                  {selected.status === "DONE" ? (
-                    <p className="text-sm text-muted-foreground">
-                      El turno de hoy ya se cerró. Si faltan horas, un
-                      administrador puede ajustarlas desde Registros.
-                    </p>
-                  ) : null}
-
                   {selected.status === "OFF" ? (
                     <Button
                       type="button"
@@ -339,6 +420,15 @@ export function KioskDialog({
         )}
 
         <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={reload}
+            disabled={loading || pending !== null}
+          >
+            <RefreshCwIcon className={loading ? "animate-spin" : undefined} />
+            Actualizar
+          </Button>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             Cerrar
           </Button>

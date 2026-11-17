@@ -147,6 +147,8 @@ export interface KioskEmployee {
   scheduledStart: string
   scheduledEnd: string
   breakMinutes: number
+  hasPin: boolean
+  pinLocked: boolean
   status: "OFF" | "WORKING" | "ON_BREAK" | "DONE"
   shiftId: string | null
 }

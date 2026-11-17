@@ -59,10 +59,11 @@ export function PosPinCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>PIN de caja</CardTitle>
+        <CardTitle>PIN de caja y checador</CardTitle>
         <CardDescription>
           Con este PIN entras al punto de venta desde una tablet o computadora
-          vinculada, sin escribir tu contraseña.
+          vinculada, sin escribir tu contraseña, y registras tus checadas en el
+          checador.
         </CardDescription>
         <KeyRoundIcon className="absolute top-6 right-6 size-4 text-muted-foreground" />
       </CardHeader>

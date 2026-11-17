@@ -464,10 +464,10 @@ export function UsersTable({
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>PIN de caja</DialogTitle>
+            <DialogTitle>PIN de caja y checador</DialogTitle>
             <DialogDescription>
               {pinTarget
-                ? `${userName(pinTarget)} usará este PIN para desbloquear la caja en una terminal vinculada.`
+                ? `${userName(pinTarget)} usará este PIN para desbloquear la caja y para registrar sus checadas en el checador.`
                 : null}
             </DialogDescription>
           </DialogHeader>

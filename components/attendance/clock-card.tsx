@@ -30,6 +30,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { getCurrentCoordinates } from "@/lib/geolocation"
 import {
   clockTime,
   formatMinutes,
@@ -37,24 +38,6 @@ import {
   type PersonalScheduleEntry,
   type ShiftRow,
 } from "@/lib/attendance"
-
-function getCoords(): Promise<{ latitude?: number; longitude?: number }> {
-  if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-    return Promise.resolve({})
-  }
-
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) =>
-        resolve({
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-        }),
-      () => resolve({}),
-      { enableHighAccuracy: true, timeout: 5_000 },
-    )
-  })
-}
 
 /**
  * Checador personal.
@@ -100,7 +83,7 @@ export function ClockCard({
     success: string,
   ) {
     startTransition(async () => {
-      const coords = await getCoords()
+      const coords = await getCurrentCoordinates()
       const result = await action(note, coords)
 
       if (!result.ok) {
