@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ClockCard } from "@/components/attendance/clock-card"
+import { ShiftEditDialog } from "@/components/attendance/shift-edit-dialog"
 import { apiFetch } from "@/lib/api"
 import {
   shiftDuration,
@@ -15,7 +16,29 @@ import {
   type TipDistribution,
 } from "@/lib/attendance"
 import { canReadMoney } from "@/lib/orders"
-import { requireUser } from "@/lib/session"
+import { isAdmin, requireUser } from "@/lib/session"
+
+/**
+ * Lee JSON solo si hay cuerpo.
+ *
+ * `GET /attendance/current` responde 200 con cuerpo vacío cuando no hay turno
+ * abierto (Nest serializa `null` así). Llamar `.json()` directamente rompe la
+ * página con "Unexpected end of JSON input".
+ */
+async function readJsonOrNull<T>(
+  response: Response | null
+): Promise<T | null> {
+  if (!response || !response.ok || response.status === 204) return null
+
+  const text = await response.text()
+  if (!text.trim()) return null
+
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return null
+  }
+}
 
 export default async function AttendancePage() {
   const user = await requireUser()
@@ -31,6 +54,7 @@ export default async function AttendancePage() {
   monthStart.setDate(1)
 
   const admin = canReadMoney(user.roles)
+  const canManage = isAdmin(user)
 
   const [currentResponse, listResponse, tipsResponse] = await Promise.all([
     apiFetch("/attendance/current"),
@@ -42,20 +66,9 @@ export default async function AttendancePage() {
       : null,
   ])
 
-  const current =
-    currentResponse.ok && currentResponse.status !== 204
-      ? ((await currentResponse.json()) as ShiftRow | null)
-      : null
-
-  const list =
-    listResponse && listResponse.ok
-      ? ((await listResponse.json()) as ShiftList)
-      : null
-
-  const tips =
-    tipsResponse && tipsResponse.ok
-      ? ((await tipsResponse.json()) as TipDistribution)
-      : null
+  const current = await readJsonOrNull<ShiftRow>(currentResponse)
+  const list = await readJsonOrNull<ShiftList>(listResponse)
+  const tips = await readJsonOrNull<TipDistribution>(tipsResponse)
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
@@ -86,6 +99,9 @@ export default async function AttendancePage() {
                     <th className="px-4 py-2 font-medium">Salida</th>
                     <th className="px-4 py-2 font-medium">Duración</th>
                     <th className="px-4 py-2 font-medium">Nota</th>
+                    {canManage ? (
+                      <th className="px-4 py-2 font-medium">Acciones</th>
+                    ) : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -122,12 +138,17 @@ export default async function AttendancePage() {
                       <td className="px-4 py-2 text-muted-foreground">
                         {shift.note ?? "—"}
                       </td>
+                      {canManage ? (
+                        <td className="px-4 py-2 text-right">
+                          <ShiftEditDialog shift={shift} />
+                        </td>
+                      ) : null}
                     </tr>
                   ))}
                   {list.shifts.length === 0 ? (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={canManage ? 6 : 5}
                         className="px-4 py-8 text-center text-sm text-muted-foreground"
                       >
                         Nadie ha checado en los últimos 7 días.

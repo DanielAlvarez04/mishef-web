@@ -18,3 +18,19 @@ export async function clockOut(): Promise<ActionResult<ShiftRow>> {
     "/dashboard",
   ])
 }
+
+export interface ShiftUpdateInput {
+  startedAt?: string
+  endedAt?: string | null
+  note?: string | null
+}
+
+/** Corrige un turno (solo ADMIN). */
+export async function updateShift(
+  shiftId: string,
+  input: Partial<ShiftUpdateInput>
+): Promise<ActionResult<ShiftRow>> {
+  return mutateApi<ShiftRow>(`/attendance/${shiftId}`, "PATCH", input, [
+    "/attendance",
+  ])
+}

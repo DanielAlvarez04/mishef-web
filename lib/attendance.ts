@@ -29,12 +29,13 @@ export interface TipDistribution {
   participants: TipShare[]
 }
 
-/** Duración legible de un turno: `7h 25m`; los abiertos dicen "en curso". */
+/**
+ * Duración legible de un turno: `7h 25m`. Si sigue abierto, calcula el tiempo
+ * transcurrido hasta ahora; la tabla lo acompaña con la etiqueta "en curso".
+ */
 export function shiftDuration(start: string, end: string | null): string {
   const endMs = end ? new Date(end).getTime() : Date.now()
   const minutes = Math.max(0, Math.round((endMs - new Date(start).getTime()) / 60000))
-
-  if (!end) return "en curso"
 
   const hours = Math.floor(minutes / 60)
   const rest = minutes % 60
