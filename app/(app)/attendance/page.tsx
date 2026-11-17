@@ -6,27 +6,36 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { AttendanceTabs } from "@/components/attendance/attendance-tabs"
+import { AssignmentTabs } from "@/components/attendance/assignment-tabs"
 import { ClockCard } from "@/components/attendance/clock-card"
-import { ShiftEditDialog } from "@/components/attendance/shift-edit-dialog"
+import { PersonalCalendar } from "@/components/attendance/personal-calendar"
+import { ScheduleBoard } from "@/components/attendance/schedule-board"
+import { TeamShiftsTable } from "@/components/attendance/team-shifts-table"
+import { TipsTable } from "@/components/attendance/tips-table"
 import { apiFetch } from "@/lib/api"
 import {
-  shiftDuration,
+  canReadTeamAttendance,
+  clockTime,
+  formatMinutes,
+  type MyTips,
+  type PersonalAttendance,
+  type PersonalScheduleEntry,
   type ShiftList,
   type ShiftRow,
   type TipDistribution,
+  type WeekSchedule,
 } from "@/lib/attendance"
-import { canReadMoney } from "@/lib/orders"
 import { isAdmin, requireUser } from "@/lib/session"
 
 /**
  * Lee JSON solo si hay cuerpo.
  *
- * `GET /attendance/current` responde 200 con cuerpo vacío cuando no hay turno
- * abierto (Nest serializa `null` así). Llamar `.json()` directamente rompe la
- * página con "Unexpected end of JSON input".
+ * Nest responde 200 con cuerpo vacío para algunos `null` y la página no debe
+ * romperse con "Unexpected end of JSON input".
  */
 async function readJsonOrNull<T>(
-  response: Response | null
+  response: Response | null,
 ): Promise<T | null> {
   if (!response || !response.ok || response.status === 204) return null
 
@@ -40,185 +49,247 @@ async function readJsonOrNull<T>(
   }
 }
 
+function startOfWeek(date: Date): Date {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const day = result.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  result.setDate(result.getDate() + diff)
+  return result
+}
+
+function dateKey(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, "0")
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+function weekdayLabel(value: string): string {
+  return new Date(`${value}T00:00:00`).toLocaleDateString("es-MX", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+  })
+}
+
+function rangeLabel(weekStart: string): string {
+  const start = new Date(`${weekStart}T00:00:00`)
+  const end = addDays(start, 6)
+
+  return `${start.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+  })} – ${end.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })}`
+}
+
+function PersonalShiftsCard({ shifts }: { shifts: ShiftRow[] }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Mis últimas checadas</CardTitle>
+        <CardDescription>Turnos de los últimos 7 días.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {shifts.length === 0 ? (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Todavía no tienes checadas registradas.
+          </p>
+        ) : (
+          <div className="flex flex-col divide-y">
+            {shifts.map((shift) => (
+              <div
+                key={shift.id}
+                className="flex flex-wrap items-center justify-between gap-2 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="flex flex-col">
+                  <span className="font-medium">
+                    {weekdayLabel(dateKey(new Date(shift.startedAt)))}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {clockTime(shift.startedAt)}–{clockTime(shift.endedAt)}
+                    {shift.endedAt
+                      ? ` · ${formatMinutes(shift.workedMinutes ?? 0)}`
+                      : " · en curso"}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {shift.needsReview ? (
+                    <Badge variant="outline">Por autorizar</Badge>
+                  ) : null}
+                  {shift.withinGeofence === false ? (
+                    <Badge variant="outline">Fuera de zona</Badge>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function PersonalTipsCard({ tips }: { tips: MyTips | null }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Mis propinas</CardTitle>
+        <CardDescription>
+          Reparto del mes en curso según tus horas efectivas.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {tips?.participant ? (
+          <div className="flex flex-col gap-3">
+            <div>
+              <p className="text-3xl font-semibold tabular-nums">
+                ${tips.participant.share.toFixed(2)}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {tips.participant.hours.toFixed(2)} h · peso{" "}
+                {tips.participant.weight.toFixed(2)} de {tips.totalWeight}
+              </p>
+            </div>
+            <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+              Pozo total del negocio: ${tips.pool.toFixed(2)}. Tu parte se
+              calcula con tus horas y el factor de tu rol.
+            </p>
+          </div>
+        ) : (
+          <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+            Aún no acumulas horas este mes, así que todavía no tienes una parte
+            del reparto.
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function MissingCard({ message }: { message: string }) {
+  return (
+    <Card>
+      <CardContent className="py-6 text-sm text-muted-foreground">
+        {message}
+      </CardContent>
+    </Card>
+  )
+}
+
 export default async function AttendancePage() {
   const user = await requireUser()
 
-  // Server component: el rango depende del reloj del servidor, no del render
-  // del cliente. La regla de pureza no distingue server de client.
-  // eslint-disable-next-line react-hooks/purity
-  const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10)
-  const to = new Date().toISOString().slice(0, 10)
-  const monthStart = new Date()
-  monthStart.setDate(1)
+  // Server component: la semana depende del reloj del servidor.
+  const today = new Date()
+  const weekStartDate = startOfWeek(today)
+  const weekStart = dateKey(weekStartDate)
+  const weekEnd = dateKey(addDays(weekStartDate, 6))
+  const todayKey = dateKey(today)
 
-  const admin = canReadMoney(user.roles)
+  const canReadTeam = canReadTeamAttendance(user.roles)
   const canManage = isAdmin(user)
 
-  const [currentResponse, listResponse, tipsResponse] = await Promise.all([
-    apiFetch("/attendance/current"),
-    admin ? apiFetch(`/attendance?from=${from}&to=${to}`) : null,
-    admin
-      ? apiFetch(
-          `/attendance/tips?from=${monthStart.toISOString().slice(0, 10)}&to=${to}`
-        )
-      : null,
-  ])
+  const [meResponse, scheduleResponse, listResponse, tipsResponse] =
+    await Promise.all([
+      apiFetch("/attendance/me"),
+      canReadTeam
+        ? apiFetch(`/attendance/schedule?weekStart=${weekStart}`)
+        : null,
+      canReadTeam
+        ? apiFetch(`/attendance?from=${weekStart}&to=${weekEnd}`)
+        : null,
+      canReadTeam
+        ? apiFetch(`/attendance/tips?from=${weekStart}&to=${weekEnd}`)
+        : null,
+    ])
 
-  const current = await readJsonOrNull<ShiftRow>(currentResponse)
+  const me = await readJsonOrNull<PersonalAttendance>(meResponse)
+  const schedule = await readJsonOrNull<WeekSchedule>(scheduleResponse)
   const list = await readJsonOrNull<ShiftList>(listResponse)
   const tips = await readJsonOrNull<TipDistribution>(tipsResponse)
+
+  const todaySchedule: PersonalScheduleEntry | null =
+    me?.schedule.find((entry) => entry.date.slice(0, 10) === todayKey) ?? null
+  const todayShift =
+    me?.shifts.find(
+      (shift) => dateKey(new Date(shift.startedAt)) === todayKey,
+    ) ?? null
+
+  const personal = me ? (
+    <div className="flex flex-col gap-4">
+      <ClockCard
+        current={me.current}
+        todayShift={todayShift}
+        todaySchedule={todaySchedule}
+        settings={me.settings}
+        kioskEnabled={me.kioskEnabled}
+      />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <PersonalShiftsCard shifts={me.shifts} />
+        <PersonalTipsCard tips={me.tips} />
+      </div>
+
+      <PersonalCalendar
+        weekStart={weekStart}
+        schedule={me.schedule}
+        shifts={me.shifts}
+      />
+    </div>
+  ) : (
+    <MissingCard message="No pudimos cargar tu resumen de asistencia. Recarga la página e inténtalo de nuevo." />
+  )
+
+  const period = rangeLabel(weekStart)
+
+  const assignment = canReadTeam ? (
+    <AssignmentTabs
+      schedule={
+        schedule ? (
+          <ScheduleBoard initial={schedule} canManage={canManage} />
+        ) : (
+          <MissingCard message="No pudimos cargar el horario de la semana." />
+        )
+      }
+      records={
+        list ? (
+          <TeamShiftsTable
+            list={list}
+            rangeLabel={period}
+            canManage={canManage}
+          />
+        ) : (
+          <MissingCard message="No pudimos cargar los registros de la semana." />
+        )
+      }
+      tips={
+        tips ? (
+          <TipsTable distribution={tips} rangeLabel={period} />
+        ) : (
+          <MissingCard message="No pudimos cargar el reparto de propinas." />
+        )
+      }
+    />
+  ) : null
 
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">Asistencia</h1>
         <p className="text-sm text-muted-foreground">
-          Checador del equipo y reparto de propinas por horas trabajadas.
+          Checador, horarios asignados y propinas por horas trabajadas.
         </p>
       </div>
 
-      <ClockCard current={current} />
-
-      {admin && list ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Últimos 7 días</CardTitle>
-            <CardDescription>
-              {list.shifts.length} turno(s) · {list.hours.toFixed(1)} h en total
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Persona</th>
-                    <th className="px-4 py-2 font-medium">Entrada</th>
-                    <th className="px-4 py-2 font-medium">Salida</th>
-                    <th className="px-4 py-2 font-medium">Duración</th>
-                    <th className="px-4 py-2 font-medium">Nota</th>
-                    {canManage ? (
-                      <th className="px-4 py-2 font-medium">Acciones</th>
-                    ) : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {list.shifts.map((shift) => (
-                    <tr key={shift.id} className="border-t">
-                      <td className="px-4 py-2 font-medium">
-                        {shift.user?.name ?? shift.user?.username ?? "—"}
-                      </td>
-                      <td className="px-4 py-2">
-                        {new Date(shift.startedAt).toLocaleString("es-MX", {
-                          day: "2-digit",
-                          month: "short",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="px-4 py-2">
-                        {shift.endedAt
-                          ? new Date(shift.endedAt).toLocaleString("es-MX", {
-                              day: "2-digit",
-                              month: "short",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-2">
-                        {shift.endedAt ? (
-                          shiftDuration(shift.startedAt, shift.endedAt)
-                        ) : (
-                          <Badge variant="outline">en curso</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {shift.note ?? "—"}
-                      </td>
-                      {canManage ? (
-                        <td className="px-4 py-2 text-right">
-                          <ShiftEditDialog shift={shift} />
-                        </td>
-                      ) : null}
-                    </tr>
-                  ))}
-                  {list.shifts.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={canManage ? 6 : 5}
-                        className="px-4 py-8 text-center text-sm text-muted-foreground"
-                      >
-                        Nadie ha checado en los últimos 7 días.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
-
-      {admin && tips ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Reparto de propinas del mes</CardTitle>
-            <CardDescription>
-              Pozo de ${tips.pool.toFixed(2)} · peso = horas × factor del rol
-              (mesero/cajero 1, cocina/inventario 0.6, admin 0).
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="px-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-2 font-medium">Persona</th>
-                    <th className="px-4 py-2 font-medium">Rol</th>
-                    <th className="px-4 py-2 text-right font-medium">Horas</th>
-                    <th className="px-4 py-2 text-right font-medium">Peso</th>
-                    <th className="px-4 py-2 text-right font-medium">Le toca</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tips.participants.map((row) => (
-                    <tr key={row.userId} className="border-t">
-                      <td className="px-4 py-2 font-medium">
-                        {row.name ?? row.userId}
-                      </td>
-                      <td className="px-4 py-2 text-muted-foreground">
-                        {row.role}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {row.hours.toFixed(1)}
-                      </td>
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {row.weight.toFixed(1)}
-                      </td>
-                      <td className="px-4 py-2 text-right font-medium tabular-nums">
-                        ${row.share.toFixed(2)}
-                      </td>
-                    </tr>
-                  ))}
-                  {tips.participants.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={5}
-                        className="px-4 py-8 text-center text-sm text-muted-foreground"
-                      >
-                        Sin propinas ni turnos en el mes.
-                      </td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      ) : null}
+      <AttendanceTabs personal={personal} assignment={assignment} />
     </div>
   )
 }
