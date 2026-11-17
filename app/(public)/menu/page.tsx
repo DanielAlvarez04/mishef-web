@@ -84,7 +84,10 @@ export default async function PublicMenuPage() {
 
               <ul className="flex flex-col divide-y">
                 {group.items.map((item) => (
-                  <li key={item.id} className="flex gap-3 py-3">
+                  <li
+                    key={item.id}
+                    className={item.isSoldOut ? "flex gap-3 py-3 opacity-60" : "flex gap-3 py-3"}
+                  >
                     {item.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -95,7 +98,14 @@ export default async function PublicMenuPage() {
                       />
                     ) : null}
                     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span className="font-medium">{item.name}</span>
+                      <span className="flex flex-wrap items-center gap-2 font-medium">
+                        {item.name}
+                        {item.isSoldOut ? (
+                          <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            Agotado
+                          </span>
+                        ) : null}
+                      </span>
                       {item.description ? (
                         <span className="text-sm text-muted-foreground">
                           {item.description}

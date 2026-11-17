@@ -379,6 +379,8 @@ export interface ItemListItem {
   price: string
   taxRate: string | null
   isActive: boolean
+  /** Marcado manual: el menú público lo muestra como agotado. */
+  isSoldOut: boolean
   /** Despublicado como artículo: no aparece en Artículos ni en menús. */
   isArchived: boolean
   isCombo: boolean

@@ -87,6 +87,7 @@ export interface ItemUpdateInput {
   price?: number
   isCombo?: boolean
   isActive?: boolean
+  isSoldOut?: boolean
 }
 
 /**

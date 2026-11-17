@@ -7,6 +7,7 @@ import type { UnitCode } from "@/lib/catalog"
 import { CORE_PRODUCT_GROUPS } from "@/lib/core-products"
 import { isSupportedCurrency } from "@/lib/currency-config"
 import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { readApi } from "@/lib/server-api"
 
 function text(formData: FormData, key: string): string | undefined {
   const value = formData.get(key)
@@ -318,6 +319,22 @@ export interface OrganizationBrandingInput {
   address?: string | null
   latitude?: number | null
   longitude?: number | null
+}
+
+export interface LocationSearchResult {
+  label: string
+  latitude: number
+  longitude: number
+  type: string | null
+}
+
+/** Busca direcciones reales (OpenStreetMap) para ubicar el negocio. */
+export async function searchOrganizationLocation(
+  query: string
+): Promise<ActionResult<LocationSearchResult[]>> {
+  return readApi(
+    `/organizations/location-search?q=${encodeURIComponent(query.trim())}`
+  )
 }
 
 /**

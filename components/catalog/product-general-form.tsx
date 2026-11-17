@@ -71,6 +71,7 @@ export function ProductGeneralForm({
               String(formData.get("price") ?? "").replace(",", ".")
             )
             const isActive = formData.get("isActive") === "on"
+            const isSoldOut = formData.get("isSoldOut") === "on"
             const isCombo = formData.get("isCombo") === "on"
 
             const changes: Partial<ItemUpdateInput> = {
@@ -84,6 +85,7 @@ export function ProductGeneralForm({
                 : { categoryId }),
               ...(sameNumber(product.price, price) ? {} : { price }),
               ...(product.isActive === isActive ? {} : { isActive }),
+              ...(product.isSoldOut === isSoldOut ? {} : { isSoldOut }),
               ...(product.isCombo === isCombo ? {} : { isCombo }),
             }
 
@@ -192,6 +194,16 @@ export function ProductGeneralForm({
                 className="size-4 accent-primary"
               />
               Activo
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="isSoldOut"
+                defaultChecked={product.isSoldOut}
+                disabled={!canManage}
+                className="size-4 accent-primary"
+              />
+              Agotado en el menú
             </label>
             <label className="flex items-center gap-2 text-sm">
               <input

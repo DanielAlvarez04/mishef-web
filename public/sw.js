@@ -3,11 +3,14 @@
  *
  * Reglas de seguridad:
  * - Solo se cachean recursos estáticos propios (chunks con hash, CSS e iconos).
- * - Nunca se cachean respuestas HTML autenticadas ni peticiones RSC/API: la
- *   navegación va siempre a la red y, si falla, se sirve la página offline.
- * - Nada de credenciales, cookies ni datos personales entran en la caché.
+ * - La navegación va siempre a la red; la única excepción es /pos, que se
+ *   conserva para reabrir el POS sin conexión y se borra al cambiar de sesión.
+ * - Nada de credenciales, cookies ni datos personales entran en la caché
+ *   estática; la copia del POS se elimina al iniciar o cerrar sesión.
  */
 const CACHE = "np-static-v1";
+const POS_CACHE = "np-pos-v1";
+const POS_PATH = "/pos";
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [
   OFFLINE_URL,
@@ -38,7 +41,11 @@ self.addEventListener("activate", (event) => {
     caches
       .keys()
       .then((keys) =>
-        Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
+        Promise.all(
+          keys
+            .filter((key) => key !== CACHE && key !== POS_CACHE)
+            .map((key) => caches.delete(key))
+        )
       )
       .then(() => self.clients.claim())
   );
@@ -87,7 +94,45 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navegación: red primero, sin cachear HTML autenticado.
+  // Excepción: /pos se conserva para poder reabrir el punto de venta sin red.
+  // Es HTML autenticado y se borra al iniciar/cerrar sesión (`clearPosCache`).
   if (request.mode === "navigate") {
+    const isPos = url.pathname === POS_PATH || url.pathname === `${POS_PATH}/`;
+
+    if (isPos) {
+      event.respondWith(
+        fetch(request)
+          .then((response) => {
+            if (response.ok) {
+              const copy = response.clone();
+              event.waitUntil(
+                caches
+                  .open(POS_CACHE)
+                  .then((cache) => cache.put(POS_PATH, copy))
+                  .catch(() => undefined)
+              );
+            }
+            return response;
+          })
+          .catch(async () => {
+            const cached = await caches.match(POS_PATH, {
+              cacheName: POS_CACHE,
+            });
+            if (cached) return cached;
+
+            const offline = await caches.match(OFFLINE_URL);
+            return (
+              offline ??
+              new Response("Sin conexión", {
+                status: 503,
+                headers: { "content-type": "text/plain; charset=utf-8" },
+              })
+            );
+          })
+      );
+      return;
+    }
+
     event.respondWith(
       fetch(request).catch(async () => {
         const cache = await caches.open(CACHE);

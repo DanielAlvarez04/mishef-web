@@ -4,6 +4,7 @@ export interface PublicMenuItem {
   description: string | null
   price: number
   imageUrl: string | null
+  isSoldOut: boolean
 }
 
 export interface PublicMenuGroup {

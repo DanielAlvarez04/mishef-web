@@ -18,6 +18,10 @@ export interface BenchmarkReport {
     businessType: string | null
     organizations: number
     minimum: number
+    scope: "local" | "national"
+    radiusKm: number | null
+    localCandidates: number
+    myLocation: { latitude: number; longitude: number } | null
   } | null
   metrics: BenchmarkMetric[]
 }

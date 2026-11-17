@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { API_BASE_URL } from "@/lib/api-base"
+import { clearPosCache } from "@/lib/offline/clear"
 import { apiErrorMessage } from "@/lib/http-error"
 
 interface LoginFormProps extends React.ComponentProps<"form"> {
@@ -49,6 +50,7 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(initialError ?? null)
 
   function finishLogin() {
+    void clearPosCache()
     router.push("/dashboard")
     router.refresh()
   }

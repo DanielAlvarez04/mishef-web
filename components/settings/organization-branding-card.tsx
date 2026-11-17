@@ -2,10 +2,14 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { MapPinIcon, PaletteIcon } from "lucide-react"
+import { Loader2Icon, MapPinIcon, PaletteIcon, SearchIcon } from "lucide-react"
 import { toast } from "sonner"
 
-import { updateOrganizationBranding } from "@/app/(app)/settings/actions"
+import {
+  searchOrganizationLocation,
+  updateOrganizationBranding,
+  type LocationSearchResult,
+} from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -49,8 +53,29 @@ export function OrganizationBrandingCard({
   const [place, setPlace] = useState(address ?? "")
   const [lat, setLat] = useState(latitude ?? "")
   const [lng, setLng] = useState(longitude ?? "")
+  const [query, setQuery] = useState("")
+  const [results, setResults] = useState<LocationSearchResult[]>([])
+  const [searching, startSearch] = useTransition()
 
   if (!canManage) return null
+
+  const mapSrc = (() => {
+    const latitude = Number(lat)
+    const longitude = Number(lng)
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null
+    if (Math.abs(latitude) > 90 || Math.abs(longitude) > 180) return null
+
+    const delta = 0.004
+    const bbox = [
+      longitude - delta,
+      latitude - delta,
+      longitude + delta,
+      latitude + delta,
+    ].join(",")
+
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude},${longitude}`
+  })()
 
   function useMyLocation() {
     if (!("geolocation" in navigator)) {
@@ -67,6 +92,39 @@ export function OrganizationBrandingCard({
       () => toast.error("No pudimos obtener tu ubicación."),
       { enableHighAccuracy: true, timeout: 10_000 }
     )
+  }
+
+  function searchAddress() {
+    const value = query.trim()
+
+    if (value.length < 3) {
+      toast.error("Escribe al menos 3 caracteres.")
+      return
+    }
+
+    startSearch(async () => {
+      const result = await searchOrganizationLocation(value)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No pudimos buscar la dirección.")
+        return
+      }
+
+      setResults(result.data ?? [])
+
+      if ((result.data ?? []).length === 0) {
+        toast.info("No encontramos esa dirección. Prueba con calle, colonia y ciudad.")
+      }
+    })
+  }
+
+  function selectResult(result: LocationSearchResult) {
+    setPlace(result.label)
+    setLat(result.latitude.toFixed(7))
+    setLng(result.longitude.toFixed(7))
+    setResults([])
+    setQuery("")
+    toast.success("Dirección seleccionada. Guarda para aplicarla.")
   }
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
@@ -176,6 +234,61 @@ export function OrganizationBrandingCard({
               />
             </Field>
 
+            <Field>
+              <FieldLabel htmlFor="location-search">
+                Buscar en el mapa
+              </FieldLabel>
+              <div className="flex gap-2">
+                <Input
+                  id="location-search"
+                  value={query}
+                  placeholder="Calle, colonia, ciudad…"
+                  maxLength={120}
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault()
+                      searchAddress()
+                    }
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={searching || query.trim().length < 3}
+                  onClick={searchAddress}
+                >
+                  {searching ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <SearchIcon />
+                  )}
+                  Buscar
+                </Button>
+              </div>
+              <FieldDescription>
+                Resultados de OpenStreetMap. Elige uno para fijar la dirección y
+                las coordenadas reales.
+              </FieldDescription>
+
+              {results.length > 0 ? (
+                <ul className="flex flex-col overflow-hidden rounded-md border">
+                  {results.map((result) => (
+                    <li key={`${result.latitude},${result.longitude}`}>
+                      <button
+                        type="button"
+                        onClick={() => selectResult(result)}
+                        className="flex w-full items-start gap-2 border-b px-3 py-2 text-left text-sm last:border-0 hover:bg-muted"
+                      >
+                        <MapPinIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+                        <span>{result.label}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </Field>
+
             <div className="flex flex-wrap items-end gap-3">
               <Field className="w-40">
                 <FieldLabel htmlFor="latitude">Latitud</FieldLabel>
@@ -201,6 +314,15 @@ export function OrganizationBrandingCard({
                 Usar mi ubicación
               </Button>
             </div>
+
+            {mapSrc ? (
+              <iframe
+                title="Ubicación del negocio"
+                src={mapSrc}
+                loading="lazy"
+                className="h-56 w-full rounded-lg border"
+              />
+            ) : null}
           </div>
 
           <div className="flex justify-end">

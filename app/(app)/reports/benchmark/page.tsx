@@ -92,9 +92,38 @@ export default async function BenchmarkPage({
             {report.cohort?.organizations} negocios
             {report.cohort?.businessType
               ? ` de giro «${report.cohort.businessType}»`
-              : ""}{" "}
+              : ""}
+            {report.cohort?.scope === "local"
+              ? ` de tu zona (${report.cohort.radiusKm} km)`
+              : " de todo el país"}{" "}
             · últimos {report.period.days} días
           </p>
+
+          {report.cohort && !report.cohort.myLocation ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  Mejora tu benchmark con tu ubicación
+                </CardTitle>
+                <CardDescription>
+                  Agrega las coordenadas de tu negocio para compararte con
+                  negocios de tu zona en lugar de todo el país.{" "}
+                  <Link href="/settings" className="underline underline-offset-4">
+                    Configurar ubicación
+                  </Link>
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : null}
+
+          {report.cohort?.scope === "national" &&
+          report.cohort.myLocation &&
+          report.cohort.localCandidates < report.cohort.minimum ? (
+            <p className="text-xs text-muted-foreground">
+              Aún no hay suficientes negocios con ventas en tu zona; por ahora
+              se compara con todo el país.
+            </p>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-3">
             {report.metrics.map((metric) => (
