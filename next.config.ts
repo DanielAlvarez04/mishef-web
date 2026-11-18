@@ -42,7 +42,9 @@ const nextConfig: NextConfig = {
     // a una pestaña recién vista es instantáneo y las mutaciones siguen
     // invalidando con `revalidatePath`.
     staleTimes: {
-      dynamic: 15,
+      // En desarrollo no se reutiliza nada: evita tener que hacer hard reload
+      // para ver cambios. En producción 15 s para navegación instantánea.
+      dynamic: process.env.NODE_ENV === "development" ? 0 : 15,
     },
   },
   images: {

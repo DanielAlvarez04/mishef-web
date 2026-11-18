@@ -201,6 +201,7 @@ export default async function SettingsPage({
     ? ((await organizationResponse.json()) as {
         slug: string
         brandColor: string | null
+        theme: string
         logoUrl: string | null
         address: string | null
         latitude: string | null
@@ -536,6 +537,7 @@ export default async function SettingsPage({
                 />
                 <OrganizationBrandingCard
                   brandColor={organization?.brandColor ?? null}
+                  theme={organization?.theme ?? "default"}
                   logoUrl={organization?.logoUrl ?? null}
                   address={organization?.address ?? null}
                   latitude={organization?.latitude ?? null}

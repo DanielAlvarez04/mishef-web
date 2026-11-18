@@ -20,10 +20,19 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { sameText } from "@/lib/diff"
+import { ORGANIZATION_THEMES } from "@/lib/themes"
 
 export interface OrganizationBrandingProps {
   brandColor: string | null
+  theme: string
   logoUrl: string | null
   address: string | null
   latitude: string | null
@@ -39,6 +48,7 @@ export interface OrganizationBrandingProps {
  */
 export function OrganizationBrandingCard({
   brandColor,
+  theme: initialTheme,
   logoUrl,
   address,
   latitude,
@@ -49,6 +59,7 @@ export function OrganizationBrandingCard({
   const [pending, startTransition] = useTransition()
 
   const [color, setColor] = useState(brandColor ?? "")
+  const [theme, setTheme] = useState(initialTheme)
   const [logo, setLogo] = useState(logoUrl ?? "")
   const [place, setPlace] = useState(address ?? "")
   const [lat, setLat] = useState(latitude ?? "")
@@ -135,6 +146,9 @@ export function OrganizationBrandingCard({
     if (!sameText(brandColor ?? "", color.trim())) {
       patch.brandColor = color.trim() || null
     }
+    if (!sameText(initialTheme, theme)) {
+      patch.theme = theme
+    }
     if (!sameText(logoUrl ?? "", logo.trim())) {
       patch.logoUrl = logo.trim() || null
     }
@@ -213,6 +227,37 @@ export function OrganizationBrandingCard({
             <FieldDescription>
               Se usa como color de acento en botones y estados. Déjalo vacío o
               pulsa «Restablecer» para volver a los colores de Mishef.
+            </FieldDescription>
+          </Field>
+
+          <Field className="max-w-64">
+            <FieldLabel htmlFor="organization-theme">Tema del panel</FieldLabel>
+            <Select
+              value={theme}
+              onValueChange={(next) => {
+                if (next) setTheme(next)
+              }}
+              items={[...ORGANIZATION_THEMES]}
+              disabled={pending}
+            >
+              <SelectTrigger
+                id="organization-theme"
+                className="w-full"
+                aria-label="Tema del panel"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ORGANIZATION_THEMES.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldDescription>
+              Define los colores base del panel. El sidebar usa el fondo y el
+              main el tono 100 del tema.
             </FieldDescription>
           </Field>
 

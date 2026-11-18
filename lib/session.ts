@@ -26,6 +26,8 @@ export interface SessionUser {
   organizationTaxRate: string
   /** Moneda del negocio (código ISO 4217, p. ej. `MXN`). */
   organizationCurrency: string
+  /** Tema visual del panel (`default`, `sky`, …). */
+  organizationTheme: string
   /** La organización usa la sección de insumos core sugeridos. */
   organizationUseCoreSuggestions: boolean
   /** La organización usa los grupos de opciones core sugeridos. */
@@ -61,6 +63,7 @@ interface MeResponse {
     logoUrl?: string | null
     taxRate?: string | null
     currency?: string | null
+    theme?: string | null
     useCoreSuggestions?: boolean | null
     useCoreOptionGroups?: boolean | null
     practiceMode?: boolean | null
@@ -104,6 +107,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       organizationLogoUrl: data.organization?.logoUrl ?? null,
       organizationTaxRate: data.organization?.taxRate ?? "0.16",
       organizationCurrency: data.organization?.currency ?? "MXN",
+      organizationTheme: data.organization?.theme ?? "default",
       organizationUseCoreSuggestions:
         data.organization?.useCoreSuggestions ?? true,
       organizationUseCoreOptionGroups:

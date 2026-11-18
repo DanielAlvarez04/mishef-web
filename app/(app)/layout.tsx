@@ -11,8 +11,6 @@ import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
-import { designCss, normalizeDesignTokens } from "@/lib/design"
-import { readApi } from "@/lib/server-api"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 
 /**
@@ -24,7 +22,6 @@ const PLATFORM_PATHS = [
   "/plans",
   "/subscriptions",
   "/users",
-  "/styles",
 ]
 
 export default async function AppLayout({
@@ -64,20 +61,8 @@ export default async function AppLayout({
   const cookieStore = await cookies()
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
 
-  // Estilos globales aplicados desde /styles. El borrador no se inyecta.
-  const designResult = await readApi<{ applied: unknown }>("/design")
-  const designTokens = designResult.ok
-    ? normalizeDesignTokens(designResult.data?.applied)
-    : null
-
   return (
     <CurrencyProvider currency={user.organizationCurrency}>
-      {designTokens ? (
-        <style
-          data-design-tokens
-          dangerouslySetInnerHTML={{ __html: designCss(designTokens) }}
-        />
-      ) : null}
       <OfflineProvider userId={user.id}>
         <PracticeModeWatcher
           active={user.organizationPracticeMode}
@@ -85,6 +70,7 @@ export default async function AppLayout({
         />
         <SidebarProvider
           defaultOpen={sidebarOpen}
+          data-theme={user.organizationTheme}
           style={
             {
               ...brandStyle(user.organizationBrandColor),
@@ -108,14 +94,14 @@ export default async function AppLayout({
               role: user.roles[0],
             }}
           />
-          <SidebarInset className="ml-0! h-svh overflow-hidden">
+          <SidebarInset className="h-svh overflow-y-auto">
             <SiteHeader
               branchName={
                 branches.length > 1 ? (activeBranch?.name ?? null) : null
               }
             />
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
-            <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <div className="flex min-h-0 flex-1 flex-col">
               {children}
             </div>
           </SidebarInset>

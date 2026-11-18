@@ -315,6 +315,7 @@ export async function updateKitchenSettings(input: {
 
 export interface OrganizationBrandingInput {
   brandColor?: string | null
+  theme?: string
   logoUrl?: string | null
   address?: string | null
   latitude?: number | null
@@ -354,6 +355,10 @@ export async function updateOrganizationBranding(
       return { ok: false, message: "El color debe tener el formato #rrggbb." }
     }
     payload.brandColor = color
+  }
+
+  if (input.theme !== undefined) {
+    payload.theme = input.theme
   }
 
   if (input.logoUrl !== undefined) {

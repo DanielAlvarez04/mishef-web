@@ -258,21 +258,39 @@ export function OfflineProvider({
       void refresh()
     }, 0)
 
-    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
-      navigator.serviceWorker
-        .register("/sw.js", { scope: "/", updateViaCache: "none" })
-        .then(async () => {
-          // La primera visita puede ocurrir antes de que el SW controle la
-          // página: se le pide explícitamente que guarde esta copia del POS.
-          if (window.location.pathname !== "/pos") return;
+    if ("serviceWorker" in navigator) {
+      if (process.env.NODE_ENV === "production") {
+        navigator.serviceWorker
+          .register("/sw.js", { scope: "/", updateViaCache: "none" })
+          .then(async () => {
+            // La primera visita puede ocurrir antes de que el SW controle la
+            // página: se le pide explícitamente que guarde esta copia del POS.
+            if (window.location.pathname !== "/pos") return;
 
-          const registration = await navigator.serviceWorker.ready;
-          registration.active?.postMessage({ type: "CACHE_POS" });
+            const registration = await navigator.serviceWorker.ready;
+            registration.active?.postMessage({ type: "CACHE_POS" });
+          })
+          .catch(() => {
+            // Sin service worker la app sigue funcionando; solo pierde el
+            // arranque offline.
+          })
+      } else {
+        // Un service worker de una prueba de producción anterior cachea chunks
+        // y rompe el refresco en caliente. En desarrollo se elimina.
+        void navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            void registration.unregister();
+          }
         })
-        .catch(() => {
-          // Sin service worker la app sigue funcionando; solo pierde el
-          // arranque offline.
-        })
+
+        if ("caches" in window) {
+          void caches.keys().then((keys) => {
+            for (const key of keys) {
+              void caches.delete(key);
+            }
+          })
+        }
+      }
     }
 
     return () => window.clearTimeout(initial)
