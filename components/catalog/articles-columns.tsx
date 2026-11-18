@@ -437,9 +437,10 @@ export function createArticleColumns(
             {hasRecipe ? (
               <Badge
                 variant="outline"
+                size="sm"
                 title="Publicado desde una receta"
                 aria-label="Publicado desde una receta"
-                className="h-5 border-primary/90 bg-primary/5 px-2 py-0.5 text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
+                className="border-primary/90 bg-primary/5 text-primary/90 dark:border-chart-1/90 dark:bg-primary/10 dark:text-chart-1"
               >
                 <BlenderIcon />
               </Badge>

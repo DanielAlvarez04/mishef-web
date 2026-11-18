@@ -353,7 +353,7 @@ export function CatalogClient({
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <TabsList>
+        <TabsList size="sm">
           <TabsTrigger type="button" value="articulos">
             <SoupIcon className="size-4" />
             Artículos

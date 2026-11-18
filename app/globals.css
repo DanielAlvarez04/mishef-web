@@ -214,3 +214,17 @@ input[type=number] {
 .np-dragging * {
   cursor: grabbing !important;
 }
+
+/*
+ * Badges compactos por contexto: dentro de cards, tablas y hover cards el
+ * tamaño grande se reduce al chico. Los tamaños explícitos (sm/md) no cambian.
+ */
+[data-slot="card"] [data-slot="badge"],
+[data-slot="table"] [data-slot="badge"],
+[data-slot="hover-card-content"] [data-slot="badge"] {
+  height: 1.25rem;
+  padding-inline: 0.5rem;
+  font-size: 10px;
+  line-height: 1;
+  gap: 0.125rem;
+}
