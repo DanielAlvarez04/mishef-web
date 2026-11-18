@@ -184,8 +184,8 @@ export function MercadoPagoCard({
           Mercado Pago Point
         </CardTitle>
         <CardDescription>
-          Conecta la cuenta de Mercado Pago del negocio para enviar cobros a
-          su terminal Point desde el punto de venta.
+          Conecta la cuenta de Mercado Pago del negocio para cobrar en su
+          terminal Point o generar links de pago desde el punto de venta.
         </CardDescription>
         <CardAction>
           {!status.configured ? (

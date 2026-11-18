@@ -30,6 +30,8 @@ export interface SessionUser {
   organizationUseCoreSuggestions: boolean
   /** La organización usa los grupos de opciones core sugeridos. */
   organizationUseCoreOptionGroups: boolean
+  /** Acceso al panel interno de la plataforma (z.mishef.co / /plans). */
+  isPlatformAdmin: boolean
   /** Modo práctica: no se registra analítica de operación. */
   organizationPracticeMode: boolean
   /** `true` si el modo práctica está vigente (no expiró). */
@@ -47,6 +49,7 @@ interface MeResponse {
   twoFactorEnabled: boolean
   onboarded?: boolean
   googleLinked?: boolean
+  isPlatformAdmin?: boolean
   roles: string[]
   organizationId?: string | null
   branchId?: string | null
@@ -91,6 +94,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       twoFactorEnabled: data.twoFactorEnabled,
       onboarded: data.onboarded ?? false,
       googleLinked: data.googleLinked ?? false,
+      isPlatformAdmin: data.isPlatformAdmin ?? false,
       roles: data.roles ?? [],
       organizationId: data.organizationId ?? data.organization?.id ?? null,
       branchId: data.branchId ?? null,

@@ -121,3 +121,56 @@ export async function cancelPointCharge(
     POINT_PATHS
   )
 }
+
+/** Pago con link de Checkout Pro. */
+export type LinkPayment = Payment & {
+  providerCheckoutUrl?: string | null
+}
+
+export type LinkChargeInput = PointChargeInput
+
+export async function createPaymentLink(
+  orderId: string,
+  input: LinkChargeInput
+): Promise<ActionResult<LinkPayment>> {
+  if (!orderId) {
+    return { ok: false, message: "Cuenta no encontrada." }
+  }
+
+  return mutateApi<LinkPayment>(
+    `/orders/${orderId}/payments/link`,
+    "POST",
+    input,
+    POINT_PATHS
+  )
+}
+
+export async function syncLinkPayment(
+  paymentId: string
+): Promise<ActionResult<LinkPayment>> {
+  if (!paymentId) {
+    return { ok: false, message: "Pago no encontrado." }
+  }
+
+  return mutateApi<LinkPayment>(
+    `/payments/${paymentId}/sync-link`,
+    "POST",
+    undefined,
+    POINT_PATHS
+  )
+}
+
+export async function cancelLinkPayment(
+  paymentId: string
+): Promise<ActionResult<LinkPayment>> {
+  if (!paymentId) {
+    return { ok: false, message: "Pago no encontrado." }
+  }
+
+  return mutateApi<LinkPayment>(
+    `/payments/${paymentId}/cancel-link`,
+    "POST",
+    undefined,
+    POINT_PATHS
+  )
+}

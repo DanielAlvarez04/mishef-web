@@ -30,7 +30,28 @@ function formatBytes(bytes: number): string {
 export function StorageCard({ storage }: { storage: StorageUsage | null }) {
   if (!storage) return null
 
-  const percent = Math.max(0, Math.min(100, storage.percent))
+  if (storage.limit === null) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <HardDriveIcon className="size-4" /> Almacenamiento
+          </CardTitle>
+          <CardDescription>
+            Fotos de catálogo y de merma, ya optimizadas. Tu plan no tiene
+            límite de almacenamiento.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm font-medium">
+            {formatBytes(storage.used)} usados · Sin límite
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const percent = Math.max(0, Math.min(100, storage.percent ?? 0))
   const tone =
     percent >= 95
       ? "bg-destructive"
@@ -45,8 +66,8 @@ export function StorageCard({ storage }: { storage: StorageUsage | null }) {
           <HardDriveIcon className="size-4" /> Almacenamiento
         </CardTitle>
         <CardDescription>
-          Fotos de catálogo y de merma, ya optimizadas. Cada sucursal suma{" "}
-          {formatBytes(storage.perBranch)}.
+          Fotos de catálogo y de merma, ya optimizadas. El límite depende de tu
+          plan.
         </CardDescription>
       </CardHeader>
       <CardContent className="gap-3">

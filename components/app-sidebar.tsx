@@ -23,6 +23,7 @@ import {
 import type { Branch } from "@/lib/branches"
 import {
   BarChart3Icon,
+  BadgeDollarSignIcon,
   ChartBarIcon,
   ChefHatIcon,
   ClockIcon,
@@ -32,8 +33,10 @@ import {
   NotebookTextIcon,
   PackageIcon,
   PercentIcon,
+  ReceiptTextIcon,
   Settings2Icon,
   ShieldAlertIcon,
+  StoreIcon,
   Trash2Icon,
   ShoppingBasketIcon,
   UsersIcon,
@@ -111,12 +114,25 @@ const data = {
       icon: <Settings2Icon />,
     },
   ],
+  navPlatform: [
+    {
+      title: "Planes",
+      url: "/plans",
+      icon: <BadgeDollarSignIcon />,
+    },
+    {
+      title: "Suscripciones",
+      url: "/subscriptions",
+      icon: <StoreIcon />,
+    },
+  ],
 }
 
 export function AppSidebar({
   user,
   organizationName,
   isAdmin = false,
+  isPlatformAdmin = false,
   branches = [],
   activeBranchId = null,
   lockedBranch = false,
@@ -125,6 +141,7 @@ export function AppSidebar({
   user: NavUserData
   organizationName?: string | null
   isAdmin?: boolean
+  isPlatformAdmin?: boolean
   branches?: Branch[]
   activeBranchId?: string | null
   lockedBranch?: boolean
@@ -133,6 +150,11 @@ export function AppSidebar({
     () => [
       ...(isAdmin
         ? [
+            {
+              title: "Facturación",
+              url: "/billing",
+              icon: <ReceiptTextIcon />,
+            },
             {
               title: "Usuarios",
               url: "/users",
@@ -176,6 +198,12 @@ export function AppSidebar({
         </SidebarGroup>
         <SidebarSeparator />
         <NavMain items={data.navService} label="Servicio" />
+        {isPlatformAdmin ? (
+          <>
+            <SidebarSeparator />
+            <NavMain items={data.navPlatform} label="Ventas" />
+          </>
+        ) : null}
         <SidebarSeparator />
         <NavMain items={data.navApplication} label="Aplicación" />
         <NavSecondary items={navSecondary} className="mt-auto" />

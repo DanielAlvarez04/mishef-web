@@ -16,6 +16,7 @@ export type PaymentMethod =
   | "CARD"
   | "TRANSFER"
   | "MERCADO_PAGO_POINT"
+  | "MERCADO_PAGO_LINK"
 
 export type PaymentStatus = "PENDING" | "CONFIRMED" | "CANCELLED" | "REFUNDED"
 
@@ -24,6 +25,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
   MERCADO_PAGO_POINT: "Mercado Pago (terminal)",
+  MERCADO_PAGO_LINK: "Mercado Pago (link)",
 }
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

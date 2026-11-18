@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { cookies } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
+import { BillingBanner } from "@/components/billing/billing-banner"
 import { OfflineProvider } from "@/components/offline/offline-provider"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
@@ -56,6 +57,7 @@ export default async function AppLayout({
             variant="inset"
             organizationName={user.organizationName}
             isAdmin={isAdmin(user)}
+            isPlatformAdmin={user.isPlatformAdmin}
             branches={branches}
             activeBranchId={activeBranch?.id ?? user.branchId ?? null}
             lockedBranch={Boolean(user.branchId)}
@@ -68,6 +70,7 @@ export default async function AppLayout({
           />
           <SidebarInset className="ml-0! h-svh overflow-hidden">
             <SiteHeader branchName={activeBranch?.name ?? null} />
+            <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               {children}
             </div>

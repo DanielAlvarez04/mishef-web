@@ -7,8 +7,10 @@ import {
   CheckCircle2Icon,
   CheckIcon,
   CircleAlertIcon,
+  CopyIcon,
   CreditCardIcon,
   HandCoinsIcon,
+  LinkIcon,
   Loader2Icon,
   LockIcon,
   ReceiptTextIcon,
@@ -75,8 +77,12 @@ import {
 import { jalapenoChipClass } from "@/lib/chips"
 import {
   cancelPointCharge,
+  cancelLinkPayment,
   chargeWithPoint,
+  createPaymentLink,
+  syncLinkPayment,
   syncPointPayment,
+  type LinkPayment,
   type PointPayment,
 } from "@/lib/mercadopago-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
@@ -102,6 +108,7 @@ const METHOD_ICONS: Record<PaymentMethod, typeof BanknoteIcon> = {
   CARD: CreditCardIcon,
   TRANSFER: ArrowLeftRightIcon,
   MERCADO_PAGO_POINT: SmartphoneIcon,
+  MERCADO_PAGO_LINK: LinkIcon,
 }
 
 type ChargeStep = "review" | "payment" | "tip" | "close"
@@ -178,11 +185,12 @@ export function ChargeDialog({
   const [localPayments, setLocalPayments] = React.useState<ChargePayment[]>([])
 
   const methods: PaymentMethod[] = React.useMemo(
-    () =>
-      mercadoPago.enabled
-        ? [...BASE_METHODS, "MERCADO_PAGO_POINT"]
-        : BASE_METHODS,
-    [mercadoPago.enabled]
+    () => [
+      ...BASE_METHODS,
+      ...(mercadoPago.enabled ? (["MERCADO_PAGO_POINT"] as const) : []),
+      ...(mercadoPago.linkEnabled ? (["MERCADO_PAGO_LINK"] as const) : []),
+    ],
+    [mercadoPago.enabled, mercadoPago.linkEnabled]
   )
 
   const [method, setMethod] = React.useState<PaymentMethod>("CASH")
@@ -247,6 +255,8 @@ export function ChargeDialog({
     React.useState<PointPayment | null>(null)
   const [pointTimedOut, setPointTimedOut] = React.useState(false)
   const pointDeadline = React.useRef<number | null>(null)
+  const [linkPayment, setLinkPayment] = React.useState<LinkPayment | null>(null)
+  const linkKey = React.useRef<string | null>(null)
   /** Pago pendiente que se está anulando (abre el diálogo de motivo). */
   const [voidTarget, setVoidTarget] = React.useState<ChargePayment | null>(null)
   const [voidReason, setVoidReason] = React.useState("")
@@ -258,9 +268,14 @@ export function ChargeDialog({
    */
   const pointKey = React.useRef<string | null>(null)
   const pointPending = pointPayment?.status === "PENDING"
+  const linkPending = linkPayment?.status === "PENDING"
+  const remotePending = pointPending || linkPending
   /** La terminal cobra la venta más la propina en una sola operación. */
   const pointTotal = pointPayment
     ? Number(pointPayment.amount) + Number(pointPayment.tipAmount ?? 0)
+    : 0
+  const linkTotal = linkPayment
+    ? Number(linkPayment.amount) + Number(linkPayment.tipAmount ?? 0)
     : 0
   const [step, setStep] = React.useState<ChargeStep>("review")
   const [detail, setDetail] = React.useState<ChargeSummary | null>(
@@ -943,6 +958,174 @@ export function ChargeDialog({
     }
   }, [pointPayment])
 
+  const onLinkConfirmed = React.useRef<(payment: LinkPayment) => void>(
+    () => {}
+  )
+
+  React.useEffect(() => {
+    onLinkConfirmed.current = (payment) => {
+      const sale = Number(payment.amount)
+      const covers = balance - sale <= 0.004
+
+      setLinkPayment(null)
+      linkKey.current = null
+      toast.success("Pago con link confirmado")
+      applyConfirmedPayment(payment)
+
+      if (!payment.splitId) {
+        setAmountInput(null)
+        if (covers) setStep("close")
+      }
+    }
+  })
+
+  React.useEffect(() => {
+    if (!linkPayment || linkPayment.status !== "PENDING") return
+
+    let cancelled = false
+
+    const tick = async () => {
+      if (cancelled) return
+
+      const result = await syncLinkPayment(linkPayment.id)
+      if (cancelled || !result.ok || !result.data) return
+
+      const next = result.data
+
+      if (next.status === "CONFIRMED") {
+        cancelled = true
+        onLinkConfirmed.current(next)
+        return
+      }
+
+      setLinkPayment((previous) =>
+        previous &&
+        previous.status === next.status &&
+        previous.providerStatus === next.providerStatus &&
+        previous.providerStatusDetail === next.providerStatusDetail
+          ? previous
+          : next
+      )
+
+      if (next.status !== "PENDING") {
+        toast.error(
+          PROVIDER_DETAIL_LABELS[next.providerStatusDetail ?? ""] ??
+            next.providerStatusDetail ??
+            "El link de pago no se completó"
+        )
+      }
+    }
+
+    const timer = setInterval(() => void tick(), 3000)
+
+    return () => {
+      cancelled = true
+      clearInterval(timer)
+    }
+  }, [linkPayment])
+
+  const handleSyncLinkNow = async () => {
+    if (!linkPayment) return
+
+    setPending("sync-link")
+
+    try {
+      const result = await syncLinkPayment(linkPayment.id)
+
+      if (!result.ok || !result.data) {
+        toast.error(result.message ?? "No se pudo sincronizar el link")
+        return
+      }
+
+      if (result.data.status === "CONFIRMED") {
+        onLinkConfirmed.current(result.data)
+        return
+      }
+
+      setLinkPayment(result.data)
+
+      if (result.data.status === "PENDING") {
+        toast.info("Todavía no se ha recibido el pago")
+      } else {
+        toast.error(
+          PROVIDER_DETAIL_LABELS[result.data.providerStatusDetail ?? ""] ??
+            result.data.providerStatusDetail ??
+            "El link de pago no se completó"
+        )
+      }
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const handleCancelLink = async () => {
+    if (!linkPayment) return
+
+    setPending("cancel-link")
+
+    try {
+      const result = await cancelLinkPayment(linkPayment.id)
+
+      if (!result.ok || !result.data) {
+        toast.error(result.message ?? "No se pudo cancelar el link")
+        return
+      }
+
+      if (result.data.status === "CANCELLED") {
+        toast.success("Link de pago cancelado")
+        setLinkPayment(null)
+        linkKey.current = null
+        setLocalPayments((previous) =>
+          previous.filter((payment) => payment.id !== result.data!.id)
+        )
+      } else {
+        toast.info("El link se cancelará al expirar")
+      }
+    } finally {
+      setPending(null)
+    }
+  }
+
+  const handleSendLink = async () => {
+    if (!Number.isFinite(saleAmount) || saleAmount <= 0) {
+      toast.error("Escribe un importe válido")
+      return
+    }
+
+    setPending("link")
+
+    const idempotencyKey =
+      linkKey.current ?? (linkKey.current = crypto.randomUUID())
+
+    try {
+      const result = await createPaymentLink(order.id, {
+        amount: Math.round(saleAmount * 100) / 100,
+        tipAmount: Math.round(tip * 100) / 100,
+        tipPercent: tip > 0 ? tipPercentValue : null,
+        tipSource: tip > 0 ? tipSource : "NONE",
+        tipBaseAmount: tip > 0 ? Math.round(saleAmount * 100) / 100 : null,
+        ...(activeSplitId ? { splitId: activeSplitId } : {}),
+        idempotencyKey,
+      })
+
+      if (!result.ok || !result.data) {
+        linkKey.current = null
+        toast.error(result.message ?? "No se pudo crear el link de pago")
+        return
+      }
+
+      setLinkPayment(result.data)
+      setLocalPayments((previous) => [
+        ...previous.filter((payment) => payment.id !== result.data!.id),
+        result.data!,
+      ])
+      setStep("payment")
+      toast.success("Link de pago generado")
+    } finally {
+      setPending(null)
+    }
+  }
+
   const handleSyncNow = async () => {
     if (!pointPayment) return
 
@@ -1066,7 +1249,7 @@ export function ChargeDialog({
   }
 
   const chooseMethod = (value: PaymentMethod) => {
-    if (pointPending) {
+    if (remotePending) {
       toast.info("Cancela el cobro en la terminal antes de cambiar de método.")
       return
     }
@@ -1076,14 +1259,14 @@ export function ChargeDialog({
 
   const stepIndex = STEPS.findIndex((entry) => entry.id === step)
   const canEnterStep = (id: ChargeStep) => {
-    if (pointPending) return id === step
+    if (remotePending) return id === step
     if (id === "close") return canClose
 
     return true
   }
 
   const goBack = () => {
-    if (pointPending) {
+    if (remotePending) {
       toast.info("Cancela el cobro en la terminal antes de continuar.")
       return
     }
@@ -1177,7 +1360,7 @@ export function ChargeDialog({
         onOpenChange={(open) => {
           if (open) return
 
-          if (pointPending) {
+          if (remotePending) {
             toast.info("Cancela el cobro en la terminal antes de salir.")
             return
           }
@@ -1216,7 +1399,7 @@ export function ChargeDialog({
                   : "border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               )}
               onClick={selectCombined}
-              disabled={pointPending}
+              disabled={remotePending}
             >
               Cuenta completa
             </Button>
@@ -1231,7 +1414,7 @@ export function ChargeDialog({
                     : "border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
                 )}
                 onClick={() => void selectSplitMode("BY_GUEST")}
-                disabled={splitBusy || pointPending}
+                disabled={splitBusy || remotePending}
               >
                 Por cliente
               </Button>
@@ -1246,7 +1429,7 @@ export function ChargeDialog({
                   : "border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               )}
               onClick={() => void selectSplitMode("EQUAL")}
-              disabled={splitBusy || pointPending}
+              disabled={splitBusy || remotePending}
             >
               Partes iguales
             </Button>
@@ -1582,6 +1765,7 @@ export function ChargeDialog({
                     : null
                   const tipAmount = Number(payment.tipAmount ?? 0)
                   const isPoint = payment.method === "MERCADO_PAGO_POINT"
+                  const isLink = payment.method === "MERCADO_PAGO_LINK"
 
                   return (
                     <li
@@ -1612,8 +1796,10 @@ export function ChargeDialog({
                         <span className="tabular-nums">
                           {money(Number(payment.amount))}
                         </span>
-                        {isPoint ? (
-                          <Badge variant="outline">En terminal</Badge>
+                        {isPoint || isLink ? (
+                          <Badge variant="outline">
+                            {isPoint ? "En terminal" : "En línea"}
+                          </Badge>
                         ) : (
                           <>
                             {canConfirm ? (
@@ -1653,6 +1839,105 @@ export function ChargeDialog({
                   Caja o administración debe confirmarlos.
                 </p>
               ) : null}
+            </div>
+          ) : null}
+          {linkPayment ? (
+            <div className="flex flex-col gap-3 rounded-lg border p-4">
+              {linkPayment.status === "PENDING" ? (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <Loader2Icon className="size-4 animate-spin" />
+                    Esperando el pago en línea…
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {money(linkTotal)}
+                    {Number(linkPayment.tipAmount ?? 0) > 0
+                      ? ` · incluye ${money(Number(linkPayment.tipAmount))} de propina`
+                      : ""}
+                  </p>
+                  {linkPayment.providerCheckoutUrl ? (
+                    <div className="flex gap-2">
+                      <Input
+                        readOnly
+                        value={linkPayment.providerCheckoutUrl}
+                        aria-label="Link de pago"
+                        onFocus={(event) => event.target.select()}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        aria-label="Copiar link de pago"
+                        onClick={() => {
+                          const url = linkPayment.providerCheckoutUrl
+                          if (!url) return
+                          void navigator.clipboard.writeText(url).then(
+                            () => toast.success("Link copiado"),
+                            () => toast.error("No se pudo copiar el link")
+                          )
+                        }}
+                      >
+                        <CopyIcon />
+                      </Button>
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleSyncLinkNow()}
+                      disabled={pending !== null}
+                    >
+                      <RefreshCwIcon data-icon="inline-start" />
+                      Sincronizar ahora
+                    </Button>
+                    {canConfirm ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => void handleCancelLink()}
+                        disabled={pending !== null}
+                      >
+                        <Undo2Icon data-icon="inline-start" />
+                        Cancelar link
+                      </Button>
+                    ) : null}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Comparte el link con el cliente. El pago se confirma solo
+                    cuando Mercado Pago lo aprueba.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    {linkPayment.status === "CONFIRMED" ? (
+                      <CheckCircle2Icon className="size-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <CircleAlertIcon className="size-4 text-destructive" />
+                    )}
+                    {linkPayment.status === "CONFIRMED"
+                      ? "Pago en línea confirmado"
+                      : "Link de pago no completado"}
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {PROVIDER_DETAIL_LABELS[
+                      linkPayment.providerStatusDetail ?? ""
+                    ] ??
+                      linkPayment.providerStatusDetail ??
+                      "Puedes generar un link nuevo."}
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={() => setLinkPayment(null)}
+                  >
+                    Nuevo link
+                  </Button>
+                </>
+              )}
             </div>
           ) : null}
           {pointPayment ? (
@@ -1866,7 +2151,17 @@ export function ChargeDialog({
                 </div>
               ) : null}
 
-              {method !== "MERCADO_PAGO_POINT" && !canConfirm ? (
+              {method === "MERCADO_PAGO_LINK" ? (
+                <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+                  Al continuar se generará un link de Mercado Pago para que el
+                  cliente pague desde su teléfono. Puedes copiarlo y enviarlo
+                  por WhatsApp.
+                </p>
+              ) : null}
+
+              {method !== "MERCADO_PAGO_POINT" &&
+              method !== "MERCADO_PAGO_LINK" &&
+              !canConfirm ? (
                 <p className="text-xs text-muted-foreground">
                   Tu rol puede registrar pagos; caja o administración los
                   confirma.
@@ -2001,7 +2296,7 @@ export function ChargeDialog({
             type="button"
             variant="outline"
             onClick={step === "review" ? onClose : goBack}
-            disabled={pointPending}
+            disabled={remotePending}
           >
             {step === "review" ? "Volver" : "Atrás"}
           </Button>
@@ -2032,7 +2327,7 @@ export function ChargeDialog({
               <Button
                 type="button"
                 onClick={() => setStep("tip")}
-                disabled={pending !== null || pointPending}
+                disabled={pending !== null || remotePending}
               >
                 Continuar
               </Button>
@@ -2049,6 +2344,19 @@ export function ChargeDialog({
                     <Loader2Icon className="animate-spin" />
                   ) : null}
                   Cobrar en terminal
+                </Button>
+              ) : method === "MERCADO_PAGO_LINK" ? (
+                <Button
+                  type="button"
+                  onClick={() => void handleSendLink()}
+                  disabled={pending !== null || saleAmount <= 0}
+                >
+                  {pending === "link" ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <LinkIcon />
+                  )}
+                  Generar link de pago
                 </Button>
               ) : canConfirm ? (
                 <>

@@ -175,6 +175,7 @@ const RESERVED_SUBDOMAINS = new Set([
   "status",
   "support",
   "www",
+  "z",
 ]);
 
 function tenantFromHost(host: string): string | null {

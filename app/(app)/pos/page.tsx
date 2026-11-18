@@ -67,7 +67,7 @@ export default async function PointOfSalePage() {
 
   const pointConfigRaw: MercadoPagoPointConfig = pointConfigResponse?.ok
     ? ((await pointConfigResponse.json()) as MercadoPagoPointConfig)
-    : { enabled: false, terminals: [] }
+    : { enabled: false, linkEnabled: false, terminals: [] }
 
   const pointTerminals = pointConfigRaw.terminals.filter(
     (terminal) =>
@@ -75,6 +75,7 @@ export default async function PointOfSalePage() {
   )
   const pointConfig: MercadoPagoPointConfig = {
     enabled: pointConfigRaw.enabled && pointTerminals.length > 0,
+    linkEnabled: pointConfigRaw.linkEnabled,
     terminals: pointTerminals,
   }
 

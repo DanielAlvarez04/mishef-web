@@ -27,9 +27,11 @@ export interface MercadoPagoStatus {
   terminals: MercadoPagoTerminal[]
 }
 
-/** Configuración mínima que el POS necesita para cobrar en terminal. */
+/** Configuración mínima que el POS necesita para cobrar en terminal o link. */
 export interface MercadoPagoPointConfig {
   enabled: boolean
+  /** La cuenta está conectada y puede generar links de Checkout Pro. */
+  linkEnabled: boolean
   terminals: Array<{
     id: string
     name: string | null
