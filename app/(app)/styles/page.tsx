@@ -1,5 +1,5 @@
 import { StyleLab } from "@/components/design/style-lab"
-import { normalizeDesignTokens } from "@/lib/design"
+import { canEditStyles, normalizeDesignTokens } from "@/lib/design"
 import { readApi } from "@/lib/server-api"
 import { requireUser } from "@/lib/session"
 
@@ -22,7 +22,7 @@ export default async function StylesPage() {
         </p>
       </div>
 
-      <StyleLab applied={applied} draft={draft} canEdit={user.isPlatformAdmin} />
+      <StyleLab applied={applied} draft={draft} canEdit={canEditStyles(user)} />
     </div>
   )
 }
