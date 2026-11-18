@@ -22,6 +22,7 @@ import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
 import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
 import { PosPinCard } from "@/components/settings/pos-pin-card"
+import { FiscalCard } from "@/components/settings/fiscal-card"
 import { MercadoPagoCard } from "@/components/settings/mercadopago-card"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
@@ -58,6 +59,7 @@ import {
 } from "@/lib/catalog"
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
+import type { FiscalProfile } from "@/lib/fiscal"
 import type { KitchenSettings } from "@/lib/kitchen"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { PosPairedDevice } from "@/lib/pos-device"
@@ -222,6 +224,12 @@ export default async function SettingsPage({
     : null
   const mpStatus: MercadoPagoStatus | null = mpStatusResponse?.ok
     ? ((await mpStatusResponse.json()) as MercadoPagoStatus)
+    : null
+
+  // Fase 0 de CFDI: solo lectura/escritura de datos fiscales, sin timbrado.
+  const fiscalResponse = admin ? await apiFetch("/fiscal/profile") : null
+  const fiscalProfile: FiscalProfile | null = fiscalResponse?.ok
+    ? ((await fiscalResponse.json()) as FiscalProfile | null)
     : null
 
   const kitchenSettingsResponse = await apiFetch("/kitchen/settings")
@@ -588,6 +596,8 @@ export default async function SettingsPage({
                 canManage={admin}
               />
             )}
+
+            <FiscalCard profile={fiscalProfile} canManage={admin} />
 
             <Card>
               <CardHeader>
