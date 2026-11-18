@@ -1,6 +1,15 @@
 "use client"
 
 import { useEffect, type ReactNode } from "react"
+import {
+  Building2Icon,
+  ChefHatIcon,
+  CookingPotIcon,
+  CreditCardIcon,
+  PackageIcon,
+  PaletteIcon,
+  UserIcon,
+} from "lucide-react"
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
@@ -59,15 +68,36 @@ export function SettingsTabs({
     >
       <TabsList
         aria-label="Secciones de configuración"
-        className="max-w-full overflow-x-auto"
+        className="max-w-full flex-wrap"
       >
-        <TabsTrigger value="account">Cuenta</TabsTrigger>
-        <TabsTrigger value="business">Negocio</TabsTrigger>
-        <TabsTrigger value="payments">Pagos</TabsTrigger>
-        <TabsTrigger value="catalog">Catálogo</TabsTrigger>
-        <TabsTrigger value="kitchen">Cocina</TabsTrigger>
-        <TabsTrigger value="inventory">Inventario</TabsTrigger>
-        <TabsTrigger value="personalization">Personalización</TabsTrigger>
+        <TabsTrigger value="account">
+          <UserIcon className="size-4" />
+          Cuenta
+        </TabsTrigger>
+        <TabsTrigger value="business">
+          <Building2Icon className="size-4" />
+          Negocio
+        </TabsTrigger>
+        <TabsTrigger value="payments">
+          <CreditCardIcon className="size-4" />
+          Pagos
+        </TabsTrigger>
+        <TabsTrigger value="catalog">
+          <CookingPotIcon className="size-4" />
+          Catálogo
+        </TabsTrigger>
+        <TabsTrigger value="kitchen">
+          <ChefHatIcon className="size-4" />
+          Cocina
+        </TabsTrigger>
+        <TabsTrigger value="inventory">
+          <PackageIcon className="size-4" />
+          Inventario
+        </TabsTrigger>
+        <TabsTrigger value="personalization">
+          <PaletteIcon className="size-4" />
+          Personalización
+        </TabsTrigger>
       </TabsList>
 
       <TabsContent value="account" className="flex min-w-0 flex-col gap-6">

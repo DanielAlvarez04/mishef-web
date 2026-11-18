@@ -1,9 +1,12 @@
 "use client"
 
+import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { ClockIcon } from "lucide-react"
 
 import { OfflineStatus } from "@/components/offline/offline-status"
 import { ModeToggle } from "@/components/mode-toggle"
+import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 
@@ -22,7 +25,15 @@ const pageTitles: Record<string, string> = {
   "/billing": "Facturación",
 }
 
-export function SiteHeader({ branchName }: { branchName?: string | null }) {
+export function SiteHeader({
+  branchName,
+  showClock = false,
+  inShift = false,
+}: {
+  branchName?: string | null
+  showClock?: boolean
+  inShift?: boolean
+}) {
   const pathname = usePathname()
 
   const pageTitle =
@@ -48,6 +59,21 @@ export function SiteHeader({ branchName }: { branchName?: string | null }) {
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">
           <ModeToggle />
+          {showClock ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative"
+              title={inShift ? "Checador · en turno" : "Checador"}
+              render={<Link href="/attendance" />}
+            >
+              <ClockIcon className="size-4" />
+              {inShift ? (
+                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-emerald-500" />
+              ) : null}
+              <span className="sr-only">Checador</span>
+            </Button>
+          ) : null}
           <OfflineStatus />
         </div>
       </div>

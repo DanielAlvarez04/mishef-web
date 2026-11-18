@@ -11,6 +11,8 @@ import { InventorySummary } from "@/components/inventory/inventory-summary"
 import { KardexTable } from "@/components/inventory/kardex-table"
 import { listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   type IngredientCategory,
@@ -41,6 +43,7 @@ export function InventoryClient({
   initialBranch,
 }: InventoryClientProps) {
   const [branch] = useState<Branch | null>(initialBranch)
+  const [showKpis, setShowKpis] = useState(true)
   const [tab, setTab] = usePersistentTab(
     "inventory-tab",
     INVENTORY_TABS,
@@ -77,25 +80,40 @@ export function InventoryClient({
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <TabsList>
-          <TabsTrigger type="button" value="inventario">
-            <PackageIcon className="size-4" />
-            Inventario
-          </TabsTrigger>
-          <TabsTrigger type="button" value="kardex">
-            <HistoryIcon className="size-4" />
-            Kardex
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger type="button" value="inventario">
+              <PackageIcon className="size-4" />
+              Inventario
+            </TabsTrigger>
+            <TabsTrigger type="button" value="kardex">
+              <HistoryIcon className="size-4" />
+              Kardex
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex items-center gap-2">
+            <Label htmlFor="inventory-show-kpis" className="text-sm font-normal">
+              Mostrar KPI&apos;s
+            </Label>
+            <Switch
+              id="inventory-show-kpis"
+              checked={showKpis}
+              onCheckedChange={setShowKpis}
+            />
+          </div>
+        </div>
 
         <TabsContent value="inventario" keepMounted>
           <div className="flex flex-col gap-4">
-            <InventorySummary
-              ingredients={initialIngredients}
-              report={inventoryReport}
-              branch={branch}
-              branches={branches}
-            />
+            {showKpis ? (
+              <InventorySummary
+                ingredients={initialIngredients}
+                report={inventoryReport}
+                branch={branch}
+                branches={branches}
+              />
+            ) : null}
             <IngredientsTable
               idPrefix="ingredients"
               ingredients={initialIngredients}
