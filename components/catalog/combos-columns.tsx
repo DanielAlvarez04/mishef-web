@@ -152,18 +152,18 @@ function ComboPromotionHint({ promotion }: { promotion: ComboPromotion }) {
       <HoverCardTrigger
         render={<button type="button" />}
         className={cn(
-          badgeVariants({ variant: "outline" }),
+          badgeVariants({ variant: "outline", size: "sm" }),
           "cursor-default border-sky-700 bg-sky-500/10 text-sky-700 dark:border-sky-400 dark:bg-sky-400/10 dark:text-sky-400"
         )}
         aria-label={`Promoción: ${PROMOTION_TYPE_LABELS[promotion.type]}`}
       >
         <TicketPercentIcon />
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-60 p-2">
+      <HoverCardContent align="end" size="sm" className="w-60">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           Promoción
         </p>
-        <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm">
+        <div className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs">
           <span className="truncate">
             {PROMOTION_TYPE_LABELS[promotion.type]}
           </span>

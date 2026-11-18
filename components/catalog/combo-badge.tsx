@@ -31,7 +31,7 @@ export function ComboBadge({
       <HoverCardTrigger
         render={<button type="button" />}
         className={cn(
-          badgeVariants({ variant: "outline" }),
+          badgeVariants({ variant: "outline", size: "sm" }),
           "cursor-pointer border-sky-700 bg-sky-500/10 text-sky-700 dark:border-sky-400 dark:bg-sky-400/10 dark:text-sky-400"
         )}
         aria-label={`${combos.length} ${
@@ -41,7 +41,7 @@ export function ComboBadge({
         <GroupIcon />
         {combos.length}
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-60 p-2">
+      <HoverCardContent align="end" size="sm" className="w-60">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           {combos.length === 1 ? "Combo" : "Combos"}
         </p>
@@ -51,7 +51,7 @@ export function ComboBadge({
               key={id}
               type="button"
               onClick={() => onEditCombo(combo.id)}
-              className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-muted"
+              className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left text-xs hover:bg-muted"
               title={combo.name}
             >
               <span className="truncate">{combo.name}</span>

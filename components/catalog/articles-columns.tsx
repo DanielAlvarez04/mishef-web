@@ -259,9 +259,8 @@ export function PresentationPreview({
       <HoverCardTrigger
         render={<button type="button" />}
         className={cn(
-          badgeVariants({ variant: "outline" }),
+          badgeVariants({ variant: "outline", size: "sm" }),
           "cursor-default tabular-nums",
-          compact && "gap-0.5 px-1.5",
           className
         )}
         aria-label={`${variants.length} ${variants.length === 1 ? "presentación" : "presentaciones"}. Ver precios`}
@@ -274,7 +273,7 @@ export function PresentationPreview({
           </span>
         )}
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-64 p-2">
+      <HoverCardContent align="end" size="sm" className="w-64">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           {variants.length === 1 ? "Presentación" : "Presentaciones"}
         </p>
@@ -286,7 +285,7 @@ export function PresentationPreview({
               <div
                 key={variant.id}
                 data-primary={isPrimary}
-                className="rounded-md px-2 py-1 text-sm data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
+                className="rounded-md px-2 py-1 text-xs data-[primary=true]:bg-primary/10 data-[primary=true]:text-primary"
               >
                 <div className="flex items-center justify-between gap-3">
                   <span className="min-w-0 truncate" title={variant.name}>

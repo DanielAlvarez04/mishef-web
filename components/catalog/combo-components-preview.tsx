@@ -32,7 +32,7 @@ export function ComboComponentsPreview({
       <HoverCardTrigger
         render={<button type="button" />}
         className={cn(
-          badgeVariants({ variant: "outline" }),
+          badgeVariants({ variant: "outline", size: "sm" }),
           "cursor-default tabular-nums"
         )}
         aria-label={`${count} ${count === 1 ? "artículo" : "artículos"}. Ver detalle`}
@@ -40,7 +40,7 @@ export function ComboComponentsPreview({
         <SoupIcon />
         {count}
       </HoverCardTrigger>
-      <HoverCardContent align="end" className="w-64 p-2">
+      <HoverCardContent align="end" size="sm" className="w-64">
         <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
           {count === 1 ? "Artículo" : "Artículos"}
         </p>
@@ -48,7 +48,7 @@ export function ComboComponentsPreview({
           {components.map((component) => (
             <div
               key={component.id}
-              className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-sm"
+              className="flex items-center justify-between gap-3 rounded-md px-2 py-1 text-xs"
             >
               <span
                 className="min-w-0 truncate"
