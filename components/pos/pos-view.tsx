@@ -1985,7 +1985,6 @@ ull` = vista consolidada. */
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   onClick={() => {
                     setCategoryId("")
                     setPriceRange(null)
@@ -2002,7 +2001,7 @@ ull` = vista consolidada. */
               <Popover>
                 <PopoverTrigger
                   render={
-                    <Button type="button" variant="outline" size="sm">
+                    <Button type="button" variant="outline">
                       <LayoutGridIcon />
                       Vista
                     </Button>
@@ -2126,7 +2125,6 @@ ull` = vista consolidada. */
                     <Button
                       type="button"
                       variant="outline"
-                      size="sm"
                       aria-label="Ordenar artículos"
                     >
                       <ArrowUpDownIcon />

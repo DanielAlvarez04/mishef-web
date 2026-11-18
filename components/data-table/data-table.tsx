@@ -690,7 +690,6 @@ export function DataTable<TData extends RowData>({
         <div className="ml-auto flex items-center gap-2 sm:ml-0">
           <Button
             variant="outline"
-            size="sm"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -698,7 +697,6 @@ export function DataTable<TData extends RowData>({
           </Button>
           <Button
             variant="outline"
-            size="sm"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >

@@ -92,7 +92,6 @@ export function CashSessionActions({
         <ButtonGroup>
           <Button
             type="button"
-            size="sm"
             variant="outline"
             disabled={closePending}
             onClick={() => setOpenClose(true)}
@@ -106,7 +105,7 @@ export function CashSessionActions({
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon-sm"
+                  size="icon"
                   aria-label="Más acciones de caja"
                 />
               }
@@ -123,7 +122,7 @@ export function CashSessionActions({
           </DropdownMenu>
         </ButtonGroup>
       ) : (
-        <Button type="button" size="sm" onClick={() => setOpenOpen(true)}>
+        <Button type="button" onClick={() => setOpenOpen(true)}>
           <ReceiptTextIcon data-icon="inline-start" />
           Abrir caja
         </Button>
