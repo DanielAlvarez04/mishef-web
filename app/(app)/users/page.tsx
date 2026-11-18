@@ -1,14 +1,60 @@
 import { redirect } from "next/navigation"
 
 import { UsersTable } from "@/components/users/users-table"
+import { PlatformUsersTable } from "@/components/users/platform-users-table"
 import { InviteTeamForm } from "@/components/users/invite-team-form"
+import { Card, CardContent } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { isAdmin, requireUser } from "@/lib/session"
-import type { InternalUser } from "@/lib/users"
+import type { PlatformOrganization } from "@/lib/billing"
+import type { InternalUser, PlatformUser } from "@/lib/users"
 
 export default async function UsersPage() {
   const user = await requireUser()
+
+  // El superadmin ve las cuentas de todos los negocios, sin gestión por equipo.
+  if (user.isPlatformAdmin) {
+    const [usersResponse, organizationsResponse] = await Promise.all([
+      apiFetch("/platform/users"),
+      apiFetch("/platform/organizations"),
+    ])
+
+    const users: PlatformUser[] | null = usersResponse.ok
+      ? ((await usersResponse.json()) as PlatformUser[])
+      : null
+    const organizations: PlatformOrganization[] = organizationsResponse.ok
+      ? ((await organizationsResponse.json()) as PlatformOrganization[])
+      : []
+
+    return (
+      <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold tracking-tight">Usuarios</h1>
+          <p className="text-sm text-muted-foreground">
+            Cuentas de todos los negocios. Filtra por negocio o busca por nombre
+            o correo.
+          </p>
+        </div>
+
+        {users ? (
+          <PlatformUsersTable
+            users={users}
+            organizations={organizations.map((organization) => ({
+              id: organization.id,
+              name: organization.name,
+            }))}
+          />
+        ) : (
+          <Card>
+            <CardContent className="py-8 text-sm text-muted-foreground">
+              No pudimos cargar los usuarios.
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    )
+  }
 
   if (!isAdmin(user)) {
     redirect("/settings")

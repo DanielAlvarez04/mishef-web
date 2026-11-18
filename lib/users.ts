@@ -23,6 +23,24 @@ export interface InternalUser {
   createdAt: string
 }
 
+/** Usuario visto desde el panel de plataforma (una fila por membresía). */
+export interface PlatformUser {
+  id: string
+  email: string | null
+  username: string | null
+  name: string | null
+  isActive: boolean
+  emailVerified: boolean
+  twoFactorEnabled: boolean
+  isPlatformAdmin: boolean
+  roles: RoleCode[]
+  branchName: string | null
+  organizationId: string
+  organizationName: string
+  organizationSlug: string
+  createdAt: string
+}
+
 /** Etiqueta visible de cada rol, con su alcance resumido. */
 export const ROLE_OPTIONS: Array<{
   value: RoleCode

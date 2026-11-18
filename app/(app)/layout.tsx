@@ -17,7 +17,7 @@ import { displayName, isAdmin, requireUser } from "@/lib/session"
  * Rutas del panel de plataforma. Un superadmin no ve el panel del negocio:
  * cualquier otra ruta lo devuelve a `/platform`.
  */
-const PLATFORM_PATHS = ["/platform", "/plans", "/subscriptions"]
+const PLATFORM_PATHS = ["/platform", "/plans", "/subscriptions", "/users"]
 
 export default async function AppLayout({
   children,

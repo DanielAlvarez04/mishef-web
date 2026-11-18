@@ -130,6 +130,11 @@ const data = {
       url: "/subscriptions",
       icon: <StoreIcon />,
     },
+    {
+      title: "Usuarios",
+      url: "/users",
+      icon: <UsersIcon />,
+    },
   ],
 }
 
