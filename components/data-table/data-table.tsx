@@ -416,32 +416,23 @@ export function DataTable<TData extends RowData>({
   )
 
   const viewToggle = onViewModeChange ? (
-    <div
-      role="group"
-      aria-label="Vista"
-      className="flex items-center gap-0.5"
+    <Button
+      variant="default"
+      onClick={() => onViewModeChange(viewMode === "cards" ? "table" : "cards")}
+      aria-label={
+        viewMode === "cards" ? "Cambiar a vista de tabla" : "Cambiar a tarjetas"
+      }
+      title={
+        viewMode === "cards" ? "Cambiar a vista de tabla" : "Cambiar a tarjetas"
+      }
     >
-      <Button
-        variant={viewMode === "cards" ? "secondary" : "ghost"}
-        size="icon-sm"
-        aria-pressed={viewMode === "cards"}
-        aria-label="Vista de tarjetas"
-        title="Vista de tarjetas"
-        onClick={() => onViewModeChange("cards")}
-      >
-        <LayoutGridIcon className="size-4" />
-      </Button>
-      <Button
-        variant={viewMode === "table" ? "secondary" : "ghost"}
-        size="icon-sm"
-        aria-pressed={viewMode === "table"}
-        aria-label="Vista de tabla"
-        title="Vista de tabla"
-        onClick={() => onViewModeChange("table")}
-      >
+      {viewMode === "cards" ? (
         <TableIcon className="size-4" />
-      </Button>
-    </div>
+      ) : (
+        <LayoutGridIcon className="size-4" />
+      )}
+      {viewMode === "cards" ? "Tabla" : "Cards"}
+    </Button>
   ) : null
 
   const columnToggle =

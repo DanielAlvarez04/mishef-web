@@ -58,12 +58,15 @@ interface SortableColumn {
 
 function ComboColumnHeader({
   title,
+  suffix,
   column,
   align = "left",
   hint,
   icon,
 }: {
   title: string
+  /** Texto secundario atenuado, p. ej. "($/%)". */
+  suffix?: string
   column: SortableColumn
   align?: "left" | "right"
   hint?: string
@@ -84,7 +87,14 @@ function ComboColumnHeader({
             <span className="sr-only">{title}</span>
           </>
         ) : (
-          <span className="font-medium">{title}</span>
+          <span className="font-medium">
+            {title}
+            {suffix ? (
+              <span className="ml-1 font-normal text-muted-foreground">
+                {suffix}
+              </span>
+            ) : null}
+          </span>
         )}
         {hint ? <InfoHint text={hint} /> : null}
       </div>
@@ -103,7 +113,16 @@ function ComboColumnHeader({
         data-sorted={sorted !== false}
         onClick={column.getToggleSortingHandler()}
       >
-        {icon ?? title}
+        {icon ?? (
+          <>
+            {title}
+            {suffix ? (
+              <span className="ml-1 font-normal text-muted-foreground">
+                {suffix}
+              </span>
+            ) : null}
+          </>
+        )}
         {hint ? <InfoHint text={hint} /> : null}
         {sorted === "asc" ? (
           <ChevronUpIcon data-icon="inline-end" />
@@ -388,7 +407,8 @@ export function createComboColumns(
         id: "cost",
         header: ({ column }) => (
           <ComboColumnHeader
-            title="Costo ($/%)"
+            title="Costo"
+            suffix="($/%)"
             column={column}
             align="right"
             hint="Costo real de los componentes y su porcentaje sobre el precio efectivo."
@@ -428,7 +448,8 @@ export function createComboColumns(
         id: "margin",
         header: ({ column }) => (
           <ComboColumnHeader
-            title="Margen ($/%)"
+            title="Margen"
+            suffix="($/%)"
             column={column}
             align="right"
             hint="Precio efectivo menos costo, y su margen bruto."

@@ -29,9 +29,9 @@ const tabsListVariants = cva(
         line: "gap-1 bg-transparent",
       },
       size: {
-        sm: "gap-0.5 p-0.5",
-        md: "gap-0.5 p-[3px]",
-        lg: "gap-1 p-1",
+        sm: "gap-0.5 p-1",
+        md: "gap-0.5 p-1.5",
+        lg: "gap-1 p-2",
       },
     },
     defaultVariants: {

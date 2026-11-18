@@ -453,6 +453,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
                 {showGroups && product.category ? (
                   <Badge
                     variant="outline"
+                    size="sm"
                     title={product.category.name}
                     className="max-w-full min-w-0 truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
                   >
@@ -464,6 +465,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
                 {product.isCombo ? (
                   <Badge
                     variant="outline"
+                    size="sm"
                     title="Combo"
                     aria-label="Combo"
                     className="border-sky-400 bg-sky-400/10 text-sky-400 backdrop-blur-sm"
@@ -474,6 +476,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
                 {promotion ? (
                   <Badge
                     variant="outline"
+                    size="sm"
                     className="border-sky-300/50 bg-sky-500/25 text-[10px] text-white backdrop-blur-sm"
                   >
                     {PROMOTION_TYPE_LABELS[promotion.type]}
@@ -4043,6 +4046,7 @@ function AddItemDialog({
                           candidate.isPrimary ? (
                             <Badge
                               variant="outline"
+                              size="sm"
                               className="border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
                             >
                               Principal

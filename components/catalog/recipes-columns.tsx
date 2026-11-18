@@ -57,12 +57,15 @@ interface SortableColumn {
 
 function RecipeColumnHeader({
   title,
+  suffix,
   column,
   align = "left",
   hint,
   icon,
 }: {
   title: string
+  /** Texto secundario atenuado, p. ej. "($/%)". */
+  suffix?: string
   column: SortableColumn
   align?: "left" | "right"
   /** Texto de ayuda que se muestra en un icono junto al título. */
@@ -84,7 +87,14 @@ function RecipeColumnHeader({
             <span className="sr-only">{title}</span>
           </>
         ) : (
-          <span className="font-medium">{title}</span>
+          <span className="font-medium">
+            {title}
+            {suffix ? (
+              <span className="ml-1 font-normal text-muted-foreground">
+                {suffix}
+              </span>
+            ) : null}
+          </span>
         )}
         {hint ? <InfoHint text={hint} /> : null}
       </div>
@@ -103,7 +113,16 @@ function RecipeColumnHeader({
         data-sorted={sorted !== false}
         onClick={column.getToggleSortingHandler()}
       >
-        {icon ?? title}
+        {icon ?? (
+          <>
+            {title}
+            {suffix ? (
+              <span className="ml-1 font-normal text-muted-foreground">
+                {suffix}
+              </span>
+            ) : null}
+          </>
+        )}
         {/* La ayuda va entre el título y los chevrones de ordenación. */}
         {hint ? <InfoHint text={hint} /> : null}
         {sorted === "asc" ? (
@@ -483,7 +502,8 @@ export function createRecipeColumns(
         id: "cost",
         header: ({ column }) => (
           <RecipeColumnHeader
-            title="Costo ($/%)"
+            title="Costo"
+            suffix="($/%)"
             column={column}
             align="right"
             hint="Costo estimado del producto y su porcentaje sobre el precio sin IVA."
@@ -533,7 +553,8 @@ export function createRecipeColumns(
         id: "margin",
         header: ({ column }) => (
           <RecipeColumnHeader
-            title="Margen ($/%)"
+            title="Margen"
+            suffix="($/%)"
             column={column}
             align="right"
             hint="Diferencia entre el precio sin IVA y el costo, y su margen bruto sobre el precio sin IVA."

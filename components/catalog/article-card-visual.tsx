@@ -117,6 +117,7 @@ export function ArticleCardVisual({
     (groupLabel ? (
       <Badge
         variant="outline"
+        size="sm"
         title={groupLabel}
         className="max-w-[calc(100%-1.5rem)] truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
       >

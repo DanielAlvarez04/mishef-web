@@ -44,6 +44,8 @@ import {
   AlertDialogMedia,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import { Label } from "@/components/ui/label"
+import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
@@ -115,6 +117,7 @@ export function CatalogClient({
   // El modo de vista se comparte entre Artículos y Recetas y se persiste entre
   // recargas para no tener que cambiarlo manualmente cada vez.
   const [viewMode, setViewMode] = usePersistentViewMode()
+  const [showKpis, setShowKpis] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
   const [initialSaveAs, setInitialSaveAs] =
     useState<ProductSaveAs>("article")
@@ -353,29 +356,47 @@ export function CatalogClient({
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
-        <TabsList size="sm">
-          <TabsTrigger type="button" value="articulos">
-            <SoupIcon className="size-4" />
-            Artículos
-          </TabsTrigger>
-          <TabsTrigger type="button" value="recetas">
-            <BlenderIcon className="size-4" />
-            Recetas
-          </TabsTrigger>
-          <TabsTrigger type="button" value="combos">
-            <GroupIcon className="size-4" />
-            Combos
-          </TabsTrigger>
-        </TabsList>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList size="sm">
+            <TabsTrigger type="button" value="articulos">
+              <SoupIcon className="size-4" />
+              Artículos
+            </TabsTrigger>
+            <TabsTrigger type="button" value="recetas">
+              <BlenderIcon className="size-4" />
+              Recetas
+            </TabsTrigger>
+            <TabsTrigger type="button" value="combos">
+              <GroupIcon className="size-4" />
+              Combos
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex items-center gap-2">
+            <Switch
+              id="catalog-show-kpis"
+              checked={showKpis}
+              onCheckedChange={setShowKpis}
+            />
+            <Label
+              htmlFor="catalog-show-kpis"
+              className="text-sm font-normal"
+            >
+              Mostrar KPI&apos;s
+            </Label>
+          </div>
+        </div>
 
         <TabsContent value="articulos" keepMounted>
           <div className="flex flex-col gap-4">
-            <CatalogSummary
-              mode="articles"
-              recipes={recipes}
-              articles={regularArticles}
-              taxRate={taxRate}
-            />
+            {showKpis ? (
+              <CatalogSummary
+                mode="articles"
+                recipes={recipes}
+                articles={regularArticles}
+                taxRate={taxRate}
+              />
+            ) : null}
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {rowForm.error}
@@ -403,12 +424,14 @@ export function CatalogClient({
 
         <TabsContent value="recetas" keepMounted>
           <div className="flex flex-col gap-4">
-            <CatalogSummary
-              mode="recipes"
-              recipes={recipes}
-              articles={articles}
-              taxRate={taxRate}
-            />
+            {showKpis ? (
+              <CatalogSummary
+                mode="recipes"
+                recipes={recipes}
+                articles={articles}
+                taxRate={taxRate}
+              />
+            ) : null}
             {rowForm.error ? (
               <p role="alert" className="text-sm text-destructive">
                 {rowForm.error}
@@ -438,10 +461,12 @@ export function CatalogClient({
 
         <TabsContent value="combos" keepMounted>
           <div className="flex flex-col gap-4">
-            <CombosSummary
-              combos={visibleArticles.filter((article) => article.isCombo)}
-              recipes={recipes}
-            />
+            {showKpis ? (
+              <CombosSummary
+                combos={visibleArticles.filter((article) => article.isCombo)}
+                recipes={recipes}
+              />
+            ) : null}
             <CombosTable
               combos={visibleArticles.filter((article) => article.isCombo)}
               recipes={recipes}
