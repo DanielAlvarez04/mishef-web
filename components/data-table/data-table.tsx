@@ -419,11 +419,11 @@ export function DataTable<TData extends RowData>({
     <div
       role="group"
       aria-label="Vista"
-      className="flex items-center gap-0.5 rounded-md border p-0.5"
+      className="flex items-center gap-0.5"
     >
       <Button
         variant={viewMode === "cards" ? "secondary" : "ghost"}
-        size="icon-xs"
+        size="icon-sm"
         aria-pressed={viewMode === "cards"}
         aria-label="Vista de tarjetas"
         title="Vista de tarjetas"
@@ -433,7 +433,7 @@ export function DataTable<TData extends RowData>({
       </Button>
       <Button
         variant={viewMode === "table" ? "secondary" : "ghost"}
-        size="icon-xs"
+        size="icon-sm"
         aria-pressed={viewMode === "table"}
         aria-label="Vista de tabla"
         title="Vista de tabla"
