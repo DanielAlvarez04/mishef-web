@@ -357,7 +357,7 @@ export function CatalogClient({
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <Tabs value={tab} onValueChange={setTab} className="gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <TabsList size="sm">
+          <TabsList>
             <TabsTrigger type="button" value="articulos">
               <SoupIcon className="size-4" />
               Artículos
@@ -373,17 +373,17 @@ export function CatalogClient({
           </TabsList>
 
           <div className="flex items-center gap-2">
-            <Switch
-              id="catalog-show-kpis"
-              checked={showKpis}
-              onCheckedChange={setShowKpis}
-            />
             <Label
               htmlFor="catalog-show-kpis"
               className="text-sm font-normal"
             >
               Mostrar KPI&apos;s
             </Label>
+            <Switch
+              id="catalog-show-kpis"
+              checked={showKpis}
+              onCheckedChange={setShowKpis}
+            />
           </div>
         </div>
 

@@ -55,12 +55,11 @@ export function SettingsTabs({
     <Tabs
       value={tab}
       onValueChange={setTab}
-      orientation="vertical"
-      className="gap-6 max-md:flex-col"
+      className="gap-4"
     >
       <TabsList
         aria-label="Secciones de configuración"
-        className="w-max max-w-full"
+        className="max-w-full overflow-x-auto"
       >
         <TabsTrigger value="account">Cuenta</TabsTrigger>
         <TabsTrigger value="business">Negocio</TabsTrigger>
