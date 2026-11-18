@@ -170,6 +170,20 @@ function mercadoPagoNotice(
   }
 }
 
+/** Parsea JSON solo si la respuesta trae cuerpo (un GET nulo llega vacío). */
+async function readJson<T>(response: Response | null): Promise<T | null> {
+  if (!response?.ok) return null
+
+  const text = await response.text()
+  if (!text.trim()) return null
+
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    return null
+  }
+}
+
 export default async function SettingsPage({
   searchParams,
 }: {
@@ -228,9 +242,7 @@ export default async function SettingsPage({
 
   // Fase 0 de CFDI: solo lectura/escritura de datos fiscales, sin timbrado.
   const fiscalResponse = admin ? await apiFetch("/fiscal/profile") : null
-  const fiscalProfile: FiscalProfile | null = fiscalResponse?.ok
-    ? ((await fiscalResponse.json()) as FiscalProfile | null)
-    : null
+  const fiscalProfile = await readJson<FiscalProfile>(fiscalResponse)
 
   const kitchenSettingsResponse = await apiFetch("/kitchen/settings")
   const kitchenSettings: KitchenSettings | null = kitchenSettingsResponse.ok

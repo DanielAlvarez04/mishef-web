@@ -32,6 +32,7 @@ import {
   LayoutDashboardIcon,
   NotebookTextIcon,
   PackageIcon,
+  PaintbrushIcon,
   PercentIcon,
   ReceiptTextIcon,
   Settings2Icon,
@@ -135,6 +136,11 @@ const data = {
       url: "/users",
       icon: <UsersIcon />,
     },
+    {
+      title: "Estilos",
+      url: "/styles",
+      icon: <PaintbrushIcon />,
+    },
   ],
 }
 
@@ -206,17 +212,21 @@ export function AppSidebar({
           <NavMain items={data.navPlatform} label="Plataforma" />
         ) : (
           <>
-            <SidebarGroup>
-              <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <BranchSelect
-                  branches={branches}
-                  activeBranchId={activeBranchId}
-                  locked={lockedBranch}
-                />
-              </SidebarGroupContent>
-            </SidebarGroup>
-            <SidebarSeparator />
+            {branches.length > 1 ? (
+              <>
+                <SidebarGroup>
+                  <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <BranchSelect
+                      branches={branches}
+                      activeBranchId={activeBranchId}
+                      locked={lockedBranch}
+                    />
+                  </SidebarGroupContent>
+                </SidebarGroup>
+                <SidebarSeparator />
+              </>
+            ) : null}
             <NavMain items={data.navService} label="Servicio" />
             <SidebarSeparator />
             <NavMain items={data.navApplication} label="Aplicación" />

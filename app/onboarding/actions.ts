@@ -1,7 +1,7 @@
 "use server"
 
 import { isSupportedCurrency } from "@/lib/currency-config"
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 
 function text(formData: FormData, key: string): string | undefined {
   const value = formData.get(key)
@@ -34,23 +34,47 @@ export async function updateOnboardingBusinessType(
   )
 }
 
-/** Paso 2: datos del negocio (nombre y sucursales). */
+/** Paso 2: datos del negocio (nombre y primera sucursal). */
 export async function updateOnboardingBusiness(
   formData: FormData
 ): Promise<ActionResult> {
   const name = text(formData, "name")
+  const branchName = text(formData, "branchName")
   const hasBranches = formData.get("hasBranches") === "true"
 
   if (!name || name.length < 2) {
     return { ok: false, message: "Escribe el nombre de tu negocio." }
   }
 
-  return mutateApi(
+  if (!branchName || branchName.length < 2) {
+    return { ok: false, message: "Escribe el nombre de tu primera sucursal." }
+  }
+
+  const updated = await mutateApi(
     "/organizations/current",
     "PATCH",
     { name, hasBranches },
     ["/onboarding", "/dashboard", "/settings"]
   )
+
+  if (!updated.ok) return updated
+
+  // La primera sucursal se crea una sola vez: si el usuario reintenta el paso,
+  // ya existe y no se duplica.
+  const branches = await readApi<Array<{ id: string }>>("/branches")
+
+  if (branches.ok && (branches.data ?? []).length === 0) {
+    const created = await mutateApi(
+      "/branches",
+      "POST",
+      { name: branchName },
+      ["/onboarding", "/dashboard", "/settings"]
+    )
+
+    if (!created.ok) return created
+  }
+
+  return updated
 }
 
 /** Paso 3: moneda del negocio (MXN o USD). */

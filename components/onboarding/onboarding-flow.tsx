@@ -136,6 +136,7 @@ export function OnboardingFlow({
   const [businessType, setBusinessType] = useState("")
   const [businessName, setBusinessName] = useState(initialBusinessName)
   const [hasBranches, setHasBranches] = useState(false)
+  const [branchName, setBranchName] = useState("")
 
   const accountName = splitDisplayName(initialName)
   const [firstName, setFirstName] = useState(accountName.first)
@@ -184,6 +185,7 @@ export function OnboardingFlow({
   const handleBusinessSubmit = () => {
     const fd = new FormData()
     fd.append("name", businessName)
+    fd.append("branchName", branchName)
     fd.append("hasBranches", hasBranches.toString())
     return businessForm.run(() => updateOnboardingBusiness(fd))
   }
@@ -324,6 +326,26 @@ export function OnboardingFlow({
                 />
                 <FieldDescription>
                   Puedes cambiarlo luego desde Configuración.
+                </FieldDescription>
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="branch-name">
+                  Nombre de tu primera sucursal
+                </FieldLabel>
+                <Input
+                  id="branch-name"
+                  name="branchName"
+                  maxLength={80}
+                  placeholder="Centro"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  required
+                  className="text-base py-2.5"
+                />
+                <FieldDescription>
+                  Se usa en reportes y configuración. Si solo tienes una, no
+                  aparece en el menú lateral.
                 </FieldDescription>
               </Field>
             </div>
@@ -573,6 +595,12 @@ export function OnboardingFlow({
                 <dt className="text-muted-foreground">ID de usuario</dt>
                 <dd className="font-medium">{username.trim().toLowerCase()}</dd>
               </div>
+              {branchName.trim() && (
+                <div className="flex items-center justify-center gap-4">
+                  <dt className="text-muted-foreground">Sucursal</dt>
+                  <dd className="font-medium">{branchName.trim()}</dd>
+                </div>
+              )}
               {hasBranches && (
                 <div className="flex items-center justify-center gap-4">
                   <dt className="text-muted-foreground">Sucursales</dt>

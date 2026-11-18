@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { Loader2Icon, MapPinIcon, PaletteIcon, SearchIcon } from "lucide-react"
+import { Loader2Icon, MapPinIcon, PaletteIcon, RotateCcwIcon, SearchIcon } from "lucide-react"
 import { toast } from "sonner"
 
 import {
@@ -199,9 +199,20 @@ export function OrganizationBrandingCard({
                 onChange={(event) => setColor(event.target.value)}
                 className="max-w-40"
               />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setColor("")}
+                disabled={!color}
+              >
+                <RotateCcwIcon />
+                Restablecer
+              </Button>
             </div>
             <FieldDescription>
-              Se usa como color de acento en botones y estados.
+              Se usa como color de acento en botones y estados. Déjalo vacío o
+              pulsa «Restablecer» para volver a los colores de Mishef.
             </FieldDescription>
           </Field>
 

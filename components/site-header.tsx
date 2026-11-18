@@ -19,6 +19,7 @@ const pageTitles: Record<string, string> = {
   "/plans": "Planes",
   "/subscriptions": "Suscripciones",
   "/users": "Usuarios",
+  "/styles": "Estilos",
   "/billing": "Facturación",
 }
 
@@ -43,7 +44,7 @@ export function SiteHeader({ branchName }: { branchName?: string | null }) {
         <SidebarTrigger className="-ml-1" />
         <Separator
           orientation="vertical"
-          className="mx-2 h-4 data-vertical:self-auto"
+          className="mx-2 h-4 self-center!"
         />
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">

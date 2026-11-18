@@ -11,13 +11,21 @@ import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
+import { designCss, normalizeDesignTokens } from "@/lib/design"
+import { readApi } from "@/lib/server-api"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 
 /**
  * Rutas del panel de plataforma. Un superadmin no ve el panel del negocio:
  * cualquier otra ruta lo devuelve a `/platform`.
  */
-const PLATFORM_PATHS = ["/platform", "/plans", "/subscriptions", "/users"]
+const PLATFORM_PATHS = [
+  "/platform",
+  "/plans",
+  "/subscriptions",
+  "/users",
+  "/styles",
+]
 
 export default async function AppLayout({
   children,
@@ -56,8 +64,21 @@ export default async function AppLayout({
   const cookieStore = await cookies()
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
 
+  // Estilos globales editados desde /styles. Si no hay tokens guardados no se
+  // inyecta nada y manda el tema original.
+  const designResult = await readApi<{ tokens: unknown }>("/design")
+  const designTokens = designResult.ok
+    ? normalizeDesignTokens(designResult.data?.tokens)
+    : null
+
   return (
     <CurrencyProvider currency={user.organizationCurrency}>
+      {designTokens ? (
+        <style
+          data-design-tokens
+          dangerouslySetInnerHTML={{ __html: designCss(designTokens) }}
+        />
+      ) : null}
       <OfflineProvider userId={user.id}>
         <PracticeModeWatcher
           active={user.organizationPracticeMode}
@@ -88,8 +109,12 @@ export default async function AppLayout({
               role: user.roles[0],
             }}
           />
-          <SidebarInset className="ml-0! h-svh overflow-hidden">
-            <SiteHeader branchName={activeBranch?.name ?? null} />
+          <SidebarInset className="m-0! h-svh overflow-hidden rounded-none! bg-sidebar! shadow-none!">
+            <SiteHeader
+              branchName={
+                branches.length > 1 ? (activeBranch?.name ?? null) : null
+              }
+            />
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
             <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
               {children}
