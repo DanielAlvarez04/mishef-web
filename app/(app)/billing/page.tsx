@@ -20,6 +20,9 @@ async function readJson<T>(response: Response): Promise<T | null> {
 export default async function BillingPage() {
   const user = await requireUser()
 
+  // El superadmin no tiene un plan propio que gestionar: su panel es /platform.
+  if (user.isPlatformAdmin) redirect("/platform")
+
   if (!isAdmin(user)) redirect("/dashboard")
 
   const [subscriptionResponse, plansResponse, paymentsResponse] =

@@ -30,7 +30,7 @@ export interface SessionUser {
   organizationUseCoreSuggestions: boolean
   /** La organización usa los grupos de opciones core sugeridos. */
   organizationUseCoreOptionGroups: boolean
-  /** Acceso al panel interno de la plataforma (z.mishef.co / /plans). */
+  /** Acceso al panel de plataforma (`/platform`, `/plans`, `/subscriptions`). */
   isPlatformAdmin: boolean
   /** Modo práctica: no se registra analítica de operación. */
   organizationPracticeMode: boolean

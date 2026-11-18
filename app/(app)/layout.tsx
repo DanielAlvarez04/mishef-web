@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation"
-import { cookies } from "next/headers"
+import { cookies, headers } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { BillingBanner } from "@/components/billing/billing-banner"
@@ -7,10 +7,17 @@ import { OfflineProvider } from "@/components/offline/offline-provider"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
+
+/**
+ * Rutas del panel de plataforma. Un superadmin no ve el panel del negocio:
+ * cualquier otra ruta lo devuelve a `/platform`.
+ */
+const PLATFORM_PATHS = ["/platform", "/plans", "/subscriptions"]
 
 export default async function AppLayout({
   children,
@@ -26,10 +33,23 @@ export default async function AppLayout({
     redirect("/onboarding")
   }
 
-  const [branches, activeBranch] = await Promise.all([
-    getBranches(),
-    getActiveBranch(),
-  ])
+  // El proxy inyecta `x-pathname`; sin esa cabecera se deja pasar para no
+  // provocar un bucle de redirecciones.
+  const pathname = ((await headers()).get("x-pathname") ?? "").split("?")[0]
+  const platformArea = PLATFORM_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  )
+  const platformMode = user.isPlatformAdmin
+
+  if (platformMode && pathname && !platformArea) {
+    redirect("/platform")
+  }
+
+  // El superadmin opera sobre `mishef-platform`: no necesita sucursales y la
+  // consulta solo añadiría latencia.
+  const [branches, activeBranch] = platformMode
+    ? ([[] as Branch[], null] as [Branch[], Branch | null])
+    : await Promise.all([getBranches(), getActiveBranch()])
 
   // El `SidebarProvider` guarda el estado en la cookie `sidebar_state`: se lee
   // aquí para que el sidebar arranque colapsado si el usuario lo dejó así.

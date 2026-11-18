@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
 import { SubscriptionsTable } from "@/components/billing/subscriptions-table"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,7 +20,7 @@ async function readJson<T>(response: Response): Promise<T | null> {
 export default async function SubscriptionsPage() {
   const user = await requireUser()
 
-  if (!user.isPlatformAdmin) notFound()
+  if (!user.isPlatformAdmin) redirect("/dashboard")
 
   const [organizationsResponse, plansResponse] = await Promise.all([
     apiFetch("/platform/organizations"),

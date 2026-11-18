@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation"
+import { redirect } from "next/navigation"
 
 import { PlansTable } from "@/components/billing/plans-table"
 import { Card, CardContent } from "@/components/ui/card"
@@ -20,7 +20,7 @@ async function readJson<T>(response: Response): Promise<T | null> {
 export default async function PlansPage() {
   const user = await requireUser()
 
-  if (!user.isPlatformAdmin) notFound()
+  if (!user.isPlatformAdmin) redirect("/dashboard")
 
   const response = await apiFetch("/platform/plans")
   const plans = await readJson<Plan[]>(response)

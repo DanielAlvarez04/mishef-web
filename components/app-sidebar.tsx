@@ -116,6 +116,11 @@ const data = {
   ],
   navPlatform: [
     {
+      title: "Resumen",
+      url: "/platform",
+      icon: <LayoutDashboardIcon />,
+    },
+    {
       title: "Planes",
       url: "/plans",
       icon: <BadgeDollarSignIcon />,
@@ -174,39 +179,45 @@ export function AppSidebar({
           <SidebarMenuItem>
             <SidebarMenuButton
               className="data-[slot=sidebar-menu-button]:p-1.5!"
-              tooltip={organizationName ?? "Mishef"}
-              render={<Link href="/dashboard" />}
+              tooltip={
+                isPlatformAdmin
+                  ? "Mishef Plataforma"
+                  : (organizationName ?? "Mishef")
+              }
+              render={<Link href={isPlatformAdmin ? "/platform" : "/dashboard"} />}
             >
               <GalleryVerticalEndIcon className="size-5!" />
               <span className="truncate text-base font-semibold">
-                {organizationName ?? "Mishef"}
+                {isPlatformAdmin
+                  ? "Mishef Plataforma"
+                  : (organizationName ?? "Mishef")}
               </span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <BranchSelect
-              branches={branches}
-              activeBranchId={activeBranchId}
-              locked={lockedBranch}
-            />
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarSeparator />
-        <NavMain items={data.navService} label="Servicio" />
         {isPlatformAdmin ? (
+          <NavMain items={data.navPlatform} label="Plataforma" />
+        ) : (
           <>
+            <SidebarGroup>
+              <SidebarGroupLabel>Sucursales</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <BranchSelect
+                  branches={branches}
+                  activeBranchId={activeBranchId}
+                  locked={lockedBranch}
+                />
+              </SidebarGroupContent>
+            </SidebarGroup>
             <SidebarSeparator />
-            <NavMain items={data.navPlatform} label="Ventas" />
+            <NavMain items={data.navService} label="Servicio" />
+            <SidebarSeparator />
+            <NavMain items={data.navApplication} label="Aplicación" />
+            <NavSecondary items={navSecondary} className="mt-auto" />
           </>
-        ) : null}
-        <SidebarSeparator />
-        <NavMain items={data.navApplication} label="Aplicación" />
-        <NavSecondary items={navSecondary} className="mt-auto" />
+        )}
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

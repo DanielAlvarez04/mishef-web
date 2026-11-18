@@ -15,6 +15,10 @@ const pageTitles: Record<string, string> = {
   "/inventory": "Inventario",
   "/reports": "Reportes",
   "/settings": "Configuración",
+  "/platform": "Plataforma",
+  "/plans": "Planes",
+  "/subscriptions": "Suscripciones",
+  "/billing": "Facturación",
 }
 
 export function SiteHeader({ branchName }: { branchName?: string | null }) {

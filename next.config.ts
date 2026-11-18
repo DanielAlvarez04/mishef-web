@@ -35,11 +35,6 @@ const nextConfig: NextConfig = {
   // necesita `public/` y `.next/static/`. Es lo que copia el Dockerfile.
   output: "standalone",
   experimental: {
-    // El panel de plataforma vive en z.mishef.co. Si Cloudflare/Traefik
-    // conserva ese host, las Server Actions deben aceptar su Origin.
-    serverActions: {
-      allowedOrigins: ["z.mishef.co"],
-    },
     // Marca la app como actualizada por el flujo de seguridad de Next.
     agentUpgrade: "security",
     // Todo el panel es dinámico (datos por usuario), y por defecto el cliente
