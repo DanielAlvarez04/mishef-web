@@ -24,13 +24,22 @@ export interface TabsStyleTokens {
   radius: number
 }
 
+/** Fondos del armazón, con variante para tema claro y oscuro. */
+export interface SurfaceStyleTokens {
+  sidebarLight: string
+  sidebarDark: string
+  mainLight: string
+  mainDark: string
+}
+
 export interface DesignTokens {
   button: ButtonStyleTokens
   badge: BadgeStyleTokens
   tabs: TabsStyleTokens
+  surfaces: SurfaceStyleTokens
 }
 
-/** Valores iniciales del laboratorio (no se aplican hasta guardar). */
+/** Valores iniciales del laboratorio (no se aplican hasta publicar). */
 export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
   button: {
     bg: "#e2703a",
@@ -52,6 +61,12 @@ export const DEFAULT_DESIGN_TOKENS: DesignTokens = {
     activeFg: "#1a1a1a",
     inactiveFg: "#6b7280",
     radius: 8,
+  },
+  surfaces: {
+    sidebarLight: "#f7f7f5",
+    sidebarDark: "#1c1c1a",
+    mainLight: "#ffffff",
+    mainDark: "#111110",
   },
 }
 
@@ -104,21 +119,38 @@ function isTabs(value: unknown): value is TabsStyleTokens {
   )
 }
 
+function isSurfaces(value: unknown): value is SurfaceStyleTokens {
+  if (!value || typeof value !== "object") return false
+  const item = value as Record<string, unknown>
+
+  return (
+    isHex(item.sidebarLight) &&
+    isHex(item.sidebarDark) &&
+    isHex(item.mainLight) &&
+    isHex(item.mainDark)
+  )
+}
+
 /** Valida lo que llega de la API antes de inyectarlo como CSS. */
 export function normalizeDesignTokens(value: unknown): DesignTokens | null {
   if (!value || typeof value !== "object") return null
   const item = value as Record<string, unknown>
 
-  if (!isButton(item.button) || !isBadge(item.badge) || !isTabs(item.tabs)) {
-    return null
+  // Los tokens guardados antes de existir `surfaces` se completan con los
+  // valores por defecto; el resto del tema no se toca.
+  return {
+    button: isButton(item.button) ? item.button : DEFAULT_DESIGN_TOKENS.button,
+    badge: isBadge(item.badge) ? item.badge : DEFAULT_DESIGN_TOKENS.badge,
+    tabs: isTabs(item.tabs) ? item.tabs : DEFAULT_DESIGN_TOKENS.tabs,
+    surfaces: isSurfaces(item.surfaces)
+      ? item.surfaces
+      : DEFAULT_DESIGN_TOKENS.surfaces,
   }
-
-  return { button: item.button, badge: item.badge, tabs: item.tabs }
 }
 
 /** CSS que aplica los tokens a los componentes de toda la app. */
 export function designCss(tokens: DesignTokens): string {
-  const { button, badge, tabs } = tokens
+  const { button, badge, tabs, surfaces } = tokens
 
   return `
 [data-slot="button"][data-variant="default"] {
@@ -150,6 +182,18 @@ export function designCss(tokens: DesignTokens): string {
 [data-slot="tabs-trigger"][data-active] {
   background-color: ${tabs.activeBg} !important;
   color: ${tabs.activeFg} !important;
+}
+[data-slot="sidebar-wrapper"] {
+  background-color: ${surfaces.sidebarLight} !important;
+}
+[data-slot="sidebar-inset"] {
+  background-color: ${surfaces.mainLight} !important;
+}
+.dark [data-slot="sidebar-wrapper"] {
+  background-color: ${surfaces.sidebarDark} !important;
+}
+.dark [data-slot="sidebar-inset"] {
+  background-color: ${surfaces.mainDark} !important;
 }
 `.trim()
 }

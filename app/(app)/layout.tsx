@@ -64,11 +64,10 @@ export default async function AppLayout({
   const cookieStore = await cookies()
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false"
 
-  // Estilos globales editados desde /styles. Si no hay tokens guardados no se
-  // inyecta nada y manda el tema original.
-  const designResult = await readApi<{ tokens: unknown }>("/design")
+  // Estilos globales aplicados desde /styles. El borrador no se inyecta.
+  const designResult = await readApi<{ applied: unknown }>("/design")
   const designTokens = designResult.ok
-    ? normalizeDesignTokens(designResult.data?.tokens)
+    ? normalizeDesignTokens(designResult.data?.applied)
     : null
 
   return (
@@ -109,7 +108,7 @@ export default async function AppLayout({
               role: user.roles[0],
             }}
           />
-          <SidebarInset className="m-0! h-svh overflow-hidden rounded-none! bg-sidebar! shadow-none!">
+          <SidebarInset className="ml-0! h-svh overflow-hidden">
             <SiteHeader
               branchName={
                 branches.length > 1 ? (activeBranch?.name ?? null) : null

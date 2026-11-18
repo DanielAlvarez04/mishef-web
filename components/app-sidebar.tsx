@@ -32,7 +32,6 @@ import {
   LayoutDashboardIcon,
   NotebookTextIcon,
   PackageIcon,
-  PaintbrushIcon,
   PercentIcon,
   ReceiptTextIcon,
   Settings2Icon,
@@ -135,11 +134,6 @@ const data = {
       title: "Usuarios",
       url: "/users",
       icon: <UsersIcon />,
-    },
-    {
-      title: "Estilos",
-      url: "/styles",
-      icon: <PaintbrushIcon />,
     },
   ],
 }
