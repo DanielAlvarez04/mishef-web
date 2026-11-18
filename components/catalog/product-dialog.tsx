@@ -32,6 +32,7 @@ import {
   type RecipeInput,
 } from "@/app/(app)/catalog/actions"
 import { ImageDropzone } from "@/components/catalog/image-dropzone"
+import { MediaGallery } from "@/components/media/media-gallery"
 import type { ImageAssets } from "@/lib/images"
 import {
   ComboComponentsPicker,
@@ -2085,7 +2086,15 @@ export function ProductDialog({
     ? saveAs === "recipe"
       ? `Nueva ${entityLabel}`
       : `Nuevo ${entityLabel}`
-    : `Editar ${entityLabel}`;
+    : `Editar ${entityLabel}`
+
+  const galleryEntity = article?.id
+    ? { type: "ITEM" as const, id: article.id }
+    : recipe?.producesIngredientId
+      ? { type: "INGREDIENT" as const, id: recipe.producesIngredientId }
+      : recipe?.id
+        ? { type: "RECIPE" as const, id: recipe.id }
+        : null;
 
   const saveLabel = `${isNew ? "Crear" : "Guardar"} ${
     saveAs === "article"
@@ -2816,6 +2825,16 @@ export function ProductDialog({
               </>
             )}
           </Tabs>
+
+          {galleryEntity ? (
+            <MediaGallery
+              entityType={galleryEntity.type}
+              entityId={galleryEntity.id}
+              disabled={form.pending}
+              title="Imágenes y video"
+              description="Galería adicional del artículo, receta o insumo. La primera imagen sigue siendo la principal."
+            />
+          ) : null}
 
           {form.error ? <FieldError>{form.error}</FieldError> : null}
         </div>

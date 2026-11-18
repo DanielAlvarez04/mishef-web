@@ -8,6 +8,7 @@ import type { DateRange } from "react-day-picker"
 
 import { MenuArticlesBuilder } from "@/components/menus/menu-articles-builder"
 import { MenuDetailsForm } from "@/components/menus/menu-details-form"
+import { MediaGallery } from "@/components/media/media-gallery"
 import {
   createMenu,
   updateMenu,
@@ -379,6 +380,17 @@ export function MenuDialog({
 
               {form.error ? (
                 <FieldError className="px-6 pb-6">{form.error}</FieldError>
+              ) : null}
+
+              {menu?.id ? (
+                <div className="px-6 pb-6">
+                  <MediaGallery
+                    entityType="MENU"
+                    entityId={menu.id}
+                    disabled={form.pending}
+                    title="Imágenes y video del menú"
+                  />
+                </div>
               ) : null}
             </div>
           </div>

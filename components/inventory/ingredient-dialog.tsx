@@ -12,6 +12,7 @@ import {
 } from "@/app/(app)/inventory/actions"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
+import { MediaGallery } from "@/components/media/media-gallery"
 import {
   Dialog,
   DialogContent,
@@ -521,6 +522,15 @@ export function IngredientDialog({
             </p>
             {formError ? <FieldError>{formError}</FieldError> : null}
             {error ? <FieldError>{error}</FieldError> : null}
+
+            {ingredient?.id ? (
+              <MediaGallery
+                entityType="INGREDIENT"
+                entityId={ingredient.id}
+                disabled={pending}
+                title="Imágenes y video del insumo"
+              />
+            ) : null}
 
             <DialogFooter>
               {!isEdit ? (
