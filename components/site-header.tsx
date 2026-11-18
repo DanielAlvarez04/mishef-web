@@ -62,6 +62,7 @@ export function SiteHeader({
               variant="outline"
               size="icon"
               title="Checador"
+              nativeButton={false}
               render={<Link href="/attendance" />}
             >
               <ClockIcon className="size-4" />

@@ -131,11 +131,21 @@ export default async function PlatformPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" render={<Link href="/plans" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/plans" />}
+          >
             Planes
             <ArrowRightIcon />
           </Button>
-          <Button variant="outline" size="sm" render={<Link href="/subscriptions" />}>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/subscriptions" />}
+          >
             Suscripciones
             <ArrowRightIcon />
           </Button>

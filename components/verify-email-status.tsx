@@ -92,7 +92,11 @@ export function VerifyEmailStatus({ token }: { token?: string }) {
         <p className="text-sm text-muted-foreground">
           Tu cuenta quedó confirmada. Ya puedes iniciar sesión.
         </p>
-        <Button render={<Link href="/login?verified=1" />} className="w-full">
+        <Button
+          nativeButton={false}
+          render={<Link href="/login?verified=1" />}
+          className="w-full"
+        >
           Iniciar sesión
         </Button>
       </div>
@@ -106,7 +110,11 @@ export function VerifyEmailStatus({ token }: { token?: string }) {
       </div>
       <h1 className="text-2xl font-bold">No pudimos verificar el correo</h1>
       <p className="text-sm text-muted-foreground">{state.message}</p>
-      <Button render={<Link href="/login" />} className="w-full">
+      <Button
+        nativeButton={false}
+        render={<Link href="/login" />}
+        className="w-full"
+      >
         Volver al inicio de sesión
       </Button>
       <FieldDescription>

@@ -63,7 +63,12 @@ export function ForgotPasswordForm() {
             hora.
           </p>
         </div>
-        <Button render={<Link href="/login" />}>Volver al inicio de sesión</Button>
+        <Button
+          nativeButton={false}
+          render={<Link href="/login" />}
+        >
+          Volver al inicio de sesión
+        </Button>
         <button
           type="button"
           className="text-sm underline underline-offset-4"

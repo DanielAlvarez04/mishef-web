@@ -170,6 +170,7 @@ export function UnassignedItemsSheet({
             <Button
               variant="outline"
               size="sm"
+              nativeButton={false}
               render={<Link href="/catalog" />}
             >
               Abrir Catálogo

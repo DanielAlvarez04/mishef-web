@@ -32,7 +32,10 @@ export function ResetPasswordForm({ token }: { token?: string }) {
           Este enlace no incluye un código de recuperación. Solicita uno nuevo
           para continuar.
         </p>
-        <Button render={<Link href="/forgot-password" />}>
+        <Button
+          nativeButton={false}
+          render={<Link href="/forgot-password" />}
+        >
           Solicitar un enlace nuevo
         </Button>
         <FieldDescription>
