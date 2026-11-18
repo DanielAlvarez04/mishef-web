@@ -668,7 +668,6 @@ export function DataTable<TData extends RowData>({
             }))}
           >
             <SelectTrigger
-              size="sm"
               className="w-20"
               id={`${idPrefix}-rows-per-page`}
             >
