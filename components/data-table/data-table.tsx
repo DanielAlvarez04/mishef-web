@@ -423,7 +423,7 @@ export function DataTable<TData extends RowData>({
     >
       <Button
         variant={viewMode === "cards" ? "secondary" : "ghost"}
-        size="icon-sm"
+        size="icon-xs"
         aria-pressed={viewMode === "cards"}
         aria-label="Vista de tarjetas"
         title="Vista de tarjetas"
@@ -433,7 +433,7 @@ export function DataTable<TData extends RowData>({
       </Button>
       <Button
         variant={viewMode === "table" ? "secondary" : "ghost"}
-        size="icon-sm"
+        size="icon-xs"
         aria-pressed={viewMode === "table"}
         aria-label="Vista de tabla"
         title="Vista de tabla"
