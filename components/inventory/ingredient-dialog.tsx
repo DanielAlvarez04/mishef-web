@@ -1,15 +1,24 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState } from "react"
-import { Loader2Icon, SaveIcon } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
+import {
+  Loader2Icon,
+  PlusIcon,
+  SaveIcon,
+  Trash2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import {
   createIngredient,
+  getIngredientPos,
+  saveIngredientPos,
   updateIngredient,
+  type IngredientPosInput,
   type IngredientUpdateInput,
 } from "@/app/(app)/inventory/actions"
+import { ImageDropzone } from "@/components/catalog/image-dropzone"
 import { Button } from "@/components/ui/button"
 import { ClearFieldsButton } from "@/components/ui/clear-fields-button"
 import { MediaGallery } from "@/components/media/media-gallery"
@@ -43,6 +52,7 @@ import {
   UNIT_SELECT_ITEMS,
   unitLabel,
   unitsOfDimension,
+  type Category,
   type Ingredient,
   type IngredientCategory,
   type IngredientLocation,
@@ -52,6 +62,7 @@ import { useCurrency } from "@/lib/currency"
 import { clearDraft, formValues, readDraft, writeDraft } from "@/lib/drafts"
 import { isCoreProductName } from "@/lib/core-products"
 import { isEmptyPatch, sameNumber, sameText } from "@/lib/diff"
+import { uploadItemImage } from "@/lib/uploads"
 
 export function IngredientDialog({
   open,
@@ -59,6 +70,7 @@ export function IngredientDialog({
   ingredient,
   categories = [],
   locations = [],
+  articleCategories = [],
   branchName = null,
 }: {
   open: boolean
@@ -66,6 +78,8 @@ export function IngredientDialog({
   ingredient?: Ingredient | null
   categories: IngredientCategory[]
   locations: IngredientLocation[]
+  /** Categorías de artículo para publicar el insumo en el POS. */
+  articleCategories?: Category[]
   /** Sucursal donde se registra el stock inicial; `null` = organización. */
   branchName?: string | null
 }) {
@@ -85,6 +99,53 @@ export function IngredientDialog({
   // Cambiar la clave remonta el formulario: así los campos no controlados
   // vuelven a su `defaultValue` cuando se limpian.
   const [formKey, setFormKey] = useState(0)
+
+  // Publicación del insumo como artículo del POS.
+  interface PosRow {
+    key: string
+    name: string
+    price: string
+  }
+
+  const [posEnabled, setPosEnabled] = useState(
+    Boolean(ingredient?.soldItemId)
+  )
+  const [posCategoryId, setPosCategoryId] = useState("")
+  const [posPrice, setPosPrice] = useState("")
+  const [posPresentations, setPosPresentations] = useState<PosRow[]>([])
+  const [posImageFile, setPosImageFile] = useState<File | null>(null)
+  const [posImagePreview, setPosImagePreview] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!ingredient?.id) return
+
+    let cancelled = false
+
+    void getIngredientPos(ingredient.id).then((result) => {
+      if (cancelled || !result.ok || !result.data) return
+
+      setPosEnabled(true)
+      setPosCategoryId(result.data.categoryId ?? "")
+      setPosPrice(String(result.data.price))
+      setPosPresentations(
+        (result.data.presentations ?? []).map((presentation, index) => ({
+          key: `pos-${index}`,
+          name: presentation.name,
+          price: String(presentation.price),
+        }))
+      )
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [ingredient?.id])
+
+  useEffect(() => {
+    return () => {
+      if (posImagePreview) URL.revokeObjectURL(posImagePreview)
+    }
+  }, [posImagePreview])
 
   const { pending, error, run } = useActionForm(() => {
     clearDraft(draftKey)
@@ -214,10 +275,77 @@ export function IngredientDialog({
               return
             }
 
+            const price = Number(posPrice.replace(",", "."))
+            let pos: IngredientPosInput | undefined
+
+            if (posEnabled) {
+              if (!posCategoryId) {
+                setFormError("Selecciona la categoría del artículo.")
+                return
+              }
+
+              if (!Number.isFinite(price) || price <= 0) {
+                setFormError("Escribe el precio de venta del artículo.")
+                return
+              }
+
+              const presentations = []
+
+              for (const row of posPresentations) {
+                const presentationName = row.name.trim()
+                if (!presentationName) continue
+
+                const presentationPrice = Number(
+                  row.price.replace(",", ".")
+                )
+
+                if (
+                  !Number.isFinite(presentationPrice) ||
+                  presentationPrice < 0
+                ) {
+                  setFormError(
+                    `El precio de "${presentationName}" no es válido.`
+                  )
+                  return
+                }
+
+                presentations.push({
+                  name: presentationName,
+                  price: presentationPrice,
+                })
+              }
+
+              pos = {
+                categoryId: posCategoryId,
+                price,
+                ...(presentations.length > 0 ? { presentations } : {}),
+              }
+            }
+
             setFormError(null)
 
+            async function uploadPosImage(itemId: string) {
+              if (!posImageFile) return
+
+              const upload = await uploadItemImage(itemId, posImageFile)
+
+              if (!upload.ok) {
+                toast.error(
+                  upload.message ?? "No se pudo subir la imagen del artículo"
+                )
+              }
+            }
+
             if (!ingredient) {
-              run(() => createIngredient(formData))
+              run(async () => {
+                const result = await createIngredient(formData, pos)
+
+                if (result.ok && result.data?.soldItemId) {
+                  await uploadPosImage(result.data.soldItemId)
+                }
+
+                return result
+              })
               return
             }
 
@@ -267,16 +395,65 @@ export function IngredientDialog({
                 : { unitCost }),
             }
 
-            if (isEmptyPatch(changes)) {
+            if (isEmptyPatch(changes) && !pos) {
               toast.info("Sin cambios")
               onOpenChange(false)
               return
             }
 
-            run(() => updateIngredient(ingredient.id, changes))
+            run(async () => {
+              if (!isEmptyPatch(changes)) {
+                const updated = await updateIngredient(
+                  ingredient.id,
+                  changes
+                )
+
+                if (!updated.ok) return updated
+              }
+
+              if (pos) {
+                const saved = await saveIngredientPos(ingredient.id, pos)
+
+                if (!saved.ok) return saved
+
+                if (saved.data?.itemId) {
+                  await uploadPosImage(saved.data.itemId)
+                }
+              }
+
+              return { ok: true }
+            })
           }}
         >
           <div className="flex flex-col gap-4">
+            {!ingredient?.soldItemId ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Guardar como
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={posEnabled ? "outline" : "default"}
+                  onClick={() => setPosEnabled(false)}
+                >
+                  Insumo
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={posEnabled ? "default" : "outline"}
+                  onClick={() => setPosEnabled(true)}
+                >
+                  Insumo + POS
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Este insumo también se vende como artículo en el POS.
+              </p>
+            )}
+
             {/* Fila 1: Nombre y Unidad */}
             <div className="grid grid-cols-2 gap-3">
               <Field>
@@ -514,6 +691,192 @@ export function IngredientDialog({
                 </Field>
               </div>
             )}
+
+            {posEnabled ? (
+              <div className="flex flex-col gap-3 rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Artículo en el POS</p>
+                  <p className="text-xs text-muted-foreground">
+                    Se crea una receta que descuenta 1 {unitSymbol} del insumo
+                    por cada venta.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-[10rem_minmax(0,1fr)]">
+                  <div className="h-40">
+                    <ImageDropzone
+                      url={posImagePreview}
+                      onSelect={(file) => {
+                        if (posImagePreview) {
+                          URL.revokeObjectURL(posImagePreview)
+                        }
+                        setPosImageFile(file)
+                        setPosImagePreview(URL.createObjectURL(file))
+                      }}
+                      onRemove={() => {
+                        if (posImagePreview) {
+                          URL.revokeObjectURL(posImagePreview)
+                        }
+                        setPosImageFile(null)
+                        setPosImagePreview(null)
+                      }}
+                      disabled={pending}
+                    />
+                  </div>
+
+                  <div className="grid content-start gap-3">
+                    <Field>
+                      <FieldLabel htmlFor="ingredient-pos-category">
+                        Categoría del artículo{" "}
+                        <span className="text-destructive">*</span>
+                      </FieldLabel>
+                      <Select
+                        value={posCategoryId}
+                        onValueChange={(value) => {
+                          if (value) setPosCategoryId(value)
+                        }}
+                        items={articleCategories
+                          .filter((category) => category.isActive)
+                          .map((category) => ({
+                            value: category.id,
+                            label: category.name,
+                          }))}
+                      >
+                        <SelectTrigger
+                          id="ingredient-pos-category"
+                          className="w-full"
+                          aria-label="Categoría del artículo"
+                        >
+                          <SelectValue placeholder="Seleccionar categoría" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {articleCategories
+                            .filter((category) => category.isActive)
+                            .map((category) => (
+                              <SelectItem
+                                key={category.id}
+                                value={category.id}
+                              >
+                                {category.name}
+                              </SelectItem>
+                            ))}
+                        </SelectContent>
+                      </Select>
+                    </Field>
+
+                    <Field>
+                      <FieldLabel htmlFor="ingredient-pos-price">
+                        Precio de venta{" "}
+                        <span className="text-destructive">*</span>
+                      </FieldLabel>
+                      <InputGroup>
+                        <InputGroupAddon align="inline-start">
+                          <InputGroupText>$</InputGroupText>
+                        </InputGroupAddon>
+                        <InputGroupInput
+                          id="ingredient-pos-price"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          value={posPrice}
+                          onChange={(event) =>
+                            setPosPrice(event.target.value)
+                          }
+                        />
+                        <InputGroupAddon align="inline-end">
+                          <InputGroupText>{currency}</InputGroupText>
+                        </InputGroupAddon>
+                      </InputGroup>
+                    </Field>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Presentaciones
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        setPosPresentations((current) => [
+                          ...current,
+                          {
+                            key: Math.random().toString(36).slice(2),
+                            name: "",
+                            price: posPrice,
+                          },
+                        ])
+                      }
+                    >
+                      <PlusIcon />
+                      Agregar
+                    </Button>
+                  </div>
+
+                  {posPresentations.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Opcional. Agrega variantes como sabores o tamaños.
+                    </p>
+                  ) : (
+                    posPresentations.map((row, index) => (
+                      <div
+                        key={row.key}
+                        className="grid grid-cols-[minmax(0,1fr)_7rem_auto] items-center gap-2"
+                      >
+                        <Input
+                          aria-label={`Nombre de la presentación ${index + 1}`}
+                          placeholder="Ej. Coca-Cola"
+                          value={row.name}
+                          onChange={(event) =>
+                            setPosPresentations((current) =>
+                              current.map((item) =>
+                                item.key === row.key
+                                  ? { ...item, name: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                        <Input
+                          aria-label={`Precio de la presentación ${index + 1}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0"
+                          value={row.price}
+                          onChange={(event) =>
+                            setPosPresentations((current) =>
+                              current.map((item) =>
+                                item.key === row.key
+                                  ? { ...item, price: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          variant="ghost"
+                          aria-label="Quitar presentación"
+                          onClick={() =>
+                            setPosPresentations((current) =>
+                              current.filter((item) => item.key !== row.key)
+                            )
+                          }
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             <p className="text-xs text-muted-foreground">
               {isEdit

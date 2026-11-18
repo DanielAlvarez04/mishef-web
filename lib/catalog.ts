@@ -557,6 +557,8 @@ export interface Ingredient {
   isActive: boolean
   isLowStock: boolean
   deficit: string
+  /** Artículo del POS vinculado (insumo vendible). */
+  soldItemId?: string | null
   category: { id: string; name: string; isCore: boolean } | null
   location: { id: string; name: string; isCore: boolean } | null
   /** `inventoryMovements` cuenta solo los movimientos que bloquean el cambio

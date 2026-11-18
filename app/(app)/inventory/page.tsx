@@ -10,6 +10,7 @@ import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { TriangleAlertIcon } from "lucide-react"
 import {
   canManageInventory,
+  type Category,
   type Ingredient,
   type InventoryMovement,
 } from "@/lib/catalog"
@@ -30,7 +31,7 @@ export default async function InventoryPage() {
   const since = new Date(today.getTime() - (SUMMARY_DAYS - 1) * 86400000)
   const reportQuery = `from=${dateParam(since)}&to=${dateParam(today)}`
 
-  const [ingredientsResponse, movementsResponse, reportResponse, branch, branches] =
+  const [ingredientsResponse, movementsResponse, reportResponse, branch, branches, categoriesResponse] =
     await Promise.all([
       // `includeBranchStocks` alimenta el KPI del Modo Global.
       apiFetch("/inventory/ingredients?includeInactive=true&includeBranchStocks=true"),
@@ -38,6 +39,7 @@ export default async function InventoryPage() {
       apiFetch(`/reports/inventory?${reportQuery}`),
       getActiveBranch(),
       getBranches(),
+      apiFetch("/catalog/categories?includeInactive=true&kind=article"),
     ])
 
   if (!ingredientsResponse.ok) {
@@ -64,6 +66,9 @@ export default async function InventoryPage() {
   const inventoryReport = reportResponse.ok
     ? ((await reportResponse.json()) as InventoryReport)
     : null
+  const articleCategories = categoriesResponse.ok
+    ? ((await categoriesResponse.json()) as Category[])
+    : []
 
   return (
     <InventoryClient
@@ -73,6 +78,7 @@ export default async function InventoryPage() {
       branches={branches}
       canManage={canManageInventory(user.roles)}
       initialBranch={branch}
+      articleCategories={articleCategories}
     />
   )
 }

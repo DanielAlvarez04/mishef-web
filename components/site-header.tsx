@@ -28,11 +28,9 @@ const pageTitles: Record<string, string> = {
 export function SiteHeader({
   branchName,
   showClock = false,
-  inShift = false,
 }: {
   branchName?: string | null
   showClock?: boolean
-  inShift?: boolean
 }) {
   const pathname = usePathname()
 
@@ -63,14 +61,10 @@ export function SiteHeader({
             <Button
               variant="outline"
               size="icon"
-              className="relative"
-              title={inShift ? "Checador · en turno" : "Checador"}
+              title="Checador"
               render={<Link href="/attendance" />}
             >
               <ClockIcon className="size-4" />
-              {inShift ? (
-                <span className="absolute top-1.5 right-1.5 size-1.5 rounded-full bg-emerald-500" />
-              ) : null}
               <span className="sr-only">Checador</span>
             </Button>
           ) : null}

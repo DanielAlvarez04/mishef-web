@@ -8,7 +8,6 @@ import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
-import { apiFetch } from "@/lib/api"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
@@ -53,43 +52,9 @@ export default async function AppLayout({
 
   // El superadmin opera sobre `mishef-platform`: no necesita sucursales y la
   // consulta solo añadiría latencia.
-  const [branches, activeBranch, attendanceResponse] = platformMode
-    ? ([
-        [] as Branch[],
-        null,
-        null,
-      ] as [Branch[], Branch | null, Response | null])
-    : await Promise.all([
-        getBranches(),
-        getActiveBranch(),
-        apiFetch("/attendance/me"),
-      ])
-
-  let attendance: {
-    current?: unknown
-    schedule?: unknown[]
-    shifts?: unknown[]
-  } | null = null
-
-  if (attendanceResponse?.ok) {
-    const text = await attendanceResponse.text()
-
-    if (text.trim()) {
-      try {
-        attendance = JSON.parse(text)
-      } catch {
-        attendance = null
-      }
-    }
-  }
-
-  const showClock = Boolean(
-    attendance &&
-      (attendance.current ||
-        (attendance.schedule?.length ?? 0) > 0 ||
-        (attendance.shifts?.length ?? 0) > 0)
-  )
-  const inShift = Boolean(attendance?.current)
+  const [branches, activeBranch] = platformMode
+    ? ([[] as Branch[], null] as [Branch[], Branch | null])
+    : await Promise.all([getBranches(), getActiveBranch()])
 
   // El `SidebarProvider` guarda el estado en la cookie `sidebar_state`: se lee
   // aquí para que el sidebar arranque colapsado si el usuario lo dejó así.
@@ -134,8 +99,7 @@ export default async function AppLayout({
               branchName={
                 branches.length > 1 ? (activeBranch?.name ?? null) : null
               }
-              showClock={showClock}
-              inShift={inShift}
+              showClock={!platformMode}
             />
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
             <div className="flex min-h-0 flex-1 flex-col">

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
+  type Category,
   type IngredientCategory,
   type IngredientLocation,
   type Ingredient,
@@ -32,6 +33,7 @@ interface InventoryClientProps {
   branches: Branch[]
   canManage: boolean
   initialBranch: Branch | null
+  articleCategories: Category[]
 }
 
 export function InventoryClient({
@@ -41,6 +43,7 @@ export function InventoryClient({
   branches,
   canManage,
   initialBranch,
+  articleCategories,
 }: InventoryClientProps) {
   const [branch] = useState<Branch | null>(initialBranch)
   const [showKpis, setShowKpis] = useState(true)
@@ -144,6 +147,7 @@ export function InventoryClient({
           ingredient={null}
           categories={categories}
           locations={locations}
+          articleCategories={articleCategories}
           branchName={branch?.name ?? null}
         />
       ) : null}
@@ -157,6 +161,7 @@ export function InventoryClient({
           ingredient={editing}
           categories={categories}
           locations={locations}
+          articleCategories={articleCategories}
           branchName={branch?.name ?? null}
         />
       ) : null}

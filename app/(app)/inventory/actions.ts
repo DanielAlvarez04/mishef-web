@@ -7,7 +7,7 @@ import type {
   UnitCode,
 } from "@/lib/catalog"
 import { apiErrorMessage } from "@/lib/http-error"
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 import { requireUser } from "@/lib/session"
 
 const INVENTORY_PATHS = ["/inventory"]
@@ -26,10 +26,28 @@ function numeric(formData: FormData, key: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
+export interface IngredientPosPresentation {
+  name: string
+  price: number
+}
+
+export interface IngredientPosInput {
+  name?: string
+  categoryId: string
+  price: number
+  taxRate?: number
+  presentations?: IngredientPosPresentation[]
+}
+
+export interface IngredientPosData extends IngredientPosInput {
+  itemId: string
+}
+
 export async function createIngredient(
-  formData: FormData
-): Promise<ActionResult> {
-  return mutateApi(
+  formData: FormData,
+  pos?: IngredientPosInput
+): Promise<ActionResult<{ id: string; soldItemId?: string | null }>> {
+  return mutateApi<{ id: string; soldItemId?: string | null }>(
     "/inventory/ingredients",
     "POST",
     {
@@ -41,7 +59,30 @@ export async function createIngredient(
       maxStock: numeric(formData, "maxStock"),
       currentStock: numeric(formData, "currentStock") ?? 0,
       minStock: numeric(formData, "minStock") ?? 0,
+      ...(pos ? { pos } : {}),
     },
+    INVENTORY_PATHS
+  )
+}
+
+/** Datos del artículo POS vinculado a un insumo (o `null`). */
+export async function getIngredientPos(
+  ingredientId: string
+): Promise<ActionResult<IngredientPosData | null>> {
+  return readApi<IngredientPosData | null>(
+    `/inventory/ingredients/${ingredientId}/pos`
+  )
+}
+
+/** Publica o actualiza el artículo POS del insumo. */
+export async function saveIngredientPos(
+  ingredientId: string,
+  pos: IngredientPosInput
+): Promise<ActionResult<{ itemId: string }>> {
+  return mutateApi<{ itemId: string }>(
+    `/inventory/ingredients/${ingredientId}/pos`,
+    "PUT",
+    pos,
     INVENTORY_PATHS
   )
 }
