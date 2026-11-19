@@ -24,7 +24,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CASH: "Efectivo",
   CARD: "Tarjeta",
   TRANSFER: "Transferencia",
-  MERCADO_PAGO_POINT: "Mercado Pago (terminal)",
+  MERCADO_PAGO_POINT: "Tarjeta · Terminal Point",
   MERCADO_PAGO_LINK: "Mercado Pago (link)",
 }
 
@@ -47,6 +47,8 @@ export interface Payment {
   cashReceived?: string | null
   changeGiven?: string | null
   sessionId?: string | null
+  /** Referencia externa del cobro (autorización, voucher o terminal ajena). */
+  reference?: string | null
   status: PaymentStatus
   paidAt: string | null
   confirmedAt: string | null
@@ -72,7 +74,12 @@ export interface Payment {
   } | null
 }
 
-export type TipSource = "NONE" | "SUGGESTED" | "CUSTOM" | "CUSTOMER_DISPLAY"
+export type TipSource =
+  | "NONE"
+  | "SUGGESTED"
+  | "CUSTOM"
+  | "CUSTOMER_DISPLAY"
+  | "TERMINAL"
 
 export type SplitMode = "BY_GUEST" | "EQUAL" | "CUSTOM"
 export type SplitStatus = "OPEN" | "PAID" | "CANCELLED"

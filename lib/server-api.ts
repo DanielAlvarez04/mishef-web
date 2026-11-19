@@ -16,6 +16,8 @@ export interface ActionResult<T = unknown> {
    * La cola offline lo usa para reintentar en vez de marcar un error definitivo.
    */
   network?: boolean
+  /** Código HTTP de la API cuando la operación falló. */
+  status?: number
 }
 
 function parseBody(text: string): unknown {
@@ -51,6 +53,7 @@ export async function readApi<T = unknown>(
           payload,
           `La consulta falló (${response.status})`
         ),
+        status: response.status,
       }
     }
 
@@ -101,6 +104,7 @@ export async function mutateApi<T = unknown>(
           payload,
           `La operación falló (${response.status})`
         ),
+        status: response.status,
       }
     }
 

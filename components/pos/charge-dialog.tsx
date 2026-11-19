@@ -88,8 +88,6 @@ import {
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import { cn } from "@/lib/utils"
 
-const BASE_METHODS: PaymentMethod[] = ["CASH", "CARD", "TRANSFER"]
-
 const PROVIDER_DETAIL_LABELS: Record<string, string> = {
   rejected_by_issuer: "Rechazado por el banco emisor",
   insufficient_amount: "Fondos insuficientes",
@@ -111,7 +109,7 @@ const METHOD_ICONS: Record<PaymentMethod, typeof BanknoteIcon> = {
   MERCADO_PAGO_LINK: LinkIcon,
 }
 
-type ChargeStep = "review" | "payment" | "tip" | "close"
+type ChargeStep = "review" | "payment" | "terminal" | "tip" | "close"
 
 /** Hora local de un cobro, para la lista de pendientes. */
 function paymentTime(value: string): string {
@@ -136,20 +134,18 @@ interface ChargePayment {
   provider?: string | null
   createdAt?: string
   confirmedAt?: string | null
+  reference?: string | null
 }
 
-const STEPS: { id: ChargeStep; label: string }[] = [
-  { id: "review", label: "Repaso" },
-  { id: "payment", label: "Pago" },
-  { id: "tip", label: "Propina" },
-  { id: "close", label: "Cierre" },
-]
-
-const STEP_ICONS: Record<ChargeStep, typeof BanknoteIcon> = {
-  review: ReceiptTextIcon,
-  payment: CreditCardIcon,
-  tip: HandCoinsIcon,
-  close: LockIcon,
+const STEP_META: Record<
+  ChargeStep,
+  { label: string; icon: typeof BanknoteIcon }
+> = {
+  review: { label: "Repaso", icon: ReceiptTextIcon },
+  payment: { label: "Pago", icon: CreditCardIcon },
+  terminal: { label: "Terminal", icon: SmartphoneIcon },
+  tip: { label: "Propina", icon: HandCoinsIcon },
+  close: { label: "Cierre", icon: LockIcon },
 }
 
 export function ChargeDialog({
@@ -184,16 +180,16 @@ export function ChargeDialog({
    */
   const [localPayments, setLocalPayments] = React.useState<ChargePayment[]>([])
 
-  const methods: PaymentMethod[] = React.useMemo(
-    () => [
-      ...BASE_METHODS,
-      ...(mercadoPago.enabled ? (["MERCADO_PAGO_POINT"] as const) : []),
-      ...(mercadoPago.linkEnabled ? (["MERCADO_PAGO_LINK"] as const) : []),
-    ],
-    [mercadoPago.enabled, mercadoPago.linkEnabled]
-  )
-
   const [method, setMethod] = React.useState<PaymentMethod>("CASH")
+  /**
+   * Cuando el método es «Tarjeta», el cajero elige dónde cobrar:
+   * - POINT: terminal integrada de Mercado Pago.
+   * - MANUAL: otra terminal o voucher; solo se registra el pago.
+   */
+  const [cardTarget, setCardTarget] = React.useState<"POINT" | "MANUAL">(
+    mercadoPago.enabled ? "POINT" : "MANUAL"
+  )
+  const [referenceInput, setReferenceInput] = React.useState("")
   const [terminalId, setTerminalId] = React.useState(
     () =>
       mercadoPago.terminals.find((terminal) => terminal.isDefault)?.id ??
@@ -270,14 +266,46 @@ export function ChargeDialog({
   const pointPending = pointPayment?.status === "PENDING"
   const linkPending = linkPayment?.status === "PENDING"
   const remotePending = pointPending || linkPending
-  /** La terminal cobra la venta más la propina en una sola operación. */
+  /** La terminal cobra la venta y captura la propina por separado. */
   const pointTotal = pointPayment
     ? Number(pointPayment.amount) + Number(pointPayment.tipAmount ?? 0)
     : 0
+  const pointBase = pointPayment ? Number(pointPayment.amount) : 0
+  const pointTip = pointPayment ? Number(pointPayment.tipAmount ?? 0) : 0
+  const pointSplitLabel = pointPayment?.splitId
+    ? (splits.find((split) => split.id === pointPayment.splitId)?.label ?? null)
+    : null
   const linkTotal = linkPayment
     ? Number(linkPayment.amount) + Number(linkPayment.tipAmount ?? 0)
     : 0
   const [step, setStep] = React.useState<ChargeStep>("review")
+
+  const steps = React.useMemo(() => {
+    const entries: ChargeStep[] = ["review", "payment"]
+
+    if (method === "MERCADO_PAGO_POINT") entries.push("terminal")
+
+    entries.push("tip", "close")
+
+    return entries.map((id) => ({ id, ...STEP_META[id] }))
+  }, [method])
+
+  const methodCards = React.useMemo(() => {
+    const cards: Array<{ id: PaymentMethod; label: string }> = [
+      { id: "CASH", label: PAYMENT_METHOD_LABELS.CASH },
+      { id: "CARD", label: "Tarjeta" },
+      { id: "TRANSFER", label: PAYMENT_METHOD_LABELS.TRANSFER },
+    ]
+
+    if (mercadoPago.linkEnabled) {
+      cards.push({
+        id: "MERCADO_PAGO_LINK",
+        label: PAYMENT_METHOD_LABELS.MERCADO_PAGO_LINK,
+      })
+    }
+
+    return cards
+  }, [mercadoPago.linkEnabled])
   const [detail, setDetail] = React.useState<ChargeSummary | null>(
     initialSummary
   )
@@ -596,7 +624,21 @@ export function ChargeDialog({
    *
    * Lo usan el cobro en efectivo/tarjeta, la confirmación manual y la terminal.
    */
-  const applyConfirmedPayment = (payment: ChargePayment) => {
+  const applyConfirmedPayment = (
+    payment: ChargePayment,
+    options: { nextStep?: ChargeStep } = {}
+  ) => {
+    // Si después de un cobro Point se registra otro método, el panel de la
+    // terminal deja de aplicar y no debe reaparecer en el paso Propina.
+    if (
+      payment.method !== "MERCADO_PAGO_POINT" &&
+      pointPayment &&
+      pointPayment.status !== "PENDING"
+    ) {
+      setPointPayment(null)
+      pointKey.current = null
+    }
+
     setLocalPayments((previous) => [
       ...previous.filter((entry) => entry.id !== payment.id),
       payment,
@@ -633,10 +675,10 @@ export function ChargeDialog({
     )
 
     if (next) {
-      focusSplit(next)
+      focusSplit(next, options.nextStep)
     } else {
       setActiveSplitId(null)
-      setStep("close")
+      setStep(options.nextStep ?? "close")
     }
 
     // Reconciliación en segundo plano: la UI ya avanzó.
@@ -666,6 +708,9 @@ export function ChargeDialog({
               }
             : { tipSource: "NONE" as const }),
           ...(activeSplitId ? { splitId: activeSplitId } : {}),
+          ...(method === "CARD" && referenceInput.trim()
+            ? { reference: referenceInput.trim() }
+            : {}),
           confirm: andConfirm,
           ...(method === "CASH" && cashInput
             ? { cashReceived: Math.round(cashReceived * 100) / 100 }
@@ -880,21 +925,18 @@ export function ChargeDialog({
 
   React.useEffect(() => {
     onPointConfirmed.current = (payment) => {
-      const sale = Number(payment.amount)
-      const covers = balance - sale <= 0.004
-
-      setPointPayment(null)
+      setPointPayment(payment)
       setPointTimedOut(false)
       pointDeadline.current = null
       pointKey.current = null
       toast.success("Pago confirmado en la terminal")
 
-      applyConfirmedPayment(payment)
+      // La propina la capturó la terminal; se muestra en el paso Propina.
+      applyConfirmedPayment(payment, { nextStep: "tip" })
 
       if (!payment.splitId) {
         setAmountInput(null)
-
-        if (covers) setStep("close")
+        setStep("tip")
       }
     }
   })
@@ -1170,6 +1212,10 @@ export function ChargeDialog({
     setAmountInput(split ? split.remainingAmount.toFixed(2) : null)
     pointDeadline.current = null
     pointKey.current = null
+
+    if (step === "terminal" || step === "tip") {
+      setStep("payment")
+    }
   }
 
   const handleCancelPoint = async () => {
@@ -1211,6 +1257,17 @@ export function ChargeDialog({
       return
     }
 
+    // Un cobro anterior cancelado/rechazado no debe reutilizar su clave.
+    if (pointPayment && pointPayment.status !== "PENDING") {
+      if (pointPayment.status === "CONFIRMED") {
+        setStep("tip")
+        return
+      }
+
+      pointKey.current = null
+      setPointPayment(null)
+    }
+
     setPending("point")
     setPointTimedOut(false)
 
@@ -1222,30 +1279,79 @@ export function ChargeDialog({
     try {
       const result = await chargeWithPoint(order.id, {
         amount: Math.round(saleAmount * 100) / 100,
-        tipAmount: Math.round(tip * 100) / 100,
-        tipPercent: tip > 0 ? tipPercentValue : null,
-        tipSource: tip > 0 ? tipSource : "NONE",
-        tipBaseAmount: tip > 0 ? Math.round(saleAmount * 100) / 100 : null,
+        // La propina se captura en la terminal. Enviarla aquí la duplicaría.
+        tipAmount: 0,
+        tipPercent: null,
+        tipSource: "NONE",
+        tipBaseAmount: null,
         ...(activeSplitId ? { splitId: activeSplitId } : {}),
         terminalId: terminal,
         idempotencyKey,
       })
 
       if (!result.ok || !result.data) {
-        // Un fallo de envío no deja cobro vivo: el siguiente intento usa una
-        // clave nueva para no chocar con un pago ya cancelado.
-        pointKey.current = null
+        // Un 5xx o un fallo de red deja el pago en `create_unknown`: se
+        // conserva la clave para que reintentar recupere la misma order.
+        const ambiguous = result.network || (result.status ?? 0) >= 500
+
+        if (!ambiguous) {
+          pointKey.current = null
+        }
+
         toast.error(result.message ?? "No se pudo enviar el cobro")
         return
       }
 
       pointDeadline.current = Date.now() + 3 * 60 * 1000
       setPointPayment(result.data)
-      setStep("payment")
+      setStep("terminal")
       toast.success("Cobro enviado a la terminal")
     } finally {
       setPending(null)
     }
+  }
+
+  const applyMethod = (value: PaymentMethod) => {
+    setMethod(value)
+
+    if (value === "MERCADO_PAGO_POINT") {
+      // La propina se captura en la terminal, no en la app.
+      setTipInput("")
+      setTipPercentValue(null)
+      setTipSource("NONE")
+
+      if (step === "tip" || step === "close") {
+        setStep("payment")
+      }
+
+      return
+    }
+
+    // Al salir de Point, el paso Terminal deja de existir.
+    if (step === "terminal") {
+      setStep("payment")
+    }
+
+    // Si se cambia de método después de un cobro Point, se limpia el panel
+    // confirmado para no mezclarlo con efectivo/tarjeta manual.
+    if (pointPayment && pointPayment.status !== "PENDING") {
+      setPointPayment(null)
+      pointKey.current = null
+    }
+  }
+
+  const chooseCardTarget = (target: "POINT" | "MANUAL") => {
+    if (remotePending) {
+      toast.info("Cancela el cobro en la terminal antes de cambiar de método.")
+      return
+    }
+
+    setCardTarget(target)
+    applyMethod(
+      target === "POINT" && mercadoPago.enabled
+        ? "MERCADO_PAGO_POINT"
+        : "CARD"
+    )
   }
 
   const chooseMethod = (value: PaymentMethod) => {
@@ -1254,13 +1360,22 @@ export function ChargeDialog({
       return
     }
 
-    setMethod(value)
+    if (value === "CARD") {
+      chooseCardTarget(cardTarget)
+      return
+    }
+
+    applyMethod(value)
   }
 
-  const stepIndex = STEPS.findIndex((entry) => entry.id === step)
+  const stepIndex = steps.findIndex((entry) => entry.id === step)
   const canEnterStep = (id: ChargeStep) => {
+    if (!steps.some((entry) => entry.id === id)) return false
     if (remotePending) return id === step
     if (id === "close") return canClose
+    if (id === "tip" && method === "MERCADO_PAGO_POINT") {
+      return pointPayment?.status === "CONFIRMED"
+    }
 
     return true
   }
@@ -1281,8 +1396,8 @@ export function ChargeDialog({
       return
     }
 
-    const index = STEPS.findIndex((entry) => entry.id === step)
-    setStep(STEPS[Math.max(0, index - 1)].id)
+    const index = steps.findIndex((entry) => entry.id === step)
+    setStep(steps[Math.max(0, index - 1)].id)
   }
 
   const detailRounds = React.useMemo(
@@ -1349,7 +1464,12 @@ export function ChargeDialog({
     return [...grouped.values()]
   }, [filteredReviewItems])
 
-  const splitStep = step === "payment" ? 2 : step === "tip" ? 3 : step === "close" ? 3 : 1
+  const splitStep =
+    step === "payment" || step === "terminal"
+      ? 2
+      : step === "tip" || step === "close"
+        ? 3
+        : 1
   const splitStepLabel =
     splitStep === 1 ? "Resumen" : splitStep === 2 ? "Pago" : "Propina"
 
@@ -1376,9 +1496,13 @@ export function ChargeDialog({
               ? "Revisa los artículos antes de cobrar."
               : step === "payment"
                 ? "Elige el método y el importe."
-                : step === "tip"
-                  ? "Agrega propina si el cliente la deja."
-                  : "Confirma el pago y cierra la cuenta."}
+                : step === "terminal"
+                  ? "Envía el cobro a la terminal y espera la confirmación."
+                  : step === "tip"
+                    ? method === "MERCADO_PAGO_POINT"
+                      ? "Propina capturada por la terminal."
+                      : "Agrega propina si el cliente la deja."
+                    : "Confirma el pago y cierra la cuenta."}
           </DialogDescription>
         </DialogHeader>
 
@@ -1520,8 +1644,8 @@ export function ChargeDialog({
         {viewMode === "COMBINED" ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-start justify-between gap-1">
-              {STEPS.map((entry, index) => {
-                const Icon = STEP_ICONS[entry.id]
+              {steps.map((entry, index) => {
+                const Icon = entry.icon
                 const active = entry.id === step
                 const done = index < stepIndex
                 const disabled = !canEnterStep(entry.id)
@@ -1566,13 +1690,13 @@ export function ChargeDialog({
               role="progressbar"
               aria-label="Progreso del cobro"
               aria-valuemin={1}
-              aria-valuemax={STEPS.length}
+              aria-valuemax={steps.length}
               aria-valuenow={stepIndex + 1}
             >
               <div
                 className="h-full rounded-full bg-primary transition-all duration-300"
                 style={{
-                  width: `${((stepIndex + 1) / STEPS.length) * 100}%`,
+                  width: `${((stepIndex + 1) / steps.length) * 100}%`,
                 }}
               />
             </div>
@@ -1728,7 +1852,7 @@ export function ChargeDialog({
           ) : null}
 
 
-          {step === "payment" ? (
+          {step === "payment" || step === "terminal" ? (
             <>
           {activeSplit ? (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/40 bg-primary/5 px-3 py-2 text-sm">
@@ -1791,6 +1915,12 @@ export function ChargeDialog({
                             · {paymentTime(payment.createdAt)}
                           </span>
                         ) : null}
+                        {payment.reference ? (
+                          <span className="text-muted-foreground">
+                            {" "}
+                            · ref. {payment.reference}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="flex flex-wrap items-center gap-1.5">
                         <span className="tabular-nums">
@@ -1841,7 +1971,7 @@ export function ChargeDialog({
               ) : null}
             </div>
           ) : null}
-          {linkPayment ? (
+          {step === "payment" && linkPayment ? (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
               {linkPayment.status === "PENDING" ? (
                 <>
@@ -1940,7 +2070,8 @@ export function ChargeDialog({
               )}
             </div>
           ) : null}
-          {pointPayment ? (
+          {step === "terminal" ? (
+            pointPayment ? (
             <div className="flex flex-col gap-3 rounded-lg border p-4">
               {pointPayment.status === "PENDING" ? (
                 <>
@@ -2026,27 +2157,51 @@ export function ChargeDialog({
                         : "Puedes intentarlo de nuevo.")}
                   </p>
                   <div className="flex flex-wrap gap-2">
-                    <Button type="button" size="sm" onClick={resetPointCharge}>
-                      Nuevo cobro
-                    </Button>
+                    {pointPayment.status !== "CONFIRMED" ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={resetPointCharge}
+                      >
+                        Nuevo cobro
+                      </Button>
+                    ) : null}
                   </div>
                 </>
               )}
             </div>
+            ) : (
+              <div className="flex flex-col gap-3 rounded-lg border border-dashed p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SmartphoneIcon className="size-4 text-primary" />
+                  Cobro en terminal Point
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {money(saleAmount)} · {terminalLabel}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  El importe no incluye propina. El cliente la elige en la
+                  terminal después de presentar la tarjeta.
+                </p>
+              </div>
+            )
           ) : !canClose ? (
             <>
               <Separator />
               <div className="grid grid-cols-2 gap-2">
-                {methods.map((value) => {
-                  const Icon = METHOD_ICONS[value]
-                  const active = method === value
+                {methodCards.map(({ id, label }) => {
+                  const Icon = METHOD_ICONS[id]
+                  const active =
+                    id === "CARD"
+                      ? method === "CARD" || method === "MERCADO_PAGO_POINT"
+                      : method === id
 
                   return (
                     <button
-                      key={value}
+                      key={id}
                       type="button"
                       aria-pressed={active}
-                      onClick={() => chooseMethod(value)}
+                      onClick={() => chooseMethod(id)}
                       className={cn(
                         "flex items-center gap-2 rounded-lg border p-3 text-left text-sm transition-colors",
                         active
@@ -2060,13 +2215,58 @@ export function ChargeDialog({
                           active ? "text-primary" : "text-muted-foreground"
                         )}
                       />
-                      <span className="font-medium">
-                        {PAYMENT_METHOD_LABELS[value]}
-                      </span>
+                      <span className="font-medium">{label}</span>
                     </button>
                   )
                 })}
               </div>
+
+              {(method === "CARD" || method === "MERCADO_PAGO_POINT") &&
+              mercadoPago.enabled ? (
+                <div className="flex flex-col gap-2">
+                  <Label>Cobro con tarjeta</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      aria-pressed={method === "MERCADO_PAGO_POINT"}
+                      onClick={() => chooseCardTarget("POINT")}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        method === "MERCADO_PAGO_POINT"
+                          ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                          : "bg-card hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="flex items-center gap-2 font-medium">
+                        <SmartphoneIcon className="size-4" />
+                        Terminal Point
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        El cliente paga y deja propina en la terminal.
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-pressed={method === "CARD"}
+                      onClick={() => chooseCardTarget("MANUAL")}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        method === "CARD"
+                          ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                          : "bg-card hover:bg-muted/50"
+                      )}
+                    >
+                      <span className="flex items-center gap-2 font-medium">
+                        <CreditCardIcon className="size-4" />
+                        Otra terminal
+                      </span>
+                      <span className="mt-1 block text-xs text-muted-foreground">
+                        Solo se registra el pago y una referencia.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
               {method === "CASH" ? (
                 <div className="grid grid-cols-3 gap-2">
@@ -2145,8 +2345,28 @@ export function ChargeDialog({
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-muted-foreground">
-                    El cobro se envía a la terminal y se confirma solo cuando el
-                    cliente paga.
+                    El cobro se envía a la terminal. El cliente paga y elige la
+                    propina en el dispositivo; aquí se registra automáticamente.
+                  </p>
+                </div>
+              ) : null}
+
+              {method === "CARD" ? (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="card-reference">
+                    Referencia / autorización
+                  </Label>
+                  <Input
+                    id="card-reference"
+                    value={referenceInput}
+                    onChange={(event) =>
+                      setReferenceInput(event.target.value.slice(0, 120))
+                    }
+                    placeholder="Opcional: voucher, autorización o terminal"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se guarda en la caja para conciliar el cobro con otra
+                    terminal.
                   </p>
                 </div>
               ) : null}
@@ -2178,83 +2398,120 @@ export function ChargeDialog({
           ) : null}
 
           {step === "tip" ? (
-            <div className="flex flex-col gap-3">
-              <div className="grid grid-cols-4 gap-2">
-                {[0, 10, 15, 20].map((percent) => {
-                  const suggested =
-                    percent === 0
-                      ? 0
-                      : Math.round(saleAmount * percent) / 100
-                  const active =
-                    percent === 0
-                      ? tip === 0
-                      : Math.abs(tip - suggested) < 0.005
+            method === "MERCADO_PAGO_POINT" ? (
+              <div className="flex flex-col gap-3 rounded-lg border p-4">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <SmartphoneIcon className="size-4 text-primary" />
+                  Propina capturada en la terminal
+                </div>
+                {pointPayment?.status === "CONFIRMED" ? (
+                  <>
+                    {pointSplitLabel ? (
+                      <p className="text-xs text-muted-foreground">
+                        Parte: {pointSplitLabel}
+                      </p>
+                    ) : null}
+                    <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <dt className="text-muted-foreground">Venta</dt>
+                      <dd className="text-right tabular-nums">
+                        {money(pointBase)}
+                      </dd>
+                      <dt className="text-muted-foreground">Propina</dt>
+                      <dd className="text-right font-medium tabular-nums">
+                        {money(pointTip)}
+                      </dd>
+                      <dt className="font-medium">Total cobrado</dt>
+                      <dd className="text-right font-medium tabular-nums">
+                        {money(pointBase + pointTip)}
+                      </dd>
+                    </dl>
+                    <p className="text-xs text-muted-foreground">
+                      {pointTip > 0
+                        ? "La propina la eligió el cliente en la terminal Point."
+                        : "El cliente no dejó propina en la terminal."}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Primero envía el cobro a la terminal. Cuando el cliente
+                    pague, aquí verás la propina que dejó.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-4 gap-2">
+                  {[0, 10, 15, 20].map((percent) => {
+                    const suggested =
+                      percent === 0
+                        ? 0
+                        : Math.round(saleAmount * percent) / 100
+                    const active =
+                      percent === 0
+                        ? tip === 0
+                        : Math.abs(tip - suggested) < 0.005
 
-                  return (
-                    <button
-                      key={percent}
-                      type="button"
-                      aria-pressed={active}
-                      onClick={() => {
-                        setTipInput(
-                          percent === 0 ? "" : suggested.toFixed(2)
-                        )
-                        setTipPercentValue(percent === 0 ? null : percent)
-                        setTipSource(percent === 0 ? "NONE" : "SUGGESTED")
-                      }}
-                      className={cn(
-                        "flex flex-col items-center justify-center gap-0.5 rounded-lg border p-3 text-center text-sm transition-colors",
-                        active
-                          ? "border-primary bg-primary/10 ring-1 ring-primary/40"
-                          : "bg-card hover:bg-muted/50"
-                      )}
-                    >
-                      <span className="font-medium">
-                        {percent === 0 ? "Sin propina" : `${percent}%`}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground tabular-nums">
-                        {money(suggested)}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="payment-tip">Propina</Label>
-                <Input
-                  id="payment-tip"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  value={tipInput}
-                  onChange={(event) => {
-                    setTipInput(event.target.value)
-                    setTipPercentValue(null)
-                    setTipSource(
-                      event.target.value.trim() === "" ? "NONE" : "CUSTOM"
+                    return (
+                      <button
+                        key={percent}
+                        type="button"
+                        aria-pressed={active}
+                        onClick={() => {
+                          setTipInput(
+                            percent === 0 ? "" : suggested.toFixed(2)
+                          )
+                          setTipPercentValue(percent === 0 ? null : percent)
+                          setTipSource(percent === 0 ? "NONE" : "SUGGESTED")
+                        }}
+                        className={cn(
+                          "flex flex-col items-center justify-center gap-0.5 rounded-lg border p-3 text-center text-sm transition-colors",
+                          active
+                            ? "border-primary bg-primary/10 ring-1 ring-primary/40"
+                            : "bg-card hover:bg-muted/50"
+                        )}
+                      >
+                        <span className="font-medium">
+                          {percent === 0 ? "Sin propina" : `${percent}%`}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                          {money(suggested)}
+                        </span>
+                      </button>
                     )
-                  }}
-                  placeholder="0.00"
-                />
+                  })}
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="payment-tip">Propina</Label>
+                  <Input
+                    id="payment-tip"
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    value={tipInput}
+                    onChange={(event) => {
+                      setTipInput(event.target.value)
+                      setTipPercentValue(null)
+                      setTipSource(
+                        event.target.value.trim() === "" ? "NONE" : "CUSTOM"
+                      )
+                    }}
+                    placeholder="0.00"
+                  />
+                </div>
+                {displayTipPercent && displayTipPercent > 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Propina elegida por el cliente en la pantalla (
+                    {displayTipPercent}%).
+                  </p>
+                ) : null}
+                {!canConfirm ? (
+                  <p className="text-xs text-muted-foreground">
+                    Tu rol puede registrar pagos; caja o administración los
+                    confirma.
+                  </p>
+                ) : null}
               </div>
-              {displayTipPercent && displayTipPercent > 0 ? (
-                <p className="text-xs text-muted-foreground">
-                  Propina elegida por el cliente en la pantalla (
-                  {displayTipPercent}%).
-                </p>
-              ) : null}
-              {method === "MERCADO_PAGO_POINT" ? (
-                <p className="text-xs text-muted-foreground">
-                  La terminal cobra el importe más la propina en una sola
-                  operación.
-                </p>
-              ) : !canConfirm ? (
-                <p className="text-xs text-muted-foreground">
-                  Tu rol puede registrar pagos; caja o administración los
-                  confirma.
-                </p>
-              ) : null}
-            </div>
+            )
           ) : null}
 
           {step === "close" ? (
@@ -2326,24 +2583,73 @@ export function ChargeDialog({
             {step === "payment" ? (
               <Button
                 type="button"
-                onClick={() => setStep("tip")}
-                disabled={pending !== null || remotePending}
+                onClick={() =>
+                  setStep(
+                    method === "MERCADO_PAGO_POINT" ? "terminal" : "tip"
+                  )
+                }
+                disabled={
+                  pending !== null ||
+                  remotePending ||
+                  (method === "MERCADO_PAGO_POINT" && !terminalId)
+                }
               >
-                Continuar
+                {method === "MERCADO_PAGO_POINT"
+                  ? "Ir a la terminal"
+                  : "Continuar"}
               </Button>
+            ) : null}
+
+            {step === "terminal" ? (
+              pointPayment?.status === "PENDING" ? null : pointPayment?.status ===
+                "CONFIRMED" ? (
+                <Button type="button" onClick={() => setStep("tip")}>
+                  Ver propina
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void handleSendToPoint()}
+                  disabled={
+                    pending !== null ||
+                    !terminalId ||
+                    saleAmount <= 0 ||
+                    remotePending
+                  }
+                >
+                  {pending === "point" ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : (
+                    <SmartphoneIcon />
+                  )}
+                  Enviar cobro a terminal
+                </Button>
+              )
             ) : null}
 
             {step === "tip" ? (
               method === "MERCADO_PAGO_POINT" ? (
                 <Button
                   type="button"
-                  onClick={() => void handleSendToPoint()}
-                  disabled={pending !== null || !terminalId || saleAmount <= 0}
+                  onClick={() => {
+                    // Ya se mostró la propina; se limpia el panel para que un
+                    // cobro posterior no reutilice esta order confirmada.
+                    setPointPayment(null)
+                    pointKey.current = null
+                    setStep(
+                      canClose
+                        ? "close"
+                        : activeSplitId
+                          ? "review"
+                          : "payment"
+                    )
+                  }}
+                  disabled={
+                    pending !== null ||
+                    pointPayment?.status !== "CONFIRMED"
+                  }
                 >
-                  {pending === "point" ? (
-                    <Loader2Icon className="animate-spin" />
-                  ) : null}
-                  Cobrar en terminal
+                  Continuar
                 </Button>
               ) : method === "MERCADO_PAGO_LINK" ? (
                 <Button

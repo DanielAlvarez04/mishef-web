@@ -37,6 +37,7 @@ const TIP_SOURCE_LABELS: Record<string, string> = {
   SUGGESTED: "Sugerida",
   CUSTOM: "Manual",
   CUSTOMER_DISPLAY: "Pantalla del cliente",
+  TERMINAL: "Terminal Point",
 }
 
 function formatPercent(value: number | null): string {

@@ -29,6 +29,8 @@ export interface RegisterPaymentInput {
   changeGiven?: number
   /** Parte de una cuenta dividida a la que se aplica el pago. */
   splitId?: string
+  /** Referencia externa del cobro (autorización, voucher o terminal ajena). */
+  reference?: string
   /** Registra y confirma en una sola petición (roles con permiso). */
   confirm?: boolean
   idempotencyKey?: string
