@@ -189,7 +189,7 @@ export function OperationsReport({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
             <Metric
               label="Rondas enviadas"
               value={String(capture.sent)}
@@ -413,7 +413,7 @@ export function OperationsReport({
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                 <Metric
                   label="Por cliente · con IVA"
                   value={formatMoneyValue(report.guests.averageGrossPerGuest, money)}

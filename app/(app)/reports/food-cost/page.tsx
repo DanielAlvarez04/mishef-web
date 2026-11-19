@@ -46,7 +46,7 @@ export default async function FoodCostPage() {
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <Metric
           label="Food cost promedio"
           value={formatPercent(summary?.averageFoodCostPct)}

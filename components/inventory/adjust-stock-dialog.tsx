@@ -68,7 +68,7 @@ export function AdjustStockDialog({
 }: AdjustStockDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent mobile="full" className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         {ingredient ? (
           <AdjustStockForm
             // Remontar el formulario al abrir (o al cambiar de insumo/tipo)

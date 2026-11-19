@@ -10,12 +10,11 @@ import {
   useSensors,
   type DragEndEvent,
 } from "@dnd-kit/core"
-import { restrictToVerticalAxis } from "@dnd-kit/modifiers"
 import {
   SortableContext,
   sortableKeyboardCoordinates,
+  rectSortingStrategy,
   useSortable,
-  verticalListSortingStrategy,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
 import {
@@ -278,31 +277,14 @@ export function PresentationRows({
         </div>
       </fieldset>
 
-      <div
-        className={cn(
-          "hidden gap-2 px-1 text-xs font-medium text-muted-foreground sm:grid",
-          showFactor
-            ? "grid-cols-[auto_auto_minmax(0,1fr)_5.5rem_9rem_auto]"
-            : "grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto]"
-        )}
-      >
-        <span className="w-5" aria-hidden />
-        <span className="w-4" aria-hidden />
-        <span>Presentación</span>
-        {showFactor ? <span>Factor</span> : null}
-        <span>Precio</span>
-        <span className="sr-only">Acciones</span>
-      </div>
-
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
-        modifiers={[restrictToVerticalAxis]}
         onDragEnd={handleDragEnd}
       >
         <SortableContext
           items={rows.map((row) => row.key)}
-          strategy={verticalListSortingStrategy}
+          strategy={rectSortingStrategy}
         >
           <RadioGroup
             value={rows.find((row) => row.isPrimary)?.key ?? ""}
@@ -311,7 +293,7 @@ export function PresentationRows({
             }}
             disabled={disabled}
             aria-label="Presentación principal"
-            className="flex flex-col gap-2"
+            className="grid grid-cols-2 gap-2 sm:grid-cols-3"
           >
             {rows.map((row, index) => (
               <SortablePresentationRow
@@ -338,6 +320,7 @@ export function PresentationRows({
           type="button"
           variant="outline"
           size="sm"
+          className="w-full sm:w-auto"
           disabled={disabled}
           onClick={() => onChange([...rows, createPresentationRow()])}
         >
@@ -361,12 +344,18 @@ function PresentationImageButton({
   row,
   fallbackUrl,
   disabled,
+  full = false,
+  removePlacement = "top-right",
   onSelect,
   onRemove,
 }: {
   row: PresentationRow
   fallbackUrl: string | null
   disabled: boolean
+  /** Ocupa todo el ancho de la card (modo tarjetas). */
+  full?: boolean
+  /** En tarjetas, la ✕ va abajo para no chocar con el radio de principal. */
+  removePlacement?: "top-right" | "bottom-right"
   onSelect: (file: File) => void
   onRemove: () => void
 }) {
@@ -390,7 +379,7 @@ function PresentationImageButton({
   }
 
   return (
-    <div className="relative size-9 shrink-0">
+    <div className={cn("relative", full ? "size-full" : "size-9 shrink-0")}>
       <button
         type="button"
         disabled={disabled}
@@ -398,7 +387,10 @@ function PresentationImageButton({
         title={`${hasOwn ? "Reemplazar" : "Agregar"} imagen de ${label}`}
         onClick={() => inputRef.current?.click()}
         className={cn(
-          "relative flex size-9 items-center justify-center overflow-hidden rounded-md border bg-muted transition-colors hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          "relative flex items-center justify-center overflow-hidden bg-muted transition-colors hover:border-primary/60 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          full
+            ? "size-full"
+            : "size-9 rounded-md border",
           inherited && "border-dashed",
           disabled && "cursor-not-allowed opacity-60"
         )}
@@ -408,14 +400,14 @@ function PresentationImageButton({
             src={src}
             assets={ownUrl ? row.imageVariants : null}
             alt=""
-            sizes="36px"
+            sizes={full ? "(max-width: 640px) 50vw, 240px" : "36px"}
             className={cn(
               "size-full object-cover",
               inherited && "opacity-70"
             )}
           />
         ) : (
-          <ImageIcon className="size-4 text-muted-foreground" />
+          <ImageIcon className={cn(full ? "size-7" : "size-4", "text-muted-foreground")} />
         )}
         {inherited ? (
           <span className="absolute inset-x-0 bottom-0 bg-background/85 text-center text-[8px] font-medium text-muted-foreground">
@@ -431,7 +423,12 @@ function PresentationImageButton({
           aria-label={`Quitar imagen de ${label}`}
           title={`Quitar imagen de ${label}`}
           onClick={onRemove}
-          className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-destructive focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          className={cn(
+            "absolute flex size-4 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-destructive focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60",
+            removePlacement === "bottom-right"
+              ? "right-1 bottom-1"
+              : "-top-1 -right-1"
+          )}
         >
           <XIcon className="size-2.5" />
         </button>
@@ -531,100 +528,125 @@ function SortablePresentationRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "grid items-center gap-2 rounded-md",
-        showFactor
-          ? "grid-cols-[auto_auto_minmax(0,1fr)_5.5rem_9rem_auto]"
-          : "grid-cols-[auto_auto_minmax(0,1fr)_9rem_auto]",
-        isDragging && "relative z-10 opacity-70"
+        "relative flex min-w-0 flex-col overflow-hidden rounded-lg border bg-card",
+        isDragging && "z-10 opacity-70"
       )}
     >
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label={`Reordenar ${row.name.trim() || suggestedName}`}
-        className="cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-        disabled={disabled}
-        {...attributes}
-        {...listeners}
-      >
-        <GripVerticalIcon />
-      </Button>
-
-      <RadioGroupItem
-        value={row.key}
-        aria-label={`Marcar ${row.name.trim() || suggestedName} como principal`}
-        disabled={disabled}
-      />
-
-      <div className="flex min-w-0 items-center gap-1.5">
+      <div className="relative aspect-[4/3] w-full bg-muted">
         <PresentationImageButton
           row={row}
           fallbackUrl={fallbackImageUrl}
           disabled={disabled}
+          full
+          removePlacement="bottom-right"
           onSelect={selectImage}
           onRemove={removeImage}
         />
+
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon-sm"
+          aria-label={`Reordenar ${row.name.trim() || suggestedName}`}
+          className="absolute top-1 left-1 size-7 cursor-grab touch-none bg-background/85 shadow-sm backdrop-blur active:cursor-grabbing"
+          disabled={disabled}
+          {...attributes}
+          {...listeners}
+        >
+          <GripVerticalIcon />
+        </Button>
+
+        <div className="absolute top-1 right-1 rounded-full bg-background/90 p-1 shadow-sm">
+          <RadioGroupItem
+            value={row.key}
+            aria-label={`Marcar ${row.name.trim() || suggestedName} como principal`}
+            disabled={disabled}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-1 flex-col gap-2 p-2">
         <Input
           aria-label="Nombre de la presentación"
           value={row.name}
           maxLength={80}
           placeholder={suggestedName}
           disabled={disabled}
-          className="min-w-0"
+          className="h-8 min-w-0"
           onChange={(event) =>
             update({ name: event.target.value, linkedName: false })
           }
         />
+
+        <div
+          className={cn(
+            "grid gap-1.5",
+            showFactor ? "grid-cols-2" : "grid-cols-1"
+          )}
+        >
+          {showFactor ? (
+            <Input
+              aria-label={`Factor de ${row.name.trim() || suggestedName}`}
+              type="number"
+              min="0.1"
+              step="0.01"
+              value={row.recipeFactor}
+              placeholder={row.recipeFactorPlaceholder ?? "1"}
+              disabled={disabled}
+              title="Multiplicador de consumo de la receta"
+              className="h-8"
+              onChange={(event) => update({ recipeFactor: event.target.value })}
+            />
+          ) : null}
+
+          <InputGroup className="h-8">
+            <InputGroupAddon align="inline-start">
+              <InputGroupText>$</InputGroupText>
+            </InputGroupAddon>
+            <InputGroupInput
+              aria-label="Precio de la presentación"
+              type="number"
+              min="0"
+              step="0.01"
+              value={row.isPrimary ? articlePrice : row.price}
+              placeholder={suggestedPrice}
+              disabled={disabled}
+              onChange={(event) =>
+                row.isPrimary
+                  ? onArticlePriceChange(event.target.value)
+                  : update({ price: event.target.value })
+              }
+            />
+            <InputGroupAddon align="inline-end">
+              <InputGroupText className="text-[10px]">{currency}</InputGroupText>
+            </InputGroupAddon>
+          </InputGroup>
+        </div>
+
+        <div className="mt-auto flex items-center justify-between gap-1">
+          <span
+            className={cn(
+              "truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+              row.isPrimary
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground"
+            )}
+          >
+            {row.isPrimary ? "Principal" : `#${index + 1}`}
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Quitar presentación"
+            className="-mr-1 -mb-1 text-muted-foreground hover:text-destructive"
+            disabled={disabled || rows.length <= 1}
+            onClick={() => onRemove(row.key)}
+          >
+            <Trash2Icon />
+          </Button>
+        </div>
       </div>
-
-      {showFactor ? (
-        <Input
-          aria-label={`Factor de ${row.name.trim() || suggestedName}`}
-          type="number"
-          min="0.1"
-          step="0.01"
-          value={row.recipeFactor}
-          placeholder={row.recipeFactorPlaceholder ?? "1"}
-          disabled={disabled}
-          title="Multiplicador de consumo de la receta"
-          onChange={(event) => update({ recipeFactor: event.target.value })}
-        />
-      ) : null}
-
-      <InputGroup>
-        <InputGroupAddon align="inline-start">
-          <InputGroupText>$</InputGroupText>
-        </InputGroupAddon>
-        <InputGroupInput
-          aria-label="Precio de la presentación"
-          type="number"
-          min="0"
-          step="0.01"
-          value={row.isPrimary ? articlePrice : row.price}
-          placeholder={suggestedPrice}
-          disabled={disabled}
-          onChange={(event) =>
-            row.isPrimary
-              ? onArticlePriceChange(event.target.value)
-              : update({ price: event.target.value })
-          }
-        />
-        <InputGroupAddon align="inline-end">
-          <InputGroupText>{currency}</InputGroupText>
-        </InputGroupAddon>
-      </InputGroup>
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Quitar presentación"
-        disabled={disabled || rows.length <= 1}
-        onClick={() => onRemove(row.key)}
-      >
-        <Trash2Icon />
-      </Button>
     </div>
   )
 }

@@ -15,6 +15,7 @@ import {
   NotebookTextIcon,
   PencilLineIcon,
   PlusIcon,
+  ReceiptTextIcon,
   SearchIcon,
   SlidersHorizontalIcon,
   SoupIcon,
@@ -77,11 +78,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
 import { useOfflineSync } from "@/components/offline/offline-provider"
 import { PendingOperations } from "@/components/offline/pending-operations"
 import { useShortcut } from "@/components/keyboard/keyboard-shortcuts-provider"
 import * as posCapture from "@/components/pos/pos-capture"
+import { useMediaQuery } from "@/hooks/use-media-query"
 import { OrderDeck, adjacentOrderId } from "@/components/pos/order-deck"
 import { ArticleCardVisual, type ArticleCardTextSize } from "@/components/catalog/article-card-visual"
 import {
@@ -687,6 +696,28 @@ ull` = vista consolidada. */
     : channel === "DINE_IN"
   const displayChannel = activeOrder?.channel ?? channel
   const total = cart.reduce((sum, line) => sum + cartLineTotal(line), 0)
+
+  // La comanda se muestra como columna solo cuando hay ancho suficiente para
+  // catálogo + panel (xl). En tablet horizontal y teléfono se usa el sheet.
+  const showComandaColumn = useMediaQuery("(min-width: 1280px)", true)
+  const [comandaOpen, setComandaOpen] = React.useState(false)
+
+  const comandaUnits =
+    cart.reduce((count, line) => count + line.quantity, 0) +
+    (activeOrder?.rounds ?? []).reduce((count, round) => {
+      if (round.status === "CANCELLED") return count
+
+      if ("items" in round) {
+        return (
+          count +
+          round.items.reduce((roundCount, item) => roundCount + item.quantity, 0)
+        )
+      }
+
+      return count + (round._count?.items ?? 0)
+    }, 0)
+  const comandaAmount =
+    total + (activeOrder ? Number(activeOrder.total) || 0 : 0)
 
   /**
    * El precio del catálogo es final (IVA incluido), así que el IVA se extrae
@@ -1843,12 +1874,600 @@ ull` = vista consolidada. */
     }
   }
 
+  const comandaPanel = (
+    <OrderDeck
+                orders={deckOrders}
+                activeId={orderId}
+                onSelect={selectOrder}
+              >
+                <Card className="flex flex-col gap-3 border p-4 ring-0">
+              <CardHeader className="flex flex-row items-center justify-between gap-2 p-0">
+                <CardTitle className="flex items-center gap-2">
+                  <PencilLineIcon className="size-4" />
+                  Comanda
+                </CardTitle>
+                <Select
+                  value={orderId || "new"}
+                  onValueChange={(value) =>
+                    selectOrder(value === "new" ? "" : (value ?? ""))
+                  }
+                  items={[
+                    { value: "new", label: "Nueva cuenta" },
+                    ...orders.map((order) => ({
+                      value: order.id,
+                      label: `${orderLabel(order)} · ${money(order.total)}${
+                        branch || !order.branch ? "" : ` · ${order.branch.name}`
+                      }`,
+                    })),
+                  ]}
+                >
+                  <SelectTrigger className="w-44" aria-label="Cuentas">
+                    <SelectValue placeholder="Nueva cuenta" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">Nueva cuenta</SelectItem>
+                    {orders.map((order) => (
+                      <SelectItem key={order.id} value={order.id}>
+                        {orderLabel(order)} · {money(order.total)}
+                        {branch || !order.branch ? "" : ` · ${order.branch.name}`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </CardHeader>
+
+              <CardContent className="flex flex-col gap-3 p-0">
+                <div className="flex flex-wrap gap-1.5">
+                  {CHANNELS.map((value) => {
+                    const disabled =
+                      value === "PHONE" ||
+                      value === "DELIVERY" ||
+                      Boolean(activeOrder)
+                    const active = displayChannel === value
+
+                    return (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className={jalapenoChipClass(active)}
+                        aria-pressed={active}
+                        disabled={disabled}
+                        title={
+                          value === "PHONE" || value === "DELIVERY"
+                            ? "Disponible próximamente"
+                            : undefined
+                        }
+                        onClick={() => {
+                          posCapture.noteComandaInteraction()
+                          setChannel(value)
+                        }}
+                      >
+                        {ORDER_CHANNEL_LABELS[value]}
+                      </Button>
+                    )
+                  })}
+                </div>
+
+                {isDineIn ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                      <div className="flex flex-col gap-2">
+                        <Select
+                          value={activeOrder?.tableNumber ?? tableNumber}
+                          onValueChange={(value) => {
+                            posCapture.noteComandaInteraction()
+                            setTableNumber(value ?? "1")
+                          }}
+                          disabled={Boolean(activeOrder)}
+                          items={TABLE_OPTIONS.map((value) => ({
+                            value,
+                            label: `Mesa ${value}`,
+                          }))}
+                        >
+                          <SelectTrigger id="pos-table" className="w-full" aria-label="Mesa">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TABLE_OPTIONS.map((value) => (
+                              <SelectItem key={value} value={value}>
+                                Mesa {value}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex flex-col gap-2">
+                        <Label>Clientes</Label>
+                        <ButtonGroup aria-label="Número de clientes">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Quitar un cliente"
+                            disabled={partySize <= 1 || guestBusy}
+                            onClick={() => void changePartySize(partySize - 1)}
+                          >
+                            <MinusIcon />
+                          </Button>
+                          <Input
+                            aria-label="Número de clientes"
+                            inputMode="numeric"
+                            className="h-8 w-12 min-w-12 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                            value={partySizeDraft}
+                            onChange={(event) => {
+                              posCapture.noteComandaActivity()
+                              setPartySizeDraft(
+                                event.target.value.replace(/\D/g, "").slice(0, 2)
+                              )
+                            }}
+                            onBlur={() =>
+                              void changePartySize(Number(partySizeDraft) || 1)
+                            }
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault()
+                                event.currentTarget.blur()
+                              }
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label="Añadir un cliente"
+                            disabled={partySize >= 20 || guestBusy}
+                            onClick={() => void changePartySize(partySize + 1)}
+                          >
+                            <PlusIcon />
+                          </Button>
+                        </ButtonGroup>
+                      </div>
+                    </div>
+
+                    <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
+                      <legend className="px-1 text-[10px] font-medium text-muted-foreground">
+                        Orden para
+                      </legend>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {guests.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={jalapenoChipClass(activeGuestKey === null)}
+                            aria-pressed={activeGuestKey === null}
+                            onClick={() => selectGuest(null)}
+                          >
+                            General
+                          </Button>
+                        ) : null}
+
+                        {guests.map((guest, index) => (
+                          <div key={guest.key} className="flex items-center">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                jalapenoChipClass(activeGuestKey === guest.key),
+                                "max-w-40 rounded-r-none"
+                              )}
+                              aria-pressed={activeGuestKey === guest.key}
+                              onClick={() => selectGuest(guest.key)}
+                            >
+                              <span className="truncate">
+                                {guestDisplayName(guest, index)}
+                              </span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
+                              aria-label={`Quitar ${guestDisplayName(guest, index)}`}
+                              disabled={partySize <= 1 || guestBusy}
+                              onClick={() => requestRemoveGuest(guest)}
+                            >
+                              <XIcon className="size-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1 rounded-full border-dashed px-2.5 text-xs text-muted-foreground"
+                          disabled={partySize >= 20 || guestBusy}
+                          onClick={() => void changePartySize(partySize + 1)}
+                        >
+                          <UserPlusIcon className="size-3.5" />
+                          Añadir cliente
+                        </Button>
+                      </div>
+
+                      {activeGuest ? (
+                        <div className="mt-2 flex flex-col gap-2 border-t pt-2">
+                          <div className="flex items-end gap-2">
+                            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                              <Label htmlFor="pos-guest-name" className="text-xs">
+                                Nombre
+                              </Label>
+                              <GuestNameField
+                                key={activeGuest.key}
+                                guest={activeGuest}
+                                placeholder={`Cliente ${
+                                  guests.findIndex(
+                                    (guest) => guest.key === activeGuest.key
+                                  ) + 1
+                                }`}
+                                disabled={guestBusy}
+                                onChange={(name) =>
+                                  setGuestNameLocal(activeGuest, name)
+                                }
+                                onCommit={(name) =>
+                                  void updateGuest(activeGuest, { name })
+                                }
+                              />
+                            </div>
+
+                            <GuestProfilePopover
+                              sex={activeGuest.sex}
+                              ageRange={activeGuest.ageRange}
+                              disabled={guestBusy}
+                              onChange={(changes) =>
+                                void updateGuest(activeGuest, changes)
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </fieldset>
+                  </div>
+                ) : null}
+
+                {!activeOrder && !isDineIn && displayChannel === "COUNTER" ? (
+                  <div className="flex items-end gap-2">
+                    <div className="flex min-w-0 flex-1 flex-col gap-2">
+                      <Label htmlFor="pos-customer">
+                        Cliente{" "}
+                        <span className="text-xs font-normal text-muted-foreground">
+                          (opcional)
+                        </span>
+                      </Label>
+                      <Input
+                        id="pos-customer"
+                        value={customerName}
+                        onChange={(event) => {
+                          posCapture.noteComandaActivity()
+                          setCustomerName(event.target.value)
+                        }}
+                        maxLength={120}
+                        placeholder="Nombre"
+                      />
+                    </div>
+                    <GuestProfilePopover
+                      sex={customerSex}
+                      ageRange={customerAgeRange}
+                      onChange={(changes) => {
+                        posCapture.noteComandaInteraction()
+                        if (changes.sex !== undefined) setCustomerSex(changes.sex)
+                        if (changes.ageRange !== undefined) {
+                          setCustomerAgeRange(changes.ageRange)
+                        }
+                      }}
+                    />
+                  </div>
+                ) : null}
+
+                {displays.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    <Label htmlFor="pos-display">Pantalla de cliente</Label>
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={displayId || "none"}
+                        onValueChange={(value) =>
+                          setDisplayId(value === "none" ? "" : (value ?? ""))
+                        }
+                        items={[
+                          { value: "none", label: "Sin pantalla" },
+                          ...displays.map((display) => ({
+                            value: display.id,
+                            label: display.name,
+                          })),
+                        ]}
+                      >
+                        <SelectTrigger id="pos-display" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Sin pantalla</SelectItem>
+                          {displays.map((display) => (
+                            <SelectItem key={display.id} value={display.id}>
+                              {display.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {displayState?.confirmedAt ? (
+                        <Badge variant="secondary">Confirmó</Badge>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                <Separator />
+
+              {comboNotice ? (
+                <Alert className="border-chart-3/50! bg-chart-3/10! text-chart-3!">
+                  <SparklesIcon />
+                  <AlertTitle>Precio de combo ajustado</AlertTitle>
+                  <AlertDescription className="text-chart-3/80!">
+                    {comboNotice.message}
+                  </AlertDescription>
+                  {comboUndoAvailable ? (
+                    <AlertAction>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-chart-3 hover:bg-chart-3/15 hover:text-chart-3"
+                        onClick={comboNotice.undo}
+                      >
+                        <Undo2Icon />
+                        Revertir
+                      </Button>
+                    </AlertAction>
+                  ) : null}
+                </Alert>
+              ) : null}
+
+              {cart.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Elige artículos del catálogo para armar la ronda.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {cart.map((line, index) => (
+                    <li
+                      key={line.key}
+                      className={cn(
+                        "flex flex-col gap-1",
+                        index > 0 && "border-t border-dashed pt-2"
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {line.itemName}
+                            {lineGuestLabel(line) ? (
+                              <span className="ml-1.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                                {lineGuestLabel(line)}
+                              </span>
+                            ) : null}
+                          </p>
+                          {line.variantName ? (
+                            <p className="text-sm font-medium text-muted-foreground">
+                              {line.variantName}
+                            </p>
+                          ) : null}
+                          {line.extras.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              + {line.extras.map((extra) => extra.name).join(", ")}
+                            </p>
+                          ) : null}
+                          {line.options.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              {line.options
+                                .map(
+                                  (option) =>
+                                    `${option.groupName}: ${option.name}`
+                                )
+                                .join(" · ")}
+                            </p>
+                          ) : null}
+                          {line.excludedNames.length > 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              Sin {line.excludedNames.join(", ")}
+                            </p>
+                          ) : null}
+                          {line.notes ? (
+                            <p className="text-xs italic text-muted-foreground">
+                              “{line.notes}”
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="text-sm font-medium tabular-nums">
+                          {money(cartLineTotal(line))}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Quitar una unidad de ${line.itemName}`}
+                          onClick={() => changeQuantity(line.key, -1)}
+                        >
+                          <MinusIcon />
+                        </Button>
+                        <span className="w-8 text-center text-sm tabular-nums">
+                          {line.quantity}
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label={`Añadir una unidad de ${line.itemName}`}
+                          onClick={() => changeQuantity(line.key, 1)}
+                        >
+                          <PlusIcon />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className="ml-auto"
+                          aria-label={`Editar opciones de ${line.itemName}`}
+                          onClick={() => openCartLineEditor(line)}
+                        >
+                          <PencilLineIcon />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Quitar ${line.itemName} de la comanda`}
+                          onClick={() => removeLine(line.key)}
+                        >
+                          <Trash2Icon />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              <Separator />
+
+              <div className="flex flex-col gap-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="tabular-nums">
+                    {money(taxBreakdown.subtotal)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">IVA</span>
+                  <span className="tabular-nums">{money(taxBreakdown.tax)}</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-1">
+                  <span className="font-medium">Total</span>
+                  <span className="text-base font-semibold tabular-nums">
+                    {money(total)}
+                  </span>
+                </div>
+              </div>
+
+              {activeOrder ? (
+                <>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      Pagado {money(activeOrder.paidTotal ?? 0)}
+                      {activeConfirmedCount > 0
+                        ? ` · ${activeConfirmedCount} pago(s)`
+                        : ""}
+                    </span>
+                    <span className="font-medium text-foreground tabular-nums">
+                      Saldo {money(Math.max(Number(activeOrder.balance ?? 0), 0))}
+                    </span>
+                  </div>
+                  {activePendingTotal > 0 ? (
+                    <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
+                      <span>Por confirmar</span>
+                      <span className="font-medium tabular-nums">
+                        {money(activePendingTotal)}
+                      </span>
+                    </div>
+                  ) : null}
+                </>
+              ) : null}
+
+              <PendingOperations />
+
+              {canSend ? (
+                <>
+                  <Button
+                    onClick={handleSend}
+                    disabled={sending || cart.length === 0}
+                  >
+                    {sending ? <Loader2Icon className="animate-spin" /> : null}
+                    {offline.isOnline
+                      ? orderId
+                        ? "Enviar ronda"
+                        : "Abrir cuenta y enviar"
+                      : "Guardar comanda sin conexión"}
+                  </Button>
+                  {!offline.isOnline ? (
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Cocina no recibirá la comanda hasta que vuelva la conexión.
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Tu rol puede abrir cuentas, pero no enviar comandas a cocina.
+                </p>
+              )}
+
+              {activeOrder && canRegister ? (
+                <>
+                  <Button
+                    variant="outline"
+                    disabled={
+                      !cash.session ||
+                      cashClosePending ||
+                      (!offline.isOnline && !canConfirm)
+                    }
+                    title={
+                      !cash.session
+                        ? "Abre la caja para cobrar"
+                        : cashClosePending
+                          ? "Cierre de caja pendiente de sincronizar"
+                          : !offline.isOnline && !canConfirm
+                            ? "Tu rol no puede confirmar pagos sin conexión"
+                            : undefined
+                    }
+                    onClick={() => {
+                      if (offline.isOnline) setCharging(true)
+                      else setOfflineCharging(true)
+                    }}
+                  >
+                    {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
+                    {offline.isOnline
+                      ? "Cobrar cuenta"
+                      : "Cobrar en efectivo sin conexión"}
+                  </Button>
+                  {!cash.session ? (
+                    <p className="text-xs text-muted-foreground">
+                      Caja cerrada: caja o administración debe abrirla para cobrar.
+                    </p>
+                  ) : cashClosePending ? (
+                    <p className="text-xs text-muted-foreground">
+                      La caja se cerró en este dispositivo; espera a sincronizar
+                      antes de cobrar otra cuenta.
+                    </p>
+                  ) : !offline.isOnline ? (
+                    <p className="text-xs text-muted-foreground">
+                      {canConfirm
+                        ? "Solo efectivo: el cobro se guarda y se envía al reconectar."
+                        : "Sin conexión solo pueden cobrar roles autorizados a confirmar pagos."}
+                    </p>
+                  ) : null}
+                </>
+              ) : null}
+
+              {!canDraft ? (
+                <p className="text-xs text-muted-foreground">
+                  No tienes permiso para abrir cuentas.
+                </p>
+              ) : null}
+              </CardContent>
+                </Card>
+              </OrderDeck>
+  )
+
   return (
-    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 lg:px-6 xl:pb-6">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
               <div className="relative w-full sm:w-56">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -1887,7 +2506,7 @@ ull` = vista consolidada. */
                 }))}
               >
                 <SelectTrigger
-                  className="w-full sm:w-44"
+                  className="w-full sm:w-44 sm:flex-none"
                   aria-label="Filtrar por menú"
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -1919,7 +2538,7 @@ ull` = vista consolidada. */
                       aria-label="Filtros"
                     >
                       <SlidersHorizontalIcon />
-                      Filtros
+                      <span className="hidden sm:inline">Filtros</span>
                       {activeFilterCount > 0 ? (
                         <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                           {activeFilterCount}
@@ -2000,13 +2619,13 @@ ull` = vista consolidada. */
               ) : null}
             </div>
 
-            <div className="ml-auto flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
               <Popover>
                 <PopoverTrigger
                   render={
-                    <Button type="button" variant="outline">
+                    <Button type="button" variant="outline" aria-label="Vista">
                       <LayoutGridIcon />
-                      Vista
+                      <span className="hidden sm:inline">Vista</span>
                     </Button>
                   }
                 />
@@ -2131,7 +2750,7 @@ ull` = vista consolidada. */
                       aria-label="Ordenar artículos"
                     >
                       <ArrowUpDownIcon />
-                      Ordenar
+                      <span className="hidden sm:inline">Ordenar</span>
                     </Button>
                   }
                 />
@@ -2184,594 +2803,54 @@ ull` = vista consolidada. */
           )}
         </div>
 
-        <div className="lg:sticky lg:top-4">
-          <OrderDeck
-            orders={deckOrders}
-            activeId={orderId}
-            onSelect={selectOrder}
-          >
-            <Card className="flex flex-col gap-3 border p-4 ring-0">
-          <CardHeader className="flex flex-row items-center justify-between gap-2 p-0">
-            <CardTitle className="flex items-center gap-2">
-              <PencilLineIcon className="size-4" />
-              Comanda
-            </CardTitle>
-            <Select
-              value={orderId || "new"}
-              onValueChange={(value) =>
-                selectOrder(value === "new" ? "" : (value ?? ""))
-              }
-              items={[
-                { value: "new", label: "Nueva cuenta" },
-                ...orders.map((order) => ({
-                  value: order.id,
-                  label: `${orderLabel(order)} · ${money(order.total)}${
-                    branch || !order.branch ? "" : ` · ${order.branch.name}`
-                  }`,
-                })),
-              ]}
+                {showComandaColumn ? (
+          <div className="hidden xl:sticky xl:top-4 xl:block">
+            {comandaPanel}
+          </div>
+        ) : null}
+      </div>
+
+      {!showComandaColumn ? (
+        <>
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex justify-end px-3 lg:bottom-6 xl:hidden">
+            <button
+              type="button"
+              onClick={() => setComandaOpen(true)}
+              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full border bg-card px-4 text-sm shadow-lg shadow-black/10 transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]"
             >
-              <SelectTrigger className="w-44" aria-label="Cuentas">
-                <SelectValue placeholder="Nueva cuenta" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="new">Nueva cuenta</SelectItem>
-                {orders.map((order) => (
-                  <SelectItem key={order.id} value={order.id}>
-                    {orderLabel(order)} · {money(order.total)}
-                    {branch || !order.branch ? "" : ` · ${order.branch.name}`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardHeader>
-
-          <CardContent className="flex flex-col gap-3 p-0">
-            <div className="flex flex-wrap gap-1.5">
-              {CHANNELS.map((value) => {
-                const disabled =
-                  value === "PHONE" ||
-                  value === "DELIVERY" ||
-                  Boolean(activeOrder)
-                const active = displayChannel === value
-
-                return (
-                  <Button
-                    key={value}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className={jalapenoChipClass(active)}
-                    aria-pressed={active}
-                    disabled={disabled}
-                    title={
-                      value === "PHONE" || value === "DELIVERY"
-                        ? "Disponible próximamente"
-                        : undefined
-                    }
-                    onClick={() => {
-                      posCapture.noteComandaInteraction()
-                      setChannel(value)
-                    }}
-                  >
-                    {ORDER_CHANNEL_LABELS[value]}
-                  </Button>
-                )
-              })}
-            </div>
-
-            {isDineIn ? (
-              <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-                  <div className="flex flex-col gap-2">
-                    <Select
-                      value={activeOrder?.tableNumber ?? tableNumber}
-                      onValueChange={(value) => {
-                        posCapture.noteComandaInteraction()
-                        setTableNumber(value ?? "1")
-                      }}
-                      disabled={Boolean(activeOrder)}
-                      items={TABLE_OPTIONS.map((value) => ({
-                        value,
-                        label: `Mesa ${value}`,
-                      }))}
-                    >
-                      <SelectTrigger id="pos-table" className="w-full" aria-label="Mesa">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {TABLE_OPTIONS.map((value) => (
-                          <SelectItem key={value} value={value}>
-                            Mesa {value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="flex flex-col gap-2">
-                    <Label>Clientes</Label>
-                    <ButtonGroup aria-label="Número de clientes">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Quitar un cliente"
-                        disabled={partySize <= 1 || guestBusy}
-                        onClick={() => void changePartySize(partySize - 1)}
-                      >
-                        <MinusIcon />
-                      </Button>
-                      <Input
-                        aria-label="Número de clientes"
-                        inputMode="numeric"
-                        className="h-8 w-12 min-w-12 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                        value={partySizeDraft}
-                        onChange={(event) => {
-                          posCapture.noteComandaActivity()
-                          setPartySizeDraft(
-                            event.target.value.replace(/\D/g, "").slice(0, 2)
-                          )
-                        }}
-                        onBlur={() =>
-                          void changePartySize(Number(partySizeDraft) || 1)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter") {
-                            event.preventDefault()
-                            event.currentTarget.blur()
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label="Añadir un cliente"
-                        disabled={partySize >= 20 || guestBusy}
-                        onClick={() => void changePartySize(partySize + 1)}
-                      >
-                        <PlusIcon />
-                      </Button>
-                    </ButtonGroup>
-                  </div>
-                </div>
-
-                <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
-                  <legend className="px-1 text-[10px] font-medium text-muted-foreground">
-                    Orden para
-                  </legend>
-
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {guests.length > 1 ? (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className={jalapenoChipClass(activeGuestKey === null)}
-                        aria-pressed={activeGuestKey === null}
-                        onClick={() => selectGuest(null)}
-                      >
-                        General
-                      </Button>
-                    ) : null}
-
-                    {guests.map((guest, index) => (
-                      <div key={guest.key} className="flex items-center">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            jalapenoChipClass(activeGuestKey === guest.key),
-                            "max-w-40 rounded-r-none"
-                          )}
-                          aria-pressed={activeGuestKey === guest.key}
-                          onClick={() => selectGuest(guest.key)}
-                        >
-                          <span className="truncate">
-                            {guestDisplayName(guest, index)}
-                          </span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
-                          aria-label={`Quitar ${guestDisplayName(guest, index)}`}
-                          disabled={partySize <= 1 || guestBusy}
-                          onClick={() => requestRemoveGuest(guest)}
-                        >
-                          <XIcon className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="h-7 gap-1 rounded-full border-dashed px-2.5 text-xs text-muted-foreground"
-                      disabled={partySize >= 20 || guestBusy}
-                      onClick={() => void changePartySize(partySize + 1)}
-                    >
-                      <UserPlusIcon className="size-3.5" />
-                      Añadir cliente
-                    </Button>
-                  </div>
-
-                  {activeGuest ? (
-                    <div className="mt-2 flex flex-col gap-2 border-t pt-2">
-                      <div className="flex items-end gap-2">
-                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                          <Label htmlFor="pos-guest-name" className="text-xs">
-                            Nombre
-                          </Label>
-                          <GuestNameField
-                            key={activeGuest.key}
-                            guest={activeGuest}
-                            placeholder={`Cliente ${
-                              guests.findIndex(
-                                (guest) => guest.key === activeGuest.key
-                              ) + 1
-                            }`}
-                            disabled={guestBusy}
-                            onChange={(name) =>
-                              setGuestNameLocal(activeGuest, name)
-                            }
-                            onCommit={(name) =>
-                              void updateGuest(activeGuest, { name })
-                            }
-                          />
-                        </div>
-
-                        <GuestProfilePopover
-                          sex={activeGuest.sex}
-                          ageRange={activeGuest.ageRange}
-                          disabled={guestBusy}
-                          onChange={(changes) =>
-                            void updateGuest(activeGuest, changes)
-                          }
-                        />
-                      </div>
-                    </div>
-                  ) : null}
-                </fieldset>
-              </div>
-            ) : null}
-
-            {!activeOrder && !isDineIn && displayChannel === "COUNTER" ? (
-              <div className="flex items-end gap-2">
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  <Label htmlFor="pos-customer">
-                    Cliente{" "}
-                    <span className="text-xs font-normal text-muted-foreground">
-                      (opcional)
-                    </span>
-                  </Label>
-                  <Input
-                    id="pos-customer"
-                    value={customerName}
-                    onChange={(event) => {
-                      posCapture.noteComandaActivity()
-                      setCustomerName(event.target.value)
-                    }}
-                    maxLength={120}
-                    placeholder="Nombre"
-                  />
-                </div>
-                <GuestProfilePopover
-                  sex={customerSex}
-                  ageRange={customerAgeRange}
-                  onChange={(changes) => {
-                    posCapture.noteComandaInteraction()
-                    if (changes.sex !== undefined) setCustomerSex(changes.sex)
-                    if (changes.ageRange !== undefined) {
-                      setCustomerAgeRange(changes.ageRange)
-                    }
-                  }}
-                />
-              </div>
-            ) : null}
-
-            {displays.length > 0 ? (
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="pos-display">Pantalla de cliente</Label>
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={displayId || "none"}
-                    onValueChange={(value) =>
-                      setDisplayId(value === "none" ? "" : (value ?? ""))
-                    }
-                    items={[
-                      { value: "none", label: "Sin pantalla" },
-                      ...displays.map((display) => ({
-                        value: display.id,
-                        label: display.name,
-                      })),
-                    ]}
-                  >
-                    <SelectTrigger id="pos-display" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Sin pantalla</SelectItem>
-                      {displays.map((display) => (
-                        <SelectItem key={display.id} value={display.id}>
-                          {display.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {displayState?.confirmedAt ? (
-                    <Badge variant="secondary">Confirmó</Badge>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-
-            <Separator />
-
-          {comboNotice ? (
-            <Alert className="border-chart-3/50! bg-chart-3/10! text-chart-3!">
-              <SparklesIcon />
-              <AlertTitle>Precio de combo ajustado</AlertTitle>
-              <AlertDescription className="text-chart-3/80!">
-                {comboNotice.message}
-              </AlertDescription>
-              {comboUndoAvailable ? (
-                <AlertAction>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-chart-3 hover:bg-chart-3/15 hover:text-chart-3"
-                    onClick={comboNotice.undo}
-                  >
-                    <Undo2Icon />
-                    Revertir
-                  </Button>
-                </AlertAction>
-              ) : null}
-            </Alert>
-          ) : null}
-
-          {cart.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              Elige artículos del catálogo para armar la ronda.
-            </p>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {cart.map((line, index) => (
-                <li
-                  key={line.key}
-                  className={cn(
-                    "flex flex-col gap-1",
-                    index > 0 && "border-t border-dashed pt-2"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {line.itemName}
-                        {lineGuestLabel(line) ? (
-                          <span className="ml-1.5 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                            {lineGuestLabel(line)}
-                          </span>
-                        ) : null}
-                      </p>
-                      {line.variantName ? (
-                        <p className="text-sm font-medium text-muted-foreground">
-                          {line.variantName}
-                        </p>
-                      ) : null}
-                      {line.extras.length > 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          + {line.extras.map((extra) => extra.name).join(", ")}
-                        </p>
-                      ) : null}
-                      {line.options.length > 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          {line.options
-                            .map(
-                              (option) =>
-                                `${option.groupName}: ${option.name}`
-                            )
-                            .join(" · ")}
-                        </p>
-                      ) : null}
-                      {line.excludedNames.length > 0 ? (
-                        <p className="text-xs text-muted-foreground">
-                          Sin {line.excludedNames.join(", ")}
-                        </p>
-                      ) : null}
-                      {line.notes ? (
-                        <p className="text-xs italic text-muted-foreground">
-                          “{line.notes}”
-                        </p>
-                      ) : null}
-                    </div>
-                    <span className="text-sm font-medium tabular-nums">
-                      {money(cartLineTotal(line))}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label={`Quitar una unidad de ${line.itemName}`}
-                      onClick={() => changeQuantity(line.key, -1)}
-                    >
-                      <MinusIcon />
-                    </Button>
-                    <span className="w-8 text-center text-sm tabular-nums">
-                      {line.quantity}
-                    </span>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon-sm"
-                      aria-label={`Añadir una unidad de ${line.itemName}`}
-                      onClick={() => changeQuantity(line.key, 1)}
-                    >
-                      <PlusIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="ml-auto"
-                      aria-label={`Editar opciones de ${line.itemName}`}
-                      onClick={() => openCartLineEditor(line)}
-                    >
-                      <PencilLineIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label={`Quitar ${line.itemName} de la comanda`}
-                      onClick={() => removeLine(line.key)}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <Separator />
-
-          <div className="flex flex-col gap-1 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="tabular-nums">
-                {money(taxBreakdown.subtotal)}
+              <ReceiptTextIcon className="size-5 text-primary" aria-hidden />
+              <span className="font-medium">Comanda</span>
+              {comandaUnits > 0 ? (
+                <Badge variant="secondary" className="tabular-nums">
+                  {comandaUnits}
+                </Badge>
+              ) : (
+                <span className="text-xs text-muted-foreground">Nueva</span>
+              )}
+              <span className="ml-auto font-semibold tabular-nums">
+                {money(comandaAmount)}
               </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">IVA</span>
-              <span className="tabular-nums">{money(taxBreakdown.tax)}</span>
-            </div>
-            <div className="flex items-center justify-between border-t pt-1">
-              <span className="font-medium">Total</span>
-              <span className="text-base font-semibold tabular-nums">
-                {money(total)}
-              </span>
-            </div>
+            </button>
           </div>
 
-          {activeOrder ? (
-            <>
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
-                  Pagado {money(activeOrder.paidTotal ?? 0)}
-                  {activeConfirmedCount > 0
-                    ? ` · ${activeConfirmedCount} pago(s)`
-                    : ""}
-                </span>
-                <span className="font-medium text-foreground tabular-nums">
-                  Saldo {money(Math.max(Number(activeOrder.balance ?? 0), 0))}
-                </span>
+          <Sheet open={comandaOpen} onOpenChange={setComandaOpen}>
+            <SheetContent
+              side="bottom"
+              className="max-h-[88dvh] gap-0 rounded-t-2xl p-0 pb-[env(safe-area-inset-bottom)]"
+            >
+              <SheetHeader className="border-b px-4 py-3 pr-12">
+                <SheetTitle>Comanda</SheetTitle>
+                <SheetDescription>
+                  Revisa la cuenta y envía la ronda a cocina.
+                </SheetDescription>
+              </SheetHeader>
+              <div className="min-h-0 flex-1 overflow-y-auto p-3">
+                {comandaPanel}
               </div>
-              {activePendingTotal > 0 ? (
-                <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
-                  <span>Por confirmar</span>
-                  <span className="font-medium tabular-nums">
-                    {money(activePendingTotal)}
-                  </span>
-                </div>
-              ) : null}
-            </>
-          ) : null}
-
-          <PendingOperations />
-
-          {canSend ? (
-            <>
-              <Button
-                onClick={handleSend}
-                disabled={sending || cart.length === 0}
-              >
-                {sending ? <Loader2Icon className="animate-spin" /> : null}
-                {offline.isOnline
-                  ? orderId
-                    ? "Enviar ronda"
-                    : "Abrir cuenta y enviar"
-                  : "Guardar comanda sin conexión"}
-              </Button>
-              {!offline.isOnline ? (
-                <p className="text-xs text-amber-700 dark:text-amber-300">
-                  Cocina no recibirá la comanda hasta que vuelva la conexión.
-                </p>
-              ) : null}
-            </>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Tu rol puede abrir cuentas, pero no enviar comandas a cocina.
-            </p>
-          )}
-
-          {activeOrder && canRegister ? (
-            <>
-              <Button
-                variant="outline"
-                disabled={
-                  !cash.session ||
-                  cashClosePending ||
-                  (!offline.isOnline && !canConfirm)
-                }
-                title={
-                  !cash.session
-                    ? "Abre la caja para cobrar"
-                    : cashClosePending
-                      ? "Cierre de caja pendiente de sincronizar"
-                      : !offline.isOnline && !canConfirm
-                        ? "Tu rol no puede confirmar pagos sin conexión"
-                        : undefined
-                }
-                onClick={() => {
-                  if (offline.isOnline) setCharging(true)
-                  else setOfflineCharging(true)
-                }}
-              >
-                {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
-                {offline.isOnline
-                  ? "Cobrar cuenta"
-                  : "Cobrar en efectivo sin conexión"}
-              </Button>
-              {!cash.session ? (
-                <p className="text-xs text-muted-foreground">
-                  Caja cerrada: caja o administración debe abrirla para cobrar.
-                </p>
-              ) : cashClosePending ? (
-                <p className="text-xs text-muted-foreground">
-                  La caja se cerró en este dispositivo; espera a sincronizar
-                  antes de cobrar otra cuenta.
-                </p>
-              ) : !offline.isOnline ? (
-                <p className="text-xs text-muted-foreground">
-                  {canConfirm
-                    ? "Solo efectivo: el cobro se guarda y se envía al reconectar."
-                    : "Sin conexión solo pueden cobrar roles autorizados a confirmar pagos."}
-                </p>
-              ) : null}
-            </>
-          ) : null}
-
-          {!canDraft ? (
-            <p className="text-xs text-muted-foreground">
-              No tienes permiso para abrir cuentas.
-            </p>
-          ) : null}
-          </CardContent>
-            </Card>
-          </OrderDeck>
-        </div>
-      </div>
+            </SheetContent>
+          </Sheet>
+        </>
+      ) : null}
 
       <AlertDialog
         open={comboConflict !== null}
@@ -3952,7 +4031,10 @@ function AddItemDialog({
   return (
     <>
       <Dialog open onOpenChange={(open) => !open && onClose()}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          mobile="full"
+          className="max-h-[92dvh] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-lg"
+        >
         <DialogHeader>
           <DialogTitle>{product.name}</DialogTitle>
           {product.description ? (
@@ -3962,7 +4044,7 @@ function AddItemDialog({
           ) : null}
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <div className="@container flex min-h-0 flex-col gap-4 overflow-y-auto pr-1">
           {splitByGuest ? (
             <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
               <legend className="px-1 text-[10px] font-medium text-muted-foreground">
@@ -4009,7 +4091,7 @@ function AddItemDialog({
           ) : null}
 
           {variants.length > 0 ? (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 @sm:grid-cols-3">
               {variants.map((candidate) => {
                 const count = variantCount(config, candidate.id)
                 const selected = count > 0
@@ -4089,7 +4171,7 @@ function AddItemDialog({
               })}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 gap-2 @sm:grid-cols-3">
               <div
                 className={cn(
                   "flex flex-col overflow-hidden rounded-xl border bg-card transition-shadow",

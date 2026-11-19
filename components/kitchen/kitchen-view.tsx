@@ -10,6 +10,7 @@ import {
   Maximize2Icon,
   Minimize2Icon,
   RefreshCwIcon,
+  SlidersHorizontalIcon,
   SparklesIcon,
   TimerIcon,
   WifiIcon,
@@ -19,8 +20,17 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { Branch } from "@/lib/branches"
 import { formatDateTime, formatTime } from "@/lib/catalog"
@@ -46,6 +56,13 @@ const COLUMN_HINTS: Record<string, string> = {
   PENDING: "Comandas enviadas y sin empezar.",
   PREPARING: "En cocina. Al empezar se descuenta el inventario.",
   READY: "Listas para llevar a la mesa.",
+}
+
+/** Etiquetas cortas para las tabs del tablero en vertical. */
+const COLUMN_TAB_LABELS: Record<string, string> = {
+  PENDING: "Pendientes",
+  PREPARING: "Preparación",
+  READY: "Listas",
 }
 
 /** Estilo de la insignia según la urgencia. */
@@ -158,6 +175,11 @@ export function KitchenView({
   const [fullscreen, setFullscreen] = React.useState(false)
   const [onlyDelayed, setOnlyDelayed] = React.useState(false)
   const [suggested, setSuggested] = React.useState(suggestedByDefault)
+  const [activeStatus, setActiveStatus] = usePersistentTab(
+    "kitchen-status",
+    COLUMNS,
+    "PENDING"
+  )
   const knownRounds = React.useRef<Set<string> | null>(null)
 
   // Aviso sonoro solo cuando entra una comanda nueva al tablero.
@@ -316,6 +338,14 @@ export function KitchenView({
     )
   const topSuggestion = suggested ? actionable[0] ?? null : null
 
+  /** Comandas de una columna, con el filtro de demoradas ya aplicado. */
+  const roundsFor = (status: RoundStatus) =>
+    rounds.filter(
+      (round) =>
+        round.status === status &&
+        (!onlyDelayed || priorityOf(round) === "late")
+    )
+
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 lg:px-6">
       <PageHeader
@@ -337,12 +367,15 @@ export function KitchenView({
               ) : (
                 <WifiOffIcon data-icon="inline-start" />
               )}
-              {connected ? "Tiempo real" : "Sondeo cada 15 s"}
+              <span className="hidden sm:inline">
+                {connected ? "Tiempo real" : "Sondeo cada 15 s"}
+              </span>
             </Badge>
             <Button
               variant={suggested ? "secondary" : "outline"}
               size="sm"
               aria-pressed={suggested}
+              className="hidden sm:inline-flex"
               title={
                 suggested
                   ? "Ordenando por urgencia; cambia a orden de llegada"
@@ -357,6 +390,7 @@ export function KitchenView({
               variant={onlyDelayed ? "secondary" : "outline"}
               size="sm"
               aria-pressed={onlyDelayed}
+              className="hidden sm:inline-flex"
               onClick={() => setOnlyDelayed((value) => !value)}
             >
               <TimerIcon />
@@ -366,12 +400,52 @@ export function KitchenView({
               variant="outline"
               size="sm"
               aria-pressed={sound}
+              className="hidden sm:inline-flex"
               onClick={() => setSound((value) => !value)}
               title={sound ? "Silenciar avisos" : "Activar avisos"}
             >
               {sound ? <BellIcon /> : <BellOffIcon />}
               {sound ? "Sonido" : "Silencio"}
             </Button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    className="sm:hidden"
+                    aria-label="Filtros de cocina"
+                  />
+                }
+              >
+                <SlidersHorizontalIcon />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel>Vista de cocina</DropdownMenuLabel>
+                  <DropdownMenuCheckboxItem
+                    checked={suggested}
+                    onCheckedChange={(checked) => setSuggested(checked)}
+                  >
+                    Orden sugerido
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={onlyDelayed}
+                    onCheckedChange={(checked) => setOnlyDelayed(checked)}
+                  >
+                    Solo demoradas
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem
+                    checked={sound}
+                    onCheckedChange={(checked) => setSound(checked)}
+                  >
+                    Aviso sonoro
+                  </DropdownMenuCheckboxItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button
               variant="outline"
               size="icon-sm"
@@ -385,9 +459,14 @@ export function KitchenView({
             >
               {fullscreen ? <Minimize2Icon /> : <Maximize2Icon />}
             </Button>
-            <Button variant="outline" size="sm" onClick={() => router.refresh()}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => router.refresh()}
+              aria-label="Actualizar"
+            >
               <RefreshCwIcon />
-              Actualizar
+              <span className="hidden sm:inline">Actualizar</span>
             </Button>
           </>
         }
@@ -438,25 +517,64 @@ export function KitchenView({
         </div>
       ) : null}
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div
+        role="group"
+        aria-label="Estado de las comandas"
+        className="hidden grid-cols-3 gap-1 rounded-lg bg-muted p-1 max-lg:portrait:grid"
+      >
         {COLUMNS.map((status) => {
-          const columnRounds = rounds
-            .filter(
-              (round) =>
-                round.status === status &&
-                (!onlyDelayed || priorityOf(round) === "late")
-            )
-            .sort((left, right) =>
-              suggested
-                ? (left.suggestedRank ?? 999) -
-                  (right.suggestedRank ?? 999)
-                : 0
-            )
+          const count = roundsFor(status).length
+          const active = activeStatus === status
+
+          return (
+            <button
+              key={status}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setActiveStatus(status)}
+              className={cn(
+                "flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-md px-1.5 py-1 text-[10px] font-medium leading-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+                active
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span className="flex items-center gap-1">
+                <OrderStatusIcon status={status} className="size-4 shrink-0" />
+                <span
+                  className={cn(
+                    "min-w-5 rounded-full px-1 text-center text-[10px] tabular-nums",
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "bg-background/70 text-muted-foreground"
+                  )}
+                >
+                  {count}
+                </span>
+              </span>
+              <span className="max-w-full truncate">
+                {COLUMN_TAB_LABELS[status]}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="grid gap-3 max-lg:landscape:grid-cols-[repeat(3,minmax(17rem,1fr))] max-lg:landscape:overflow-x-auto max-lg:landscape:pb-1 lg:grid-cols-3">
+        {COLUMNS.map((status) => {
+          const columnRounds = roundsFor(status).sort((left, right) =>
+            suggested
+              ? (left.suggestedRank ?? 999) - (right.suggestedRank ?? 999)
+              : 0
+          )
 
           return (
             <section
               key={status}
-              className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-3"
+              className={cn(
+                "flex flex-col gap-3 rounded-xl border bg-muted/20 p-3",
+                status !== activeStatus && "max-lg:portrait:hidden"
+              )}
             >
               <header className="flex items-center justify-between">
                 <div>

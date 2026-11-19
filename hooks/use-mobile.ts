@@ -1,6 +1,8 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+// La barra inferior reemplaza al sidebar hasta que hay espacio para ambos
+// (tablet horizontal y escritorio). El corte coincide con `lg:` de Tailwind.
+const MOBILE_BREAKPOINT = 1024
 const QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`
 
 function subscribe(onChange: () => void) {

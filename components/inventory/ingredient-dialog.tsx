@@ -238,7 +238,7 @@ export function IngredientDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent mobile="full" className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>
             {isEdit ? `Editar ${ingredient?.name}` : "Nuevo insumo"}
@@ -455,7 +455,7 @@ export function IngredientDialog({
             )}
 
             {/* Fila 1: Nombre y Unidad */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="ingredient-name">
                   Nombre <span className="text-destructive">*</span>
@@ -503,7 +503,7 @@ export function IngredientDialog({
             </div>
 
             {/* Fila 2: Categoría y Ubicación */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field>
                 <FieldLabel htmlFor="ingredient-category">
                   Categoría <span className="text-destructive">*</span>
@@ -558,7 +558,7 @@ export function IngredientDialog({
 
             {/* Fila 3: Stock inicial (nuevo) / Stock actual (editar) y Costo unitario */}
             {!isOrgView && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {isEdit ? (
                   <Field data-disabled>
                     <FieldLabel htmlFor="ingredient-current-stock">
@@ -653,7 +653,7 @@ export function IngredientDialog({
 
             {/* Fila 4: Stock mínimo y Stock máximo (ocultar en vista org) */}
             {!isOrgView && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field>
                   <FieldLabel htmlFor="ingredient-min">Stock mínimo</FieldLabel>
                   <InputGroup>

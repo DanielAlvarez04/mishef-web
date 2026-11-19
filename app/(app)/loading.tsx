@@ -24,7 +24,7 @@ export default function AppLoading() {
         <Skeleton className="h-4 w-80 max-w-full" />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <div key={index} className="rounded-xl border p-4">
             <Skeleton className="mb-3 h-4 w-24" />

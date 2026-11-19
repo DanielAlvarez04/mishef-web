@@ -95,7 +95,7 @@ export function EquivalencesDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent mobile="full" className="max-h-[92dvh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Equivalencias de {ingredient.name}</DialogTitle>
           <DialogDescription>

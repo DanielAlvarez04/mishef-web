@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { BillingBanner } from "@/components/billing/billing-banner"
+import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
@@ -102,10 +103,11 @@ export default async function AppLayout({
               showClock={!platformMode}
             />
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
-            <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
               {children}
             </div>
           </SidebarInset>
+          <MobileTabBar isPlatformAdmin={user.isPlatformAdmin} />
         </SidebarProvider>
       </OfflineProvider>
     </CurrencyProvider>

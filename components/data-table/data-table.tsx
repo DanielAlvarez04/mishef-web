@@ -380,7 +380,9 @@ export function DataTable<TData extends RowData>({
               style={isSidebar ? { contain: "inline-size" } : undefined}
               data-active={isActive}
               className={cn(
-                isSidebar ? "w-full" : "w-auto min-w-40 max-w-64",
+                isSidebar
+                  ? "w-full"
+                  : "w-full sm:w-auto sm:min-w-40 sm:max-w-64",
                 isActive && ACTIVE_FILTER_OUTLINE
               )}
               aria-label={filter.ariaLabel}
@@ -723,8 +725,9 @@ export function DataTable<TData extends RowData>({
         </div>
       ) : (
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          {/* Barra de herramientas: una sola fila con dos grupos. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          {/* Barra de herramientas: en móvil los filtros y las acciones van en
+              filas propias; desde lg comparten una sola fila. */}
+          <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
             {filtersGroup}
             {actionsGroup}
           </div>

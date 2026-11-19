@@ -87,7 +87,7 @@ export function ProduceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent mobile="full" className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Producir lote</DialogTitle>
           <DialogDescription>

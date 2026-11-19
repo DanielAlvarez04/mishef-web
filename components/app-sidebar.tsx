@@ -22,121 +22,31 @@ import {
 } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
 import {
-  BarChart3Icon,
-  BadgeDollarSignIcon,
-  ChartBarIcon,
-  ChefHatIcon,
-  ClockIcon,
-  CookingPotIcon,
+  APPLICATION_NAV,
+  PLATFORM_NAV,
+  SERVICE_NAV,
+  SETTINGS_NAV,
+  type NavItem,
+} from "@/lib/navigation"
+import {
   GalleryVerticalEndIcon,
-  LayoutDashboardIcon,
-  NotebookTextIcon,
-  PackageIcon,
-  PercentIcon,
   ReceiptTextIcon,
-  Settings2Icon,
-  ShieldAlertIcon,
-  StoreIcon,
-  Trash2Icon,
-  ShoppingBasketIcon,
   UsersIcon,
 } from "lucide-react"
 
-const data = {
-  navService: [
-    {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: <LayoutDashboardIcon />,
-    },
-    {
-      title: "Punto de venta",
-      url: "/pos",
-      icon: <ShoppingBasketIcon />,
-    },
-    {
-      title: "Menús",
-      url: "/menus",
-      icon: <NotebookTextIcon />,
-    },
-    {
-      title: "Cocina",
-      url: "/kitchen",
-      icon: <ChefHatIcon />,
-    },
-  ],
-  navApplication: [
-    {
-      title: "Catálogo",
-      url: "/catalog",
-      icon: <CookingPotIcon />,
-    },
-    {
-      title: "Inventario",
-      url: "/inventory",
-      icon: <PackageIcon />,
-    },
-    {
-      title: "Reportes",
-      url: "/reports",
-      icon: <ChartBarIcon />,
-    },
-    {
-      title: "Food cost",
-      url: "/reports/food-cost",
-      icon: <PercentIcon />,
-    },
-    {
-      title: "Fuga interna",
-      url: "/reports/leakage",
-      icon: <ShieldAlertIcon />,
-    },
-    {
-      title: "Asistencia",
-      url: "/attendance",
-      icon: <ClockIcon />,
-    },
-    {
-      title: "Merma",
-      url: "/waste",
-      icon: <Trash2Icon />,
-    },
-    {
-      title: "Benchmark",
-      url: "/reports/benchmark",
-      icon: <BarChart3Icon />,
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Configuración",
-      url: "/settings",
-      icon: <Settings2Icon />,
-    },
-  ],
-  navPlatform: [
-    {
-      title: "Resumen",
-      url: "/platform",
-      icon: <LayoutDashboardIcon />,
-    },
-    {
-      title: "Planes",
-      url: "/plans",
-      icon: <BadgeDollarSignIcon />,
-    },
-    {
-      title: "Suscripciones",
-      url: "/subscriptions",
-      icon: <StoreIcon />,
-    },
-    {
-      title: "Usuarios",
-      url: "/users",
-      icon: <UsersIcon />,
-    },
-  ],
+/** Convierte la definición compartida en items con el icono ya renderizado. */
+function withIcons(items: NavItem[]) {
+  return items.map((item) => {
+    const Icon = item.icon
+
+    return { ...item, icon: <Icon /> }
+  })
 }
+
+const navService = withIcons(SERVICE_NAV)
+const navApplication = withIcons(APPLICATION_NAV)
+const navPlatform = withIcons(PLATFORM_NAV)
+const navSecondaryBase = withIcons([SETTINGS_NAV])
 
 export function AppSidebar({
   user,
@@ -172,7 +82,7 @@ export function AppSidebar({
             },
           ]
         : []),
-      ...data.navSecondary,
+      ...navSecondaryBase,
     ],
     [isAdmin]
   )
@@ -203,7 +113,7 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {isPlatformAdmin ? (
-          <NavMain items={data.navPlatform} label="Plataforma" />
+          <NavMain items={navPlatform} label="Plataforma" />
         ) : (
           <>
             {branches.length > 1 ? (
@@ -221,9 +131,9 @@ export function AppSidebar({
                 <SidebarSeparator />
               </>
             ) : null}
-            <NavMain items={data.navService} label="Servicio" />
+            <NavMain items={navService} label="Servicio" />
             <SidebarSeparator />
-            <NavMain items={data.navApplication} label="Aplicación" />
+            <NavMain items={navApplication} label="Aplicación" />
             <NavSecondary items={navSecondary} className="mt-auto" />
           </>
         )}

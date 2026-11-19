@@ -68,7 +68,7 @@ export function SettingsTabs({
     >
       <TabsList
         aria-label="Secciones de configuración"
-        className="max-w-full flex-wrap"
+        className="max-w-full"
       >
         <TabsTrigger value="account">
           <UserIcon className="size-4" />

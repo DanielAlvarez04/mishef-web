@@ -31,7 +31,7 @@ export function CashReport({
   return (
     <div className="flex flex-col gap-4">
       {charges?.totals ? (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
           <Metric label="Ventas confirmadas" value={money(charges.totals.total)} />
           <Metric label="Propinas" value={money(charges.totals.tips)} />
           <Metric

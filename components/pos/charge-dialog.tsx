@@ -1488,7 +1488,10 @@ export function ChargeDialog({
           onClose()
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent
+          mobile="full"
+          className="max-h-[92dvh] overflow-y-auto sm:max-w-lg"
+        >
         <DialogHeader>
           <DialogTitle>Cobrar · {orderLabel(order)}</DialogTitle>
           <DialogDescription>
@@ -1510,7 +1513,9 @@ export function ChargeDialog({
           <div
             className={cn(
               "grid gap-2",
-              reviewGuests.length > 1 ? "grid-cols-3" : "grid-cols-2"
+              reviewGuests.length > 1
+                ? "grid-cols-2 min-[480px]:grid-cols-3"
+                : "grid-cols-2"
             )}
           >
             <Button
@@ -1548,6 +1553,7 @@ export function ChargeDialog({
               variant="outline"
               className={cn(
                 "border",
+                reviewGuests.length > 1 && "col-span-2 min-[480px]:col-span-1",
                 viewMode === "EQUAL"
                   ? "border-chart-2/60 bg-chart-2/10 text-chart-2 hover:bg-chart-2/20 hover:text-chart-2"
                   : "border-muted-foreground/30 text-muted-foreground hover:bg-muted/50 hover:text-foreground"
@@ -2269,7 +2275,7 @@ export function ChargeDialog({
               ) : null}
 
               {method === "CASH" ? (
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-3">
                   <div className="flex flex-col gap-2">
                     <Label htmlFor="payment-amount">Importe</Label>
                     <Input
@@ -2293,7 +2299,7 @@ export function ChargeDialog({
                       placeholder="Opcional"
                     />
                   </div>
-                  <div className="flex flex-col gap-2">
+                  <div className="col-span-2 flex flex-col gap-2 min-[420px]:col-span-1">
                     <Label>Cambio</Label>
                     <div className="flex h-9 items-center rounded-md border border-input px-3 text-sm tabular-nums">
                       {cashInput
@@ -2440,7 +2446,7 @@ export function ChargeDialog({
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 gap-2 min-[420px]:grid-cols-4">
                   {[0, 10, 15, 20].map((percent) => {
                     const suggested =
                       percent === 0
@@ -2548,7 +2554,7 @@ export function ChargeDialog({
           ) : null}
         </div>
 
-        <DialogFooter className="flex-col gap-2 sm:flex-row sm:justify-between">
+        <DialogFooter className="sticky bottom-0 z-10 flex-col gap-2 sm:flex-row sm:justify-between">
           <Button
             type="button"
             variant="outline"

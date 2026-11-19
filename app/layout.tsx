@@ -36,6 +36,8 @@ export const viewport: Viewport = {
   themeColor: "#e2703a",
   width: "device-width",
   initialScale: 1,
+  // La barra inferior usa `env(safe-area-inset-bottom)` en iPhone/PWA.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -60,7 +62,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <ThemeShortcut />
             <TooltipProvider>
               {children}
-              <Toaster position="bottom-right" />
+              <Toaster
+                position="bottom-right"
+                offset={{ bottom: 80, right: 12 }}
+              />
             </TooltipProvider>
           </KeyboardShortcutsProvider>
         </ThemeProvider>

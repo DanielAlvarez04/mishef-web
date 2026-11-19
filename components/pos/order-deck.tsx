@@ -10,7 +10,7 @@ const SWIPE_THRESHOLD_PX = 64
 /** Distancia mínima para considerar que el gesto es horizontal. */
 const SWIPE_START_PX = 8
 /** Solo debajo de este ancho (el mismo corte que usa la rejilla del POS). */
-const MOBILE_QUERY = "(max-width: 1023px)"
+const MOBILE_QUERY = "(max-width: 1279px)"
 
 /**
  * Devuelve el id de la comanda vecina o `null` si no hay movimiento.

@@ -323,6 +323,7 @@ export function BulkIngredientsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        mobile="full"
         className="flex max-h-[90dvh] flex-col gap-3 sm:w-[90rem] sm:max-w-[calc(100%-2rem)]"
         showCloseButton={!pending}
       >

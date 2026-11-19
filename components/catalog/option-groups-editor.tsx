@@ -1415,7 +1415,7 @@ function SortableGroupCard({
               items={group.values.map((item) => item.key)}
               strategy={rectSortingStrategy}
             >
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 {group.values.map((item, index) => (
                   <SortableOptionValue
                     key={item.key}
@@ -1492,129 +1492,132 @@ function SortableOptionValue({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex flex-col gap-1",
+        "overflow-hidden rounded-md border border-border",
         isDragging && "relative z-10 opacity-70"
       )}
     >
-      <div className="flex min-h-8 min-w-0 items-center gap-1.5 rounded-md border border-border px-2 py-0.5">
-      <div className="flex shrink-0 items-center">
-        <span className="w-3 text-right text-[10px] text-muted-foreground tabular-nums">
-          {index + 1}
+      <div className="flex min-h-8 min-w-0 items-center gap-1.5 px-2 py-0.5">
+        <div className="flex shrink-0 items-center">
+          <span className="w-3 text-right text-[10px] text-muted-foreground tabular-nums">
+            {index + 1}
+          </span>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Reordenar ${item.name}`}
+            className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
+            disabled={disabled}
+            {...attributes}
+            {...listeners}
+          >
+            <GripVerticalIcon />
+          </Button>
+        </div>
+
+        <Checkbox
+          checked={item.isActive}
+          disabled={disabled || item.libraryInactive}
+          title={
+            item.libraryInactive
+              ? "Opción desactivada en la biblioteca del negocio"
+              : undefined
+          }
+          onCheckedChange={(checked) =>
+            onUpdateValue({ isActive: Boolean(checked) })
+          }
+          aria-label={`Mostrar ${item.name} en la comanda`}
+        />
+
+        <span className="min-w-0 flex-1 truncate text-sm" title={item.name}>
+          {item.name}
+          {item.libraryInactive ? (
+            <span className="ml-1 text-[10px] text-muted-foreground">
+              (desactivada)
+            </span>
+          ) : null}
         </span>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Reordenar ${item.name}`}
-          className="shrink-0 cursor-grab touch-none text-muted-foreground active:cursor-grabbing"
-          disabled={disabled}
-          {...attributes}
-          {...listeners}
-        >
-          <GripVerticalIcon />
-        </Button>
-      </div>
-
-      <Checkbox
-        checked={item.isActive}
-        disabled={disabled || item.libraryInactive}
-        title={
-          item.libraryInactive
-            ? "Opción desactivada en la biblioteca del negocio"
-            : undefined
-        }
-        onCheckedChange={(checked) =>
-          onUpdateValue({ isActive: Boolean(checked) })
-        }
-        aria-label={`Mostrar ${item.name} en la comanda`}
-      />
-
-      <span className="min-w-0 flex-1 truncate text-sm" title={item.name}>
-        {item.name}
-        {item.libraryInactive ? (
-          <span className="ml-1 text-[10px] text-muted-foreground">
-            (desactivada)
-          </span>
+        {ingredients && effectsEnabled && !noPrice ? (
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Efectos de receta"
+                  disabled={disabled}
+                  className={cn(
+                    "shrink-0",
+                    item.effects.length > 0
+                      ? "text-chart-2"
+                      : "text-muted-foreground"
+                  )}
+                />
+              }
+            >
+              <BlenderIcon />
+              {item.effects.length > 0 ? (
+                <span className="text-[10px]">{item.effects.length}</span>
+              ) : null}
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              className="w-[40rem] max-w-[calc(100vw-2rem)] p-3"
+            >
+              <OptionValueEffects
+                effects={item.effects}
+                priceDelta={item.priceDelta}
+                ingredients={ingredients}
+                taxRate={taxRate}
+                disabled={disabled}
+                onChange={(effects) => onUpdateValue({ effects })}
+              />
+            </PopoverContent>
+          </Popover>
         ) : null}
-      </span>
+
+        {item.valueId ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Quitar ${item.name}`}
+            disabled={disabled}
+            className="shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onRemove}
+          >
+            <Trash2Icon />
+          </Button>
+        )}
+      </div>
 
       {noPrice ? null : (
-        <div className="flex h-7 w-28 shrink-0 items-center gap-1 border-l pl-2">
-          <span className="text-xs text-muted-foreground">
-            <span className="font-bold">+</span>$
-          </span>
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={item.priceDelta}
-            placeholder="0"
-            disabled={disabled}
-            className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-sm shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
-            aria-label={`Cargo de ${item.name}`}
-            onChange={(event) =>
-              onUpdateValue({ priceDelta: event.target.value })
-            }
-          />
-          <span className="text-xs text-muted-foreground">{currency}</span>
+        <div className="flex items-center gap-2 border-t px-2 py-1.5">
+          <span className="text-[11px] text-muted-foreground">Cargo</span>
+          <div className="ml-auto flex h-7 w-32 items-center gap-1">
+            <span className="text-xs text-muted-foreground">
+              <span className="font-bold">+</span>$
+            </span>
+            <Input
+              type="number"
+              min={0}
+              step="0.01"
+              value={item.priceDelta}
+              placeholder="0"
+              disabled={disabled}
+              className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 text-right text-sm shadow-none ring-0 focus-visible:border-0 focus-visible:ring-0 dark:bg-transparent"
+              aria-label={`Cargo de ${item.name}`}
+              onChange={(event) =>
+                onUpdateValue({ priceDelta: event.target.value })
+              }
+            />
+            <span className="text-xs text-muted-foreground">{currency}</span>
+          </div>
         </div>
       )}
-
-      {ingredients && effectsEnabled && !noPrice ? (
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                aria-label="Efectos de receta"
-                disabled={disabled}
-                className={cn(
-                  "shrink-0",
-                  item.effects.length > 0
-                    ? "text-chart-2"
-                    : "text-muted-foreground"
-                )}
-              />
-            }
-          >
-            <BlenderIcon />
-            {item.effects.length > 0 ? (
-              <span className="text-[10px]">{item.effects.length}</span>
-            ) : null}
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-[40rem] max-w-[calc(100vw-2rem)] p-3"
-          >
-            <OptionValueEffects
-              effects={item.effects}
-              priceDelta={item.priceDelta}
-              ingredients={ingredients}
-              taxRate={taxRate}
-              disabled={disabled}
-              onChange={(effects) => onUpdateValue({ effects })}
-            />
-          </PopoverContent>
-        </Popover>
-      ) : null}
-
-      {item.valueId ? null : (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Quitar ${item.name}`}
-          disabled={disabled}
-          className="shrink-0 text-muted-foreground hover:text-destructive"
-          onClick={onRemove}
-        >
-          <Trash2Icon />
-        </Button>
-      )}
-      </div>
     </div>
   )
 }

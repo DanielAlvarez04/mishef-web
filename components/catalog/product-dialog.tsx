@@ -2185,8 +2185,11 @@ export function ProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-hidden p-0! sm:max-w-3xl">
-        <div className="scroll-fade-y no-scrollbar max-h-[90vh] overflow-y-auto p-6">
+      <DialogContent
+        mobile="full"
+        className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0! sm:max-w-3xl"
+      >
+        <div className="scroll-fade-y no-scrollbar min-h-0 flex-1 overflow-y-auto p-6">
           <div className="grid gap-6">
         <DialogHeader>
           <DialogTitle>{dialogTitle}</DialogTitle>
@@ -2196,16 +2199,7 @@ export function ProductDialog({
         <div className="flex flex-col gap-4">
           {/* Grupo superior: imagen a la izquierda; chip, nombre, precio y categoría. */}
           <div className="grid gap-4 sm:grid-cols-[minmax(0,16rem)_minmax(0,1fr)]">
-            <ImageDropzone
-              url={image?.url ?? null}
-              assets={image?.kind === "existing" ? image.assets : null}
-              onSelect={handleSelectImage}
-              onRemove={handleRemoveImage}
-              disabled={form.pending}
-            />
-
-            <div className="flex flex-col gap-3">
-              <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2">
+            <fieldset className="min-w-0 rounded-lg border border-dashed px-2 pt-1 pb-2 sm:col-start-2 sm:row-start-1">
                 <legend className="px-1 text-[10px] font-medium text-muted-foreground">
                   Guardar como
                 </legend>
@@ -2251,6 +2245,17 @@ export function ProductDialog({
                 </div>
               </fieldset>
 
+            <div className="h-56 sm:col-start-1 sm:row-span-2 sm:row-start-1 sm:h-full">
+  <ImageDropzone
+                url={image?.url ?? null}
+                assets={image?.kind === "existing" ? image.assets : null}
+                onSelect={handleSelectImage}
+                onRemove={handleRemoveImage}
+                disabled={form.pending}
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 sm:col-start-2 sm:row-start-2">
               <Field
                 data-invalid={invalidFields.has("name") ? "true" : undefined}
               >
@@ -2839,28 +2844,6 @@ export function ProductDialog({
           {form.error ? <FieldError>{form.error}</FieldError> : null}
         </div>
 
-        <DialogFooter>
-          {isNew ? (
-            <ClearFieldsButton
-              onClick={handleClear}
-              disabled={form.pending}
-              className="sm:mr-auto"
-            />
-          ) : null}
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={form.pending}
-          >
-            Cancelar
-          </Button>
-          <Button type="button" onClick={save} disabled={form.pending}>
-            {form.pending ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
-            {saveLabel}
-          </Button>
-        </DialogFooter>
-
         <AlertDialog
           open={confirmDisableVariants}
           onOpenChange={setConfirmDisableVariants}
@@ -2951,6 +2934,28 @@ export function ProductDialog({
         </AlertDialog>
           </div>
         </div>
+
+        <DialogFooter className="mx-0 mb-0 shrink-0 rounded-none">
+          {isNew ? (
+            <ClearFieldsButton
+              onClick={handleClear}
+              disabled={form.pending}
+              className="sm:mr-auto"
+            />
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={form.pending}
+          >
+            Cancelar
+          </Button>
+          <Button type="button" onClick={save} disabled={form.pending}>
+            {form.pending ? <Loader2Icon className="animate-spin" /> : <SaveIcon />}
+            {saveLabel}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )

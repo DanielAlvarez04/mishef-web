@@ -31,6 +31,7 @@ import { CombosTable } from "@/components/catalog/combos-table"
 import { ImportDialog } from "@/components/catalog/import-dialog"
 import { ProduceDialog } from "@/components/catalog/produce-dialog"
 import { RecipesTable } from "@/components/catalog/recipes-table"
+import { usePersistentBoolean } from "@/hooks/use-persistent-boolean"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import { usePersistentViewMode } from "@/hooks/use-persistent-view-mode"
 import {
@@ -117,7 +118,7 @@ export function CatalogClient({
   // El modo de vista se comparte entre Artículos y Recetas y se persiste entre
   // recargas para no tener que cambiarlo manualmente cada vez.
   const [viewMode, setViewMode] = usePersistentViewMode()
-  const [showKpis, setShowKpis] = useState(true)
+  const [showKpis, setShowKpis] = usePersistentBoolean("catalog-show-kpis")
   const [dialogOpen, setDialogOpen] = useState(false)
   const [initialSaveAs, setInitialSaveAs] =
     useState<ProductSaveAs>("article")

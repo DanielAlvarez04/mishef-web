@@ -152,7 +152,7 @@ export default async function PlatformPage() {
         </div>
       </div>
 
-      <div className="grid gap-3 @xl/main:grid-cols-2 @3xl/main:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 @3xl/main:grid-cols-4">
         <Card size="sm">
           <CardHeader className="pb-2">
             <CardDescription className="flex items-center gap-1.5">

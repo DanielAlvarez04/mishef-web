@@ -13,6 +13,7 @@ import { listIngredientCategories, listIngredientLocations } from "@/app/(app)/i
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
+import { usePersistentBoolean } from "@/hooks/use-persistent-boolean"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   type Category,
@@ -46,7 +47,7 @@ export function InventoryClient({
   articleCategories,
 }: InventoryClientProps) {
   const [branch] = useState<Branch | null>(initialBranch)
-  const [showKpis, setShowKpis] = useState(true)
+  const [showKpis, setShowKpis] = usePersistentBoolean("inventory-show-kpis")
   const [tab, setTab] = usePersistentTab(
     "inventory-tab",
     INVENTORY_TABS,

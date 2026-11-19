@@ -73,7 +73,7 @@ export function ImportDialog({
         }
       }}
     >
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent mobile="full" className="max-h-[92dvh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Importar artículos desde CSV</DialogTitle>
           <DialogDescription>
