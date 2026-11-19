@@ -151,6 +151,24 @@ function mercadoPagoNotice(
         message:
           "Mercado Pago rechazó la autorización. Revisa las credenciales de la aplicación.",
       }
+    case "error_exchange_invalid_grant":
+      return {
+        tone: "error",
+        message:
+          "El código de autorización expiró o se usó dos veces. Vuelve a intentar la conexión.",
+      }
+    case "error_exchange_invalid_client":
+      return {
+        tone: "error",
+        message:
+          "El Client ID y el Client Secret no corresponden a la misma aplicación. Revisa las credenciales en Mercado Pago.",
+      }
+    case "error_exchange_invalid_scope":
+      return {
+        tone: "error",
+        message:
+          "La aplicación no tiene los permisos necesarios. Revisa los productos y permisos en Mercado Pago.",
+      }
     case "error_account":
       return {
         tone: "error",
