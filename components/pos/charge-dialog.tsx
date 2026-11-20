@@ -86,6 +86,7 @@ import {
   type PointPayment,
 } from "@/lib/mercadopago-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
+import { supportsTerminalTips } from "@/lib/mercadopago"
 import { cn } from "@/lib/utils"
 
 const PROVIDER_DETAIL_LABELS: Record<string, string> = {
@@ -909,9 +910,14 @@ export function ChargeDialog({
       "Cuenta cerrada"
     )
 
-  const terminalLabel =
-    mercadoPago.terminals.find((terminal) => terminal.id === terminalId)
-      ?.name ?? "Terminal Point"
+  const selectedTerminal =
+    mercadoPago.terminals.find((terminal) => terminal.id === terminalId) ??
+    mercadoPago.terminals[0] ??
+    null
+  const terminalLabel = selectedTerminal?.name ?? "Terminal Point"
+  const terminalTipSupport =
+    selectedTerminal?.supportsTips ??
+    supportsTerminalTips(selectedTerminal?.model ?? null)
 
   /**
    * Aplica al estado local un cobro confirmado por la terminal.
@@ -2186,8 +2192,12 @@ export function ChargeDialog({
                   {money(saleAmount)} · {terminalLabel}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  El importe no incluye propina. El cliente la elige en la
-                  terminal después de presentar la tarjeta.
+                  El importe no incluye propina.{" "}
+                  {terminalTipSupport === true
+                    ? "El cliente la elige en la terminal después de presentar la tarjeta."
+                    : terminalTipSupport === false
+                      ? "Esta terminal no captura propina; el cobro se registra solo por la venta."
+                      : "Solo Point Smart 2 captura propina. Si tu terminal es Smart 1, el monto será $0."}
                 </p>
               </div>
             )
@@ -2248,7 +2258,8 @@ export function ChargeDialog({
                         Terminal Point
                       </span>
                       <span className="mt-1 block text-xs text-muted-foreground">
-                        El cliente paga y deja propina en la terminal.
+                        El cliente paga en la terminal. Solo Point Smart 2
+                        captura propina.
                       </span>
                     </button>
                     <button
@@ -2408,8 +2419,17 @@ export function ChargeDialog({
               <div className="flex flex-col gap-3 rounded-lg border p-4">
                 <div className="flex items-center gap-2 text-sm font-medium">
                   <SmartphoneIcon className="size-4 text-primary" />
-                  Propina capturada en la terminal
+                  {terminalTipSupport === false
+                    ? "Esta terminal no captura propina"
+                    : "Propina capturada en la terminal"}
                 </div>
+                {terminalTipSupport !== true ? (
+                  <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-300">
+                    {terminalTipSupport === false
+                      ? "Point Smart 1 y Point Air 2 no permiten propina desde la terminal. El cobro se registra únicamente por la venta."
+                      : "No has indicado el modelo de la terminal. Solo Point Smart 2 captura propina; si es Smart 1, el monto será $0. Puedes configurarlo en Configuración → Pagos."}
+                  </p>
+                ) : null}
                 {pointPayment?.status === "CONFIRMED" ? (
                   <>
                     {pointSplitLabel ? (
@@ -2434,7 +2454,9 @@ export function ChargeDialog({
                     <p className="text-xs text-muted-foreground">
                       {pointTip > 0
                         ? "La propina la eligió el cliente en la terminal Point."
-                        : "El cliente no dejó propina en la terminal."}
+                        : terminalTipSupport === false
+                          ? "Esta terminal no captura propina."
+                          : "El cliente no dejó propina en la terminal."}
                     </p>
                   </>
                 ) : (

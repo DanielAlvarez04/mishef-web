@@ -53,10 +53,10 @@ export function SiteHeader({
   return (
     <header className="flex h-[calc(var(--header-height)+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b bg-card pt-[env(safe-area-inset-top)] transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[calc(var(--header-height)+env(safe-area-inset-top))]">
       <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-        <SidebarTrigger className="-ml-1" />
+        <SidebarTrigger className="-ml-1 hidden lg:inline-flex" />
         <Separator
           orientation="vertical"
-          className="mx-2 h-4 self-center!"
+          className="mx-2 hidden h-4 self-center! lg:block"
         />
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">

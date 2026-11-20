@@ -14,6 +14,7 @@ import {
 
 export function NavSecondary({
   items,
+  onNavigate,
   ...props
 }: {
   items: {
@@ -21,6 +22,8 @@ export function NavSecondary({
     url: string
     icon: React.ReactNode
   }[]
+  /** Cierra el Sheet móvil al elegir una página. */
+  onNavigate?: () => void
 } & React.ComponentPropsWithoutRef<typeof SidebarGroup>) {
   const pathname = usePathname()
 
@@ -35,7 +38,7 @@ export function NavSecondary({
                 isActive={
                   pathname === item.url || pathname.startsWith(`${item.url}/`)
                 }
-                render={<Link href={item.url} />}
+                render={<Link href={item.url} onClick={onNavigate} />}
               >
                 {item.icon}
                 <span>{item.title}</span>

@@ -10,7 +10,6 @@ import {
   Maximize2Icon,
   Minimize2Icon,
   RefreshCwIcon,
-  SlidersHorizontalIcon,
   SparklesIcon,
   TimerIcon,
   WifiIcon,
@@ -20,14 +19,6 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
@@ -367,7 +358,7 @@ export function KitchenView({
               ) : (
                 <WifiOffIcon data-icon="inline-start" />
               )}
-              <span className="hidden sm:inline">
+              <span>
                 {connected ? "Tiempo real" : "Sondeo cada 15 s"}
               </span>
             </Badge>
@@ -375,7 +366,6 @@ export function KitchenView({
               variant={suggested ? "secondary" : "outline"}
               size="sm"
               aria-pressed={suggested}
-              className="hidden sm:inline-flex"
               title={
                 suggested
                   ? "Ordenando por urgencia; cambia a orden de llegada"
@@ -390,7 +380,6 @@ export function KitchenView({
               variant={onlyDelayed ? "secondary" : "outline"}
               size="sm"
               aria-pressed={onlyDelayed}
-              className="hidden sm:inline-flex"
               onClick={() => setOnlyDelayed((value) => !value)}
             >
               <TimerIcon />
@@ -400,51 +389,12 @@ export function KitchenView({
               variant="outline"
               size="sm"
               aria-pressed={sound}
-              className="hidden sm:inline-flex"
               onClick={() => setSound((value) => !value)}
               title={sound ? "Silenciar avisos" : "Activar avisos"}
             >
               {sound ? <BellIcon /> : <BellOffIcon />}
               {sound ? "Sonido" : "Silencio"}
             </Button>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="outline"
-                    size="icon-sm"
-                    className="sm:hidden"
-                    aria-label="Filtros de cocina"
-                  />
-                }
-              >
-                <SlidersHorizontalIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Vista de cocina</DropdownMenuLabel>
-                  <DropdownMenuCheckboxItem
-                    checked={suggested}
-                    onCheckedChange={(checked) => setSuggested(checked)}
-                  >
-                    Orden sugerido
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={onlyDelayed}
-                    onCheckedChange={(checked) => setOnlyDelayed(checked)}
-                  >
-                    Solo demoradas
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuCheckboxItem
-                    checked={sound}
-                    onCheckedChange={(checked) => setSound(checked)}
-                  >
-                    Aviso sonoro
-                  </DropdownMenuCheckboxItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
 
             <Button
               variant="outline"
@@ -466,7 +416,7 @@ export function KitchenView({
               aria-label="Actualizar"
             >
               <RefreshCwIcon />
-              <span className="hidden sm:inline">Actualizar</span>
+              Actualizar
             </Button>
           </>
         }
@@ -644,6 +594,7 @@ export function KitchenView({
                             <Badge
                               variant={delayed ? "destructive" : "secondary"}
                               title={`Tiempo en la etapa actual (${ROUND_STATUS_LABELS[round.status]})`}
+                              suppressHydrationWarning
                             >
                               {formatDuration(stageMinutes)}
                             </Badge>

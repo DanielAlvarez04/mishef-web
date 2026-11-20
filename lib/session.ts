@@ -40,6 +40,11 @@ export interface SessionUser {
   organizationPracticeActive: boolean
   /** Fin automático del modo práctica; `null` = manual o inactivo. */
   organizationPracticeUntil: string | null
+  /**
+   * Datos del superadmin que abrió la sesión de soporte. `null` en una sesión
+   * normal. Mientras exista, la app está en solo lectura.
+   */
+  impersonation: { byId: string; byName: string | null } | null
 }
 
 interface MeResponse {
@@ -70,6 +75,7 @@ interface MeResponse {
     practiceActive?: boolean | null
     practiceUntil?: string | null
   } | null
+  impersonation?: { byId: string; byName: string | null } | null
 }
 
 /**
@@ -115,6 +121,7 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       organizationPracticeMode: data.organization?.practiceMode ?? false,
       organizationPracticeActive: data.organization?.practiceActive ?? false,
       organizationPracticeUntil: data.organization?.practiceUntil ?? null,
+      impersonation: data.impersonation ?? null,
     }
   } catch {
     return null

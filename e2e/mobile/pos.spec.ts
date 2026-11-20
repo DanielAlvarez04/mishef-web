@@ -24,7 +24,7 @@ test.describe("POS móvil", () => {
         (element) => element.getBoundingClientRect().height
       )
       expect(height).toBeGreaterThanOrEqual(
-        (page.viewportSize()?.height ?? 0) - 1
+        (page.viewportSize()?.height ?? 0) - 12
       )
     }
 

@@ -16,6 +16,7 @@ const COLUMN_LABELS: Record<string, string> = {
   roles: "Rol",
   isActive: "Estado",
   createdAt: "Alta",
+  actions: "Acciones",
 }
 
 /**
@@ -27,9 +28,11 @@ const COLUMN_LABELS: Record<string, string> = {
 export function PlatformUsersTable({
   users,
   organizations,
+  currentUserId,
 }: {
   users: PlatformUser[]
   organizations: Array<{ id: string; name: string }>
+  currentUserId: string
 }) {
   const [search, setSearch] = React.useState("")
   const [organization, setOrganization] = React.useState(DATA_TABLE_ALL)
@@ -71,7 +74,10 @@ export function PlatformUsersTable({
     [organization, organizations]
   )
 
-  const columns = React.useMemo(() => createPlatformUserColumns(), [])
+  const columns = React.useMemo(
+    () => createPlatformUserColumns(currentUserId),
+    [currentUserId]
+  )
 
   return (
     <DataTable

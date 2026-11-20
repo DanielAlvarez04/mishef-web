@@ -14,6 +14,12 @@ const SERVER_API_URL = process.env.API_URL ?? API_BASE_URL
 export const BRANCH_COOKIE = "np_branch"
 
 /**
+ * Cookie de la sesión de soporte (superadmin viendo la app como otro usuario).
+ * Convive con `np_at`; la API le da prioridad mientras exista.
+ */
+export const IMPERSONATION_COOKIE = "np_imp"
+
+/**
  * Rechaza cualquier intento de cachear una respuesta autenticada.
  *
  * La clave de caché de Next incluye la URL y las cabeceras, así que hoy no

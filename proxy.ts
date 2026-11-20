@@ -2,11 +2,18 @@ import { NextResponse, type NextRequest } from "next/server"
 
 const ACCESS_TOKEN_COOKIE = "np_at"
 const REFRESH_TOKEN_COOKIE = "np_rt"
+/** Sesión de soporte del superadmin; tiene prioridad sobre `np_at` en la API. */
+const IMPERSONATION_COOKIE = "np_imp"
 /** Evita que varias peticiones renueven la sesión a la vez. */
 const REFRESH_LOCK_COOKIE = "np_rl"
 /** Se renueva el access token cuando le quedan menos de 2 minutos. */
 const REFRESH_LEEWAY_MS = 2 * 60 * 1000
+/** Tiempo que se comparte el resultado de un refresh entre peticiones. */
+const REFRESH_FLIGHT_RETENTION_MS = 10_000
 const RETRY_PARAM = "_session_retry"
+
+/** Debe coincidir con el `COOKIE_DOMAIN` de la API para borrar `np_imp`. */
+const COOKIE_DOMAIN = process.env.COOKIE_DOMAIN?.trim() || undefined
 
 const PUBLIC_PATHS = [
   "/login",
@@ -249,6 +256,19 @@ function pass(request: NextRequest, headers?: Headers): NextResponse {
   return NextResponse.next({ request: { headers: next } });
 }
 
+function clearImpersonationCookie(response: NextResponse): NextResponse {
+  response.cookies.set(IMPERSONATION_COOKIE, "", {
+    path: "/",
+    maxAge: 0,
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  })
+
+  return response
+}
+
 function redirectToLogin(request: NextRequest): NextResponse {
   // Una caja vinculada por QR entra con PIN en lugar de contraseña.
   const hasDevice = Boolean(request.cookies.get("np_pos_device")?.value)
@@ -257,6 +277,7 @@ function redirectToLogin(request: NextRequest): NextResponse {
   )
   response.cookies.delete(ACCESS_TOKEN_COOKIE)
   response.cookies.delete(REFRESH_TOKEN_COOKIE)
+  clearImpersonationCookie(response)
   return response
 }
 
@@ -272,10 +293,13 @@ interface RefreshResult {
  * solo por la fecha `exp`, el layout vuelve a /login y se produce un bucle
  * ERR_TOO_MANY_REDIRECTS. Se valida contra la API.
  */
-async function accessTokenIsValid(accessToken: string): Promise<boolean> {
+async function accessTokenIsValid(
+  accessToken: string,
+  cookieName = ACCESS_TOKEN_COOKIE
+): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/me`, {
-      headers: { cookie: `${ACCESS_TOKEN_COOKIE}=${accessToken}` },
+      headers: { cookie: `${cookieName}=${accessToken}` },
       cache: "no-store",
     })
 
@@ -307,6 +331,55 @@ async function refreshSession(refreshToken: string): Promise<RefreshResult> {
   }
 }
 
+interface RefreshFlight {
+  promise: Promise<RefreshResult>
+  settledAt: number | null
+}
+
+/**
+ * Single-flight del refresh dentro del proceso.
+ *
+ * El lock por cookie no alcanza a las peticiones que ya salieron con el token
+ * viejo (varios prefetch, RSC y acciones a la vez). Compartir la misma promesa
+ * evita que dos peticiones pidan rotar el mismo refresh token y que una de
+ * ellas termine en /login.
+ */
+const refreshFlights = new Map<string, RefreshFlight>()
+
+function refreshSessionOnce(refreshToken: string): Promise<RefreshResult> {
+  const now = Date.now()
+  const current = refreshFlights.get(refreshToken)
+
+  if (
+    current &&
+    (current.settledAt === null ||
+      now - current.settledAt < REFRESH_FLIGHT_RETENTION_MS)
+  ) {
+    return current.promise
+  }
+
+  const flight: RefreshFlight = {
+    promise: refreshSession(refreshToken),
+    settledAt: null,
+  }
+  refreshFlights.set(refreshToken, flight)
+
+  const settle = () => {
+    flight.settledAt = Date.now()
+
+    setTimeout(() => {
+      if (refreshFlights.get(refreshToken) === flight) {
+        refreshFlights.delete(refreshToken)
+      }
+    }, REFRESH_FLIGHT_RETENTION_MS)
+  }
+
+  // `then` con dos callbacks evita una promesa rechazada sin manejar.
+  void flight.promise.then(settle, settle)
+
+  return flight.promise
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
@@ -321,6 +394,46 @@ export async function proxy(request: NextRequest) {
 
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE)?.value
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE)?.value
+  const impersonationToken = request.cookies.get(IMPERSONATION_COOKIE)?.value
+
+  const isPublic = PUBLIC_PATHS.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  )
+
+  // La pantalla del cliente se abre en un monitor sin sesión y nunca debe
+  // redirigirse al panel.
+  if (pathname.startsWith("/display")) {
+    return pass(request)
+  }
+
+  /**
+   * Sesión de soporte: manda sobre la del superadmin mientras exista.
+   *
+   * No se renueva (no tiene refresh): al caducar se borra `np_imp` y se vuelve
+   * al panel de plataforma con la sesión original, que nunca se tocó.
+   */
+  if (impersonationToken) {
+    if (isJwtExpired(impersonationToken)) {
+      const response = NextResponse.redirect(
+        new URL(accessToken ? "/users" : "/login", request.url)
+      )
+      return clearImpersonationCookie(response)
+    }
+
+    // En una ruta pública se comprueba contra la API para no dejar el
+    // formulario de login activo con una sesión de soporte vigente.
+    if (isPublic) {
+      if (
+        await accessTokenIsValid(impersonationToken, IMPERSONATION_COOKIE)
+      ) {
+        return NextResponse.redirect(new URL("/dashboard", request.url))
+      }
+
+      return clearImpersonationCookie(pass(request))
+    }
+
+    return pass(request)
+  }
 
   // Dentro del subdominio de un negocio (o de su dominio propio) no se ofrece
   // crear otra cuenta: el registro vive solo en el dominio principal.
@@ -334,17 +447,7 @@ export async function proxy(request: NextRequest) {
   // Rutas públicas: si hay una sesión válida se entra directo al dashboard;
   // si el token está vigente pero la sesión ya no existe, se limpian las
   // cookies y se deja ver el formulario (evita el bucle de redirecciones).
-  const isPublic = PUBLIC_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
-  )
-
   if (isPublic) {
-    // La pantalla del cliente se abre en un monitor sin sesión y nunca debe
-    // redirigirse al panel.
-    if (pathname.startsWith("/display")) {
-      return pass(request)
-    }
-
     if (!accessToken || isJwtExpired(accessToken)) {
       return pass(request)
     }
@@ -389,7 +492,7 @@ export async function proxy(request: NextRequest) {
   }
 
   try {
-    const result = await refreshSession(refreshToken)
+    const result = await refreshSessionOnce(refreshToken)
 
     if (result.ok) {
       return lockRefresh(withSessionCookies(request, result.setCookies))
@@ -397,22 +500,23 @@ export async function proxy(request: NextRequest) {
 
     // Otra pestaña ganó la rotación hace un instante. En una navegación se
     // reintenta con las cookies que el navegador ya recibió; en una mutación se
-    // deja pasar para no repetir la acción (el servidor devolverá el error).
-    if (
-      result.rotatedElsewhere &&
-      request.method === "GET" &&
-      !request.nextUrl.searchParams.has(RETRY_PARAM)
-    ) {
-      const retry = request.nextUrl.clone()
-      retry.searchParams.set(RETRY_PARAM, "1")
-      return NextResponse.redirect(retry)
-    }
-  } catch {
-    // Sin conexión con la API: si el access token aún es válido seguimos; si no,
-    // el usuario tendrá que volver a entrar.
-    if (accessToken && !isJwtExpired(accessToken)) {
+    // deja pasar para no repetir la acción ni cerrar la sesión.
+    if (result.rotatedElsewhere) {
+      if (
+        request.method === "GET" &&
+        !request.nextUrl.searchParams.has(RETRY_PARAM)
+      ) {
+        const retry = request.nextUrl.clone()
+        retry.searchParams.set(RETRY_PARAM, "1")
+        return NextResponse.redirect(retry)
+      }
+
       return pass(request)
     }
+  } catch {
+    // Sin conexión con la API: no se borran las cookies. Es preferible mostrar
+    // un error temporal a cerrar una sesión que sigue siendo válida.
+    return pass(request)
   }
 
   return redirectToLogin(request)

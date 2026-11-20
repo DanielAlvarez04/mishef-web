@@ -1,12 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, type ReactNode } from "react"
 import {
   CheckCircle2Icon,
+  CopyIcon,
   CreditCardIcon,
   InfoIcon,
   RefreshCwIcon,
+  TriangleAlertIcon,
   UnplugIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -50,8 +52,13 @@ import { useActionForm } from "@/hooks/use-action-form"
 import type { Branch } from "@/lib/branches"
 import {
   MERCADO_PAGO_OPERATING_MODES,
+  MERCADO_PAGO_TERMINAL_MODEL_OPTIONS,
+  MERCADO_PAGO_TERMINAL_MODELS,
+  isPdvTerminal,
+  supportsTerminalTips,
   type MercadoPagoStatus,
   type MercadoPagoTerminal,
+  type MercadoPagoTerminalModel,
 } from "@/lib/mercadopago"
 import { cn } from "cn"
 
@@ -76,6 +83,48 @@ function Definition({ label, value }: { label: string; value: string }) {
   )
 }
 
+function DiagnosticItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="truncate font-mono" title={value}>
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+function TerminalNotice({
+  tone,
+  children,
+}: {
+  tone: "info" | "warning" | "destructive"
+  children: ReactNode
+}) {
+  const toneClass =
+    tone === "destructive"
+      ? "border-destructive/40 bg-destructive/10 text-destructive"
+      : tone === "warning"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300"
+        : "border-border/70 bg-muted/30 text-muted-foreground"
+
+  return (
+    <div
+      className={cn(
+        "flex items-start gap-2 rounded-md border px-2.5 py-2 text-xs",
+        toneClass
+      )}
+    >
+      {tone === "destructive" ? (
+        <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+      ) : (
+        <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+      )}
+      <p className="min-w-0">{children}</p>
+    </div>
+  )
+}
+
 export function MercadoPagoCard({
   status,
   branches,
@@ -95,6 +144,7 @@ export function MercadoPagoCard({
   const activeTerminals = status.terminals.filter(
     (terminal) => terminal.isActive
   )
+  const pdvTerminals = activeTerminals.filter(isPdvTerminal)
   const branchItems = [
     { value: "none", label: "Sin asignar" },
     ...branches
@@ -174,6 +224,44 @@ export function MercadoPagoCard({
         return result
       })
     )
+  }
+
+  function handleModel(terminal: MercadoPagoTerminal, value: string | null) {
+    const model =
+      !value || value === "none" ? null : (value as MercadoPagoTerminalModel)
+
+    if (model === terminal.model) return
+
+    form.run(() =>
+      updateMercadoPagoTerminal(terminal.id, { model }).then((result) => {
+        if (result.ok) toast.success("Modelo de la terminal actualizado")
+        return result
+      })
+    )
+  }
+
+  async function copyDiagnostic(terminal: MercadoPagoTerminal) {
+    const model = terminal.model
+      ? MERCADO_PAGO_TERMINAL_MODELS[terminal.model]
+      : "Sin especificar"
+
+    const text = [
+      `Terminal: ${terminal.name ?? "Sin nombre"} (${terminal.terminalId})`,
+      `Cuenta Mercado Pago: ${connection?.mpUserId ?? "Sin conexión"}`,
+      `Modelo: ${model}`,
+      `Modo: ${terminal.operatingMode ?? "Desconocido"}`,
+      `Sucursal MP (store_id): ${terminal.storeId ?? "Sin sucursal"}`,
+      `Caja MP (pos_id): ${terminal.posId ?? "Sin caja"}`,
+      `Activa: ${terminal.isActive ? "Sí" : "No"}`,
+      `Última sincronización: ${formatDate(terminal.lastSyncedAt)}`,
+    ].join("\n")
+
+    try {
+      await navigator.clipboard.writeText(text)
+      toast.success("Diagnóstico copiado")
+    } catch {
+      toast.error("No se pudo copiar el diagnóstico")
+    }
   }
 
   return (
@@ -260,7 +348,22 @@ export function MercadoPagoCard({
                 label="Terminales activas"
                 value={String(activeTerminals.length)}
               />
+              <Definition
+                label="Listas para el POS"
+                value={String(pdvTerminals.length)}
+              />
+              <Definition
+                label="Última sincronización"
+                value={formatDate(connection.terminalsSyncedAt)}
+              />
             </div>
+
+            {activeTerminals.length > 0 && pdvTerminals.length === 0 ? (
+              <TerminalNotice tone="warning">
+                Hay terminales vinculadas, pero ninguna está lista para el POS.
+                Actívalas en modo <strong>PDV</strong> y reinicia la terminal.
+              </TerminalNotice>
+            ) : null}
 
             {connection.needsReconnect ? (
               <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
@@ -317,12 +420,18 @@ export function MercadoPagoCard({
                 </span>
               </div>
 
+              <p className="text-xs text-muted-foreground">
+                Point Smart 1 y 2 funcionan en modo PDV. Point Air 2 solo en
+                autoservicio y no se ofrece en el POS. Solo Point Smart 2 captura
+                propina en la terminal.
+              </p>
+
               {status.terminals.length === 0 ? (
                 <div className="rounded-lg border border-dashed border-border/70 p-4 text-sm text-muted-foreground">
                   No encontramos terminales en esta cuenta. Verifica que la
-                  terminal esté vinculada a la cuenta del negocio y pulsa
-                  “Actualizar terminales”. La Point Air 2 solo funciona en modo
-                  autoservicio.
+                  terminal esté vinculada a la cuenta del negocio, asociada a una
+                  sucursal y caja, y en modo PDV. La lista se actualiza sola al
+                  abrir esta página; “Actualizar terminales” fuerza la consulta.
                 </div>
               ) : (
                 status.terminals.map((terminal) => (
@@ -361,14 +470,100 @@ export function MercadoPagoCard({
                               ] ?? terminal.operatingMode)
                             : "Modo desconocido"}
                         </Badge>
+                        <Badge variant="outline">
+                          {terminal.model
+                            ? MERCADO_PAGO_TERMINAL_MODELS[terminal.model]
+                            : "Modelo sin verificar"}
+                        </Badge>
+                        {supportsTerminalTips(terminal.model) === true ? (
+                          <Badge variant="secondary">Propina</Badge>
+                        ) : supportsTerminalTips(terminal.model) === false ? (
+                          <Badge variant="outline">Sin propina</Badge>
+                        ) : null}
                         {terminal.isDefault ? (
                           <Badge>Predeterminada</Badge>
                         ) : null}
                       </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                    {!terminal.isActive ? (
+                      <TerminalNotice tone="destructive">
+                        Mercado Pago ya no reporta esta terminal. Pulsa
+                        “Actualizar terminales”; si sigue así, vuelve a
+                        vincularla en la aplicación de Mercado Pago.
+                      </TerminalNotice>
+                    ) : null}
+
+                    {!terminal.storeId || !terminal.posId ? (
+                      <TerminalNotice tone="warning">
+                        Mercado Pago no reporta sucursal y caja para esta
+                        terminal. Asígnala a una sucursal y caja en la app de
+                        Mercado Pago (una terminal por caja) y vuelve a
+                        sincronizar.
+                      </TerminalNotice>
+                    ) : null}
+
+                    {terminal.operatingMode !== "PDV" ? (
+                      <TerminalNotice tone="warning">
+                        Está vinculada a la cuenta, pero no integrada. Actívala
+                        en modo <strong>PDV</strong> y reinicia la terminal. Si
+                        aparece el botón “Usar en punto de venta”, puedes
+                        activarlo desde aquí.
+                      </TerminalNotice>
+                    ) : null}
+
+                    {terminal.model === "AIR_2" ? (
+                      <TerminalNotice tone="warning">
+                        <strong>Point Air 2</strong> solo funciona en modo
+                        autoservicio; no se ofrece en el POS asistido.
+                      </TerminalNotice>
+                    ) : null}
+
+                    {terminal.model === "SMART_1" ? (
+                      <TerminalNotice tone="info">
+                        <strong>Point Smart 1</strong> no captura propina en la
+                        terminal. El cobro funciona, pero la propina siempre
+                        será $0.
+                      </TerminalNotice>
+                    ) : null}
+
+                    {terminal.model === null ? (
+                      <TerminalNotice tone="info">
+                        Selecciona el modelo para confirmar si captura propina.
+                        Solo <strong>Point Smart 2</strong> lo hace.
+                      </TerminalNotice>
+                    ) : null}
+
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-40">
+                        <span className="text-xs text-muted-foreground">
+                          Modelo
+                        </span>
+                        <Select
+                          items={MERCADO_PAGO_TERMINAL_MODEL_OPTIONS}
+                          value={terminal.model ?? "none"}
+                          onValueChange={(value) =>
+                            handleModel(terminal, value)
+                          }
+                          disabled={form.pending}
+                        >
+                          <SelectTrigger
+                            size="sm"
+                            aria-label={`Modelo de ${terminal.name ?? terminal.terminalId}`}
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MERCADO_PAGO_TERMINAL_MODEL_OPTIONS.map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:min-w-40">
                         <span className="text-xs text-muted-foreground">
                           Sucursal
                         </span>
@@ -417,6 +612,48 @@ export function MercadoPagoCard({
                         </Button>
                       ) : null}
                     </div>
+
+                    <details className="rounded-md border border-border/60 bg-muted/20 p-2 text-xs">
+                      <summary className="cursor-pointer font-medium">
+                        Diagnóstico de la terminal
+                      </summary>
+                      <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <DiagnosticItem
+                          label="Cuenta de Mercado Pago"
+                          value={connection?.mpUserId ?? "Sin conexión"}
+                        />
+                        <DiagnosticItem
+                          label="Sucursal MP (store_id)"
+                          value={terminal.storeId ?? "Sin sucursal"}
+                        />
+                        <DiagnosticItem
+                          label="Caja MP (pos_id)"
+                          value={terminal.posId ?? "Sin caja"}
+                        />
+                        <DiagnosticItem
+                          label="Caja externa"
+                          value={terminal.externalPosId ?? "—"}
+                        />
+                        <DiagnosticItem
+                          label="Última sincronización"
+                          value={formatDate(terminal.lastSyncedAt)}
+                        />
+                        <DiagnosticItem
+                          label="Identificador de la terminal"
+                          value={terminal.terminalId}
+                        />
+                      </dl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => void copyDiagnostic(terminal)}
+                      >
+                        <CopyIcon data-icon="inline-start" />
+                        Copiar diagnóstico
+                      </Button>
+                    </details>
                   </div>
                 ))
               )}

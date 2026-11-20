@@ -15,6 +15,7 @@ import {
 export function NavMain({
   items,
   label,
+  onNavigate,
 }: {
   items: {
     title: string
@@ -23,6 +24,8 @@ export function NavMain({
   }[]
   /** Título del grupo en el sidebar (p. ej. "Aplicación"). */
   label?: string
+  /** Cierra el Sheet móvil al elegir una página. */
+  onNavigate?: () => void
 }) {
   const pathname = usePathname()
 
@@ -38,7 +41,7 @@ export function NavMain({
                 isActive={
                   pathname === item.url || pathname.startsWith(`${item.url}/`)
                 }
-                render={<Link href={item.url} />}
+                render={<Link href={item.url} onClick={onNavigate} />}
               >
                 {item.icon}
                 <span>{item.title}</span>

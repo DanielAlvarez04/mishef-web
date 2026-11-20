@@ -3,6 +3,7 @@ import { cookies, headers } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { BillingBanner } from "@/components/billing/billing-banner"
+import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
@@ -34,8 +35,9 @@ export default async function AppLayout({
 
   // Las altas nuevas (registro público o Google) configuran su negocio y
   // usuario antes de entrar. Las cuentas internas de empleados no pasan por el
-  // onboarding: las crea un ADMIN y el paso del negocio requiere ADMIN.
-  if (!user.onboarded && isAdmin(user)) {
+  // onboarding: las crea un ADMIN y el paso del negocio requiere ADMIN. En una
+  // sesión de soporte no se fuerza el onboarding del usuario objetivo.
+  if (!user.onboarded && isAdmin(user) && !user.impersonation) {
     redirect("/onboarding")
   }
 
@@ -95,15 +97,22 @@ export default async function AppLayout({
               role: user.roles[0],
             }}
           />
-          <SidebarInset className="h-svh overflow-y-auto">
+          <SidebarInset className="h-svh overflow-y-auto max-lg:landscape:pl-[calc(4rem_+_env(safe-area-inset-left))]">
             <SiteHeader
               branchName={
                 branches.length > 1 ? (activeBranch?.name ?? null) : null
               }
               showClock={!platformMode}
             />
+            {user.impersonation ? (
+              <ImpersonationBanner
+                userName={displayName(user)}
+                organizationName={user.organizationName}
+                byName={user.impersonation.byName}
+              />
+            ) : null}
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
-            <div className="flex min-h-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
+            <div className="flex min-h-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] max-lg:landscape:pb-0 lg:pb-0">
               {children}
             </div>
           </SidebarInset>

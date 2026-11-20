@@ -19,6 +19,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import type { Branch } from "@/lib/branches"
 import {
@@ -66,6 +67,15 @@ export function AppSidebar({
   activeBranchId?: string | null
   lockedBranch?: boolean
 }) {
+  const { setOpenMobile } = useSidebar()
+
+  // En móvil el sidebar es un Sheet: al elegir una página debe cerrarse para
+  // no seguir tapando el contenido. Se hace en el click, no en un efecto,
+  // para no provocar renders en cascada.
+  const closeMobileSidebar = React.useCallback(() => {
+    setOpenMobile(false)
+  }, [setOpenMobile])
+
   const navSecondary = React.useMemo(
     () => [
       ...(isAdmin
@@ -99,7 +109,7 @@ export function AppSidebar({
                   ? "Mishef Plataforma"
                   : (organizationName ?? "Mishef")
               }
-              render={<Link href={isPlatformAdmin ? "/platform" : "/dashboard"} />}
+              render={<Link href={isPlatformAdmin ? "/platform" : "/dashboard"} onClick={closeMobileSidebar} />}
             >
               <GalleryVerticalEndIcon className="size-5!" />
               <span className="truncate text-base font-semibold">
@@ -113,7 +123,11 @@ export function AppSidebar({
       </SidebarHeader>
       <SidebarContent>
         {isPlatformAdmin ? (
-          <NavMain items={navPlatform} label="Plataforma" />
+          <NavMain
+            items={navPlatform}
+            label="Plataforma"
+            onNavigate={closeMobileSidebar}
+          />
         ) : (
           <>
             {branches.length > 1 ? (
@@ -131,10 +145,22 @@ export function AppSidebar({
                 <SidebarSeparator />
               </>
             ) : null}
-            <NavMain items={navService} label="Servicio" />
+            <NavMain
+              items={navService}
+              label="Servicio"
+              onNavigate={closeMobileSidebar}
+            />
             <SidebarSeparator />
-            <NavMain items={navApplication} label="Aplicación" />
-            <NavSecondary items={navSecondary} className="mt-auto" />
+            <NavMain
+              items={navApplication}
+              label="Aplicación"
+              onNavigate={closeMobileSidebar}
+            />
+            <NavSecondary
+              items={navSecondary}
+              className="mt-auto"
+              onNavigate={closeMobileSidebar}
+            />
           </>
         )}
       </SidebarContent>

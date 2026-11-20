@@ -1,7 +1,10 @@
 "use server"
 
 import { mutateApi, type ActionResult } from "@/lib/server-api"
-import type { MercadoPagoTerminal } from "@/lib/mercadopago"
+import type {
+  MercadoPagoTerminal,
+  MercadoPagoTerminalModel,
+} from "@/lib/mercadopago"
 import type { Payment, TipSource } from "@/lib/orders"
 
 const SETTINGS_PATHS = ["/settings"]
@@ -25,6 +28,7 @@ export async function syncMercadoPagoTerminals(): Promise<
 
 export interface TerminalUpdateInput {
   branchId?: string | null
+  model?: MercadoPagoTerminalModel | null
   isDefault?: boolean
 }
 

@@ -2463,7 +2463,7 @@ ull` = vista consolidada. */
   )
 
   return (
-    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 lg:px-6 xl:pb-6">
+    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
@@ -2538,7 +2538,7 @@ ull` = vista consolidada. */
                       aria-label="Filtros"
                     >
                       <SlidersHorizontalIcon />
-                      <span className="hidden sm:inline">Filtros</span>
+                      Filtros
                       {activeFilterCount > 0 ? (
                         <span className="inline-flex size-5 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
                           {activeFilterCount}
@@ -2625,7 +2625,7 @@ ull` = vista consolidada. */
                   render={
                     <Button type="button" variant="outline" aria-label="Vista">
                       <LayoutGridIcon />
-                      <span className="hidden sm:inline">Vista</span>
+                      Vista
                     </Button>
                   }
                 />
@@ -2750,7 +2750,7 @@ ull` = vista consolidada. */
                       aria-label="Ordenar artículos"
                     >
                       <ArrowUpDownIcon />
-                      <span className="hidden sm:inline">Ordenar</span>
+                      Ordenar
                     </Button>
                   }
                 />
@@ -2812,7 +2812,7 @@ ull` = vista consolidada. */
 
       {!showComandaColumn ? (
         <>
-          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex justify-end px-3 lg:bottom-6 xl:hidden">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex justify-end px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
             <button
               type="button"
               onClick={() => setComandaOpen(true)}

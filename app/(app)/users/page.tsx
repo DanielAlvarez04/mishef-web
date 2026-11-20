@@ -40,6 +40,7 @@ export default async function UsersPage() {
         {users ? (
           <PlatformUsersTable
             users={users}
+            currentUserId={user.id}
             organizations={organizations.map((organization) => ({
               id: organization.id,
               name: organization.name,

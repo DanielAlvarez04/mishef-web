@@ -5,6 +5,7 @@ import { createColumnHelper } from "@tanstack/react-table"
 import { Badge } from "@/components/ui/badge"
 import { ROLE_OPTIONS, type PlatformUser, type RoleCode } from "@/lib/users"
 
+import { ImpersonateUserAction } from "./impersonate-user-action"
 import type { UsersTableFeatures } from "./data-table-features"
 
 const columnHelper = createColumnHelper<UsersTableFeatures, PlatformUser>()
@@ -20,7 +21,7 @@ function roleLabel(role: RoleCode): string {
 }
 
 /** Columnas del listado transversal de usuarios del panel de plataforma. */
-export function createPlatformUserColumns() {
+export function createPlatformUserColumns(currentUserId: string) {
   return columnHelper.columns([
     columnHelper.accessor("name", {
       header: () => <span className="font-medium">Usuario</span>,
@@ -94,6 +95,35 @@ export function createPlatformUserColumns() {
           {dateFormat.format(new Date(row.original.createdAt))}
         </span>
       ),
+      enableSorting: false,
+    }),
+    columnHelper.display({
+      id: "actions",
+      header: () => <span className="font-medium">Acciones</span>,
+      cell: ({ row }) => {
+        const user = row.original
+
+        // Un superadmin no se impersona a sí mismo, ni a otra cuenta de
+        // plataforma, ni a usuarios inactivos.
+        if (
+          !user.isActive ||
+          user.isPlatformAdmin ||
+          user.id === currentUserId
+        ) {
+          return <span className="text-xs text-muted-foreground">—</span>
+        }
+
+        return (
+          <ImpersonateUserAction
+            userId={user.id}
+            organizationId={user.organizationId}
+            userName={
+              user.name ?? user.username ?? user.email ?? "este usuario"
+            }
+            organizationName={user.organizationName}
+          />
+        )
+      },
       enableSorting: false,
     }),
   ])

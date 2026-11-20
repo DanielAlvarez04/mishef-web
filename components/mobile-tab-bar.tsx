@@ -14,11 +14,15 @@ import {
 import { cn } from "cn"
 
 /**
- * Barra de navegación inferior para teléfono y tablet vertical.
+ * Navegación móvil.
  *
- * Replica el grupo «Servicio» del sidebar y deja el POS en el centro, elevado
- * con el color primario. «Más» abre el sidebar completo. En escritorio se
- * oculta: ahí manda el sidebar.
+ * - Vertical: barra inferior.
+ * - Horizontal por debajo de 1024px: riel lateral izquierdo, para no robarte
+ *   altura al contenido.
+ * - Escritorio: manda el sidebar existente.
+ *
+ * El POS conserva el color primario, pero como un botón rectangular dentro de
+ * la barra, sin sobresalir ni tapar contenido.
  */
 export function MobileTabBar({
   isPlatformAdmin = false,
@@ -31,102 +35,162 @@ export function MobileTabBar({
   const centerIndex = isPlatformAdmin ? -1 : 2
 
   return (
-    <nav
-      aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 lg:hidden"
-    >
-      <div className="mx-auto grid max-w-lg grid-cols-5 items-end px-1 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
-        {items.map((item, index) =>
-          index === centerIndex ? (
-            <CenterItem
+    <>
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-x-0 bottom-0 z-40 hidden border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 max-lg:portrait:block"
+      >
+        <div className="mx-auto grid max-w-lg grid-cols-5 items-stretch px-1 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
+          {items.map((item, index) =>
+            index === centerIndex ? (
+              <PosItem
+                key={item.url}
+                item={item}
+                active={isNavItemActive(pathname, item.url)}
+                variant="bottom"
+              />
+            ) : (
+              <TabItem
+                key={item.url}
+                item={item}
+                active={isNavItemActive(pathname, item.url)}
+                variant="bottom"
+              />
+            )
+          )}
+
+          <MoreButton variant="bottom" onOpen={() => setOpenMobile(true)} />
+        </div>
+      </nav>
+
+      <nav
+        aria-label="Navegación principal"
+        className="fixed inset-y-0 left-0 z-40 hidden w-[calc(4rem_+_env(safe-area-inset-left))] flex-col gap-1 border-r bg-card/95 px-1 pt-[calc(0.5rem_+_env(safe-area-inset-top))] pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-card/85 max-lg:landscape:flex"
+      >
+        {items.map((item) =>
+          item.url === "/pos" && !isPlatformAdmin ? (
+            <PosItem
               key={item.url}
               item={item}
               active={isNavItemActive(pathname, item.url)}
+              variant="rail"
             />
           ) : (
             <TabItem
               key={item.url}
               item={item}
               active={isNavItemActive(pathname, item.url)}
+              variant="rail"
             />
           )
         )}
 
-        <button
-          type="button"
-          onClick={() => setOpenMobile(true)}
-          aria-label="Abrir menú de navegación"
-          className="flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:bg-muted/60"
-        >
-          <span className="flex h-7 w-10 items-center justify-center rounded-full">
-            <MenuIcon className="size-5" aria-hidden />
-          </span>
-          <span className="max-w-full truncate">Más</span>
-        </button>
-      </div>
-    </nav>
+        <div className="mt-auto">
+          <MoreButton variant="rail" onOpen={() => setOpenMobile(true)} />
+        </div>
+      </nav>
+    </>
   )
 }
 
-function TabItem({ item, active }: { item: NavItem; active: boolean }) {
+function TabItem({
+  item,
+  active,
+  variant,
+}: {
+  item: NavItem
+  active: boolean
+  variant: "bottom" | "rail"
+}) {
   const Icon = item.icon
+  const label = item.mobileTitle ?? item.title
 
   return (
     <Link
       href={item.url}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:bg-muted/60",
+        "flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:bg-muted/60",
+        variant === "bottom" ? "min-h-14" : "min-h-12 text-[9px]",
         active
           ? "text-primary"
-          : "text-muted-foreground hover:text-foreground"
+          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
       )}
     >
       <span
         className={cn(
-          "flex h-7 w-10 items-center justify-center rounded-full transition-colors",
+          "flex items-center justify-center rounded-md transition-colors",
+          variant === "bottom" ? "h-7 w-10" : "h-6 w-9",
           active && "bg-primary/10"
         )}
       >
         <Icon className="size-5" aria-hidden />
       </span>
-      <span className="max-w-full truncate">{item.mobileTitle ?? item.title}</span>
+      <span className="max-w-full truncate">{label}</span>
     </Link>
   )
 }
 
 /**
- * Acción central elevada.
+ * POS con el color primario, integrado en la navegación.
  *
- * No es una tab más: es el acceso rápido al POS y conserva el color primario
- * del negocio. El anillo usa el fondo de la barra para separarlo visualmente.
+ * Es rectangular y del mismo alto que las demás tabs: no flota ni se sale del
+ * contenedor. En vertical ocupa su celda; en horizontal, el ancho del riel.
  */
-function CenterItem({ item, active }: { item: NavItem; active: boolean }) {
+function PosItem({
+  item,
+  active,
+  variant,
+}: {
+  item: NavItem
+  active: boolean
+  variant: "bottom" | "rail"
+}) {
   const Icon = item.icon
+  const label = item.mobileTitle ?? item.title
 
   return (
     <Link
       href={item.url}
       aria-current={active ? "page" : undefined}
       aria-label={item.title}
-      className="group relative flex flex-col items-center gap-1 focus-visible:outline-none"
+      className={cn(
+        "flex flex-col items-center justify-center gap-0.5 rounded-lg bg-primary px-1 font-semibold text-primary-foreground shadow-sm transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.97]",
+        variant === "bottom" ? "min-h-14 text-[10px]" : "min-h-12 text-[9px]"
+      )}
+    >
+      <Icon className="size-5" aria-hidden />
+      <span className="max-w-full truncate">{label}</span>
+    </Link>
+  )
+}
+
+function MoreButton({
+  variant,
+  onOpen,
+}: {
+  variant: "bottom" | "rail"
+  onOpen: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="Abrir menú de navegación"
+      className={cn(
+        "flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:bg-muted/60",
+        variant === "bottom" ? "min-h-14 text-[10px]" : "min-h-12 text-[9px]"
+      )}
     >
       <span
         className={cn(
-          "-mt-5 flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/30 ring-4 ring-card transition-transform group-active:scale-95 group-focus-visible:ring-primary/40",
-          active && "ring-primary/25"
+          "flex items-center justify-center rounded-md",
+          variant === "bottom" ? "h-7 w-10" : "h-6 w-9"
         )}
       >
-        <Icon className="size-6" aria-hidden />
+        <MenuIcon className="size-5" aria-hidden />
       </span>
-      <span
-        className={cn(
-          "pb-0.5 text-[10px] font-semibold",
-          active ? "text-primary" : "text-muted-foreground"
-        )}
-      >
-        {item.mobileTitle ?? item.title}
-      </span>
-    </Link>
+      <span className="max-w-full truncate">Más</span>
+    </button>
   )
 }
