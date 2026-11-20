@@ -92,7 +92,7 @@ function Notice({
   tone,
   message,
 }: {
-  tone: "success" | "error"
+  tone: "success" | "warning" | "error"
   message: string
 }) {
   return (
@@ -102,7 +102,9 @@ function Notice({
         "flex items-start gap-3 rounded-xl border px-4 py-3 text-sm",
         tone === "success"
           ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-          : "border-destructive/40 bg-destructive/10 text-destructive"
+          : tone === "warning"
+            ? "border-amber-500/40 bg-amber-500/10 text-amber-800 dark:text-amber-300"
+            : "border-destructive/40 bg-destructive/10 text-destructive"
       )}
     >
       {tone === "success" ? (
@@ -118,7 +120,7 @@ function Notice({
 /** Mensajes del callback OAuth de Mercado Pago (`/settings?mp=...`). */
 function mercadoPagoNotice(
   code: string | undefined
-): { tone: "success" | "error"; message: string } | null {
+): { tone: "success" | "warning" | "error"; message: string } | null {
   if (!code) return null
 
   switch (code) {
@@ -127,6 +129,12 @@ function mercadoPagoNotice(
         tone: "success",
         message:
           "Mercado Pago conectado. Sincronizamos las terminales de la cuenta.",
+      }
+    case "connected_same":
+      return {
+        tone: "warning",
+        message:
+          "Se conectó la misma cuenta de Mercado Pago que estaba antes. Si querías usar otra, cierra sesión en Mercado Pago en este navegador (o usa una ventana privada) y vuelve a conectar.",
       }
     case "cancelled":
       return {

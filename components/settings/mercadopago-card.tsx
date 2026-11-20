@@ -56,6 +56,7 @@ import {
   MERCADO_PAGO_TERMINAL_MODELS,
   isPdvTerminal,
   supportsTerminalTips,
+  type MercadoPagoConnection,
   type MercadoPagoStatus,
   type MercadoPagoTerminal,
   type MercadoPagoTerminalModel,
@@ -81,6 +82,13 @@ function Definition({ label, value }: { label: string; value: string }) {
       <span className="font-medium break-all">{value}</span>
     </div>
   )
+}
+
+/** Correo/apodo de la cuenta autorizada; el ID queda como respaldo. */
+function accountLabel(connection: MercadoPagoConnection | null): string {
+  if (!connection) return "Sin conexión"
+
+  return connection.mpEmail ?? connection.mpNickname ?? connection.mpUserId
 }
 
 function DiagnosticItem({ label, value }: { label: string; value: string }) {
@@ -247,7 +255,11 @@ export function MercadoPagoCard({
 
     const text = [
       `Terminal: ${terminal.name ?? "Sin nombre"} (${terminal.terminalId})`,
-      `Cuenta Mercado Pago: ${connection?.mpUserId ?? "Sin conexión"}`,
+      `Cuenta Mercado Pago: ${
+        connection
+          ? `${accountLabel(connection)} (${connection.mpUserId})`
+          : "Sin conexión"
+      }`,
       `Modelo: ${model}`,
       `Modo: ${terminal.operatingMode ?? "Desconocido"}`,
       `Sucursal MP (store_id): ${terminal.storeId ?? "Sin sucursal"}`,
@@ -328,13 +340,23 @@ export function MercadoPagoCard({
               Necesitas una terminal Point (Smart 1 o Smart 2) vinculada a la
               cuenta del negocio y configurada en modo punto de venta.
             </p>
+            <p className="flex items-start gap-2 text-xs text-muted-foreground">
+              <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+              Si Mercado Pago abre con otra cuenta, cierra sesión en Mercado
+              Pago en este navegador (o usa una ventana privada) y vuelve a
+              conectar.
+            </p>
           </>
         ) : (
           <>
             <div className="grid gap-4 rounded-lg border border-border/60 p-4 text-sm sm:grid-cols-2">
               <Definition
                 label="Cuenta de Mercado Pago"
-                value={connection.mpUserId}
+                value={
+                  connection.mpEmail || connection.mpNickname
+                    ? `${accountLabel(connection)} · ${connection.mpUserId}`
+                    : connection.mpUserId
+                }
               />
               <Definition
                 label="Conectada el"
@@ -409,6 +431,12 @@ export function MercadoPagoCard({
                 Desconectar
               </Button>
             </div>
+
+            <p className="flex items-start gap-2 text-xs text-muted-foreground">
+              <InfoIcon className="mt-0.5 size-3.5 shrink-0" />
+              Para conectar otra cuenta, cierra sesión en Mercado Pago en este
+              navegador o usa una ventana privada antes de pulsar “Reconectar”.
+            </p>
 
             <div className="flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2">
@@ -684,6 +712,11 @@ export function MercadoPagoCard({
               Se borrarán los tokens guardados y las terminales sincronizadas.
               Nadie podrá cobrar en terminal desde el POS hasta que vuelvas a
               conectar la cuenta. Los pagos ya registrados se conservan.
+              <br />
+              <br />
+              Si vas a conectar otra cuenta de Mercado Pago, cierra sesión en
+              Mercado Pago en este navegador o usa una ventana privada antes de
+              reconectar.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

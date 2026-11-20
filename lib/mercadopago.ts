@@ -2,6 +2,10 @@
 
 export interface MercadoPagoConnection {
   mpUserId: string
+  /** Correo de la cuenta autorizada, si Mercado Pago lo expone. */
+  mpEmail: string | null
+  /** Apodo de la cuenta autorizada, si Mercado Pago lo expone. */
+  mpNickname: string | null
   status: string
   expiresAt: string
   connectedAt: string
