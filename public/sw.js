@@ -3,14 +3,22 @@
  *
  * Reglas de seguridad:
  * - Solo se cachean recursos estáticos propios (chunks con hash, CSS e iconos).
- * - La navegación va siempre a la red; la única excepción es /pos, que se
- *   conserva para reabrir el POS sin conexión y se borra al cambiar de sesión.
+ * - La navegación va siempre a la red; las únicas excepciones son /pos y
+ *   /kitchen, que se conservan para reabrirlos sin conexión y se borran al
+ *   cambiar de sesión.
  * - Nada de credenciales, cookies ni datos personales entran en la caché
- *   estática; la copia del POS se elimina al iniciar o cerrar sesión.
+ *   estática; las copias del POS y la cocina se eliminan al iniciar o cerrar
+ *   sesión.
  */
 const CACHE = "np-static-v1";
 const POS_CACHE = "np-pos-v1";
+const KITCHEN_CACHE = "np-kitchen-v1";
 const POS_PATH = "/pos";
+const KITCHEN_PATH = "/kitchen";
+const SHELLS = {
+  [POS_PATH]: { path: POS_PATH, cache: POS_CACHE },
+  [KITCHEN_PATH]: { path: KITCHEN_PATH, cache: KITCHEN_CACHE },
+};
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [
   OFFLINE_URL,
@@ -43,7 +51,10 @@ self.addEventListener("activate", (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE && key !== POS_CACHE)
+            .filter(
+              (key) =>
+                key !== CACHE && key !== POS_CACHE && key !== KITCHEN_CACHE
+            )
             .map((key) => caches.delete(key))
         )
       )
@@ -57,14 +68,21 @@ self.addEventListener("message", (event) => {
     return;
   }
 
-  if (event.data?.type === "CACHE_POS") {
+  const shell =
+    event.data?.type === "CACHE_POS"
+      ? SHELLS[POS_PATH]
+      : event.data?.type === "CACHE_KITCHEN"
+        ? SHELLS[KITCHEN_PATH]
+        : null;
+
+  if (shell) {
     event.waitUntil(
-      fetch(POS_PATH, { credentials: "same-origin" })
+      fetch(shell.path, { credentials: "same-origin" })
         .then(async (response) => {
-          // Un redirect a /login no es una copia válida del POS.
+          // Un redirect a /login no es una copia válida de la pantalla.
           if (!response.ok || response.redirected) return;
-          const cache = await caches.open(POS_CACHE);
-          await cache.put(POS_PATH, response);
+          const cache = await caches.open(shell.cache);
+          await cache.put(shell.path, response);
         })
         .catch(() => undefined)
     );
@@ -108,29 +126,34 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   // Navegación: red primero, sin cachear HTML autenticado.
-  // Excepción: /pos se conserva para poder reabrir el punto de venta sin red.
-  // Es HTML autenticado y se borra al iniciar/cerrar sesión (`clearPosCache`).
+  // Excepción: /pos y /kitchen se conservan para poder reabrirlos sin red.
+  // Son HTML autenticado y se borran al iniciar/cerrar sesión
+  // (`clearOfflineShells`).
   if (request.mode === "navigate") {
-    const isPos = url.pathname === POS_PATH || url.pathname === `${POS_PATH}/`;
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    const shell = Object.prototype.hasOwnProperty.call(SHELLS, pathname)
+      ? SHELLS[pathname]
+      : null;
 
-    if (isPos) {
+    if (shell) {
       event.respondWith(
         fetch(request)
           .then((response) => {
-            if (response.ok) {
+            // Un redirect a /login no es una copia válida de la pantalla.
+            if (response.ok && !response.redirected) {
               const copy = response.clone();
               event.waitUntil(
                 caches
-                  .open(POS_CACHE)
-                  .then((cache) => cache.put(POS_PATH, copy))
+                  .open(shell.cache)
+                  .then((cache) => cache.put(shell.path, copy))
                   .catch(() => undefined)
               );
             }
             return response;
           })
           .catch(async () => {
-            const cached = await caches.match(POS_PATH, {
-              cacheName: POS_CACHE,
+            const cached = await caches.match(shell.path, {
+              cacheName: shell.cache,
             });
             if (cached) return cached;
 

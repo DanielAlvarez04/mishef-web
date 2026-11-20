@@ -30,7 +30,7 @@ import {
 } from "lucide-react"
 
 import { API_BASE_URL } from "@/lib/api-base"
-import { clearPosCache } from "@/lib/offline/clear"
+import { clearOfflineShells } from "@/lib/offline/clear"
 import { roleLabel } from "@/lib/roles"
 
 export interface NavUserData {
@@ -62,9 +62,9 @@ export function NavUser({ user }: { user: NavUserData }) {
         credentials: "include",
       })
     } finally {
-      // La copia offline del POS es HTML autenticado: no debe sobrevivir al
-      // cierre de sesión en un dispositivo compartido.
-      void clearPosCache()
+      // Las copias offline del POS y la cocina son HTML autenticado: no deben
+      // sobrevivir al cierre de sesión en un dispositivo compartido.
+      void clearOfflineShells()
       // `refresh` hace que el servidor vuelva a evaluar la sesión.
       router.replace("/login")
       router.refresh()

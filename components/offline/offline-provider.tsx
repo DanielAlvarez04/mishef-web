@@ -264,11 +264,20 @@ export function OfflineProvider({
           .register("/sw.js", { scope: "/", updateViaCache: "none" })
           .then(async () => {
             // La primera visita puede ocurrir antes de que el SW controle la
-            // página: se le pide explícitamente que guarde esta copia del POS.
-            if (window.location.pathname !== "/pos") return;
+            // página: se le pide explícitamente que guarde esta copia.
+            const pathname =
+              window.location.pathname.replace(/\/+$/, "") || "/";
+            const type =
+              pathname === "/pos"
+                ? "CACHE_POS"
+                : pathname === "/kitchen"
+                  ? "CACHE_KITCHEN"
+                  : null;
+
+            if (!type) return;
 
             const registration = await navigator.serviceWorker.ready;
-            registration.active?.postMessage({ type: "CACHE_POS" });
+            registration.active?.postMessage({ type });
           })
           .catch(() => {
             // Sin service worker la app sigue funcionando; solo pierde el
