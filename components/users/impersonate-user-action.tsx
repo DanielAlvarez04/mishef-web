@@ -19,10 +19,11 @@ import {
 import { Button } from "@/components/ui/button"
 
 /**
- * Abre la sesión de soporte de solo lectura desde una fila del panel.
+ * Abre la sesión de soporte desde una fila del panel.
  *
  * La sesión del usuario objetivo no se toca: se crea una cookie aparte que
- * caduca sola y el superadmin conserva intactas sus propias cookies.
+ * caduca sola y el superadmin conserva intactas sus propias cookies. Dentro de
+ * la sesión se pueden editar los datos del negocio.
  */
 export function ImpersonateUserAction({
   userId,
@@ -70,9 +71,11 @@ export function ImpersonateUserAction({
               ¿Abrir una sesión de soporte como {userName}?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Verás {organizationName} como este usuario, en modo solo lectura.
-              Sus sesiones no se cierran ni se modifican, y esta sesión caduca
-              sola a los 30 minutos.
+              Verás {organizationName} como este usuario y podrás editar su
+              información. Sus sesiones no se cierran ni se modifican, y esta
+              sesión caduca sola a los 30 minutos. No podrás cambiar
+              contraseñas, 2FA ni la suscripción; las acciones disponibles
+              dependen de su rol.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

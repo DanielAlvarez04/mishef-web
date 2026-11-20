@@ -42,7 +42,8 @@ export interface SessionUser {
   organizationPracticeUntil: string | null
   /**
    * Datos del superadmin que abrió la sesión de soporte. `null` en una sesión
-   * normal. Mientras exista, la app está en solo lectura.
+   * normal. Mientras exista, la app opera como el usuario objetivo, con un
+   * límite: no se pueden cambiar credenciales, 2FA ni la suscripción.
    */
   impersonation: { byId: string; byName: string | null } | null
 }

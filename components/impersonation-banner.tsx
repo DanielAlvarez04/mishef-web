@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 /**
  * Aviso permanente de que la app se está viendo como otro usuario.
  *
- * La sesión es de solo lectura y caduca sola a los 30 minutos. Salir revoca la
- * sesión de soporte y devuelve al superadmin a su propia sesión, que nunca se
- * tocó.
+ * La sesión permite editar datos del negocio (salvo credenciales, 2FA y
+ * suscripción) y caduca sola a los 30 minutos. Salir revoca la sesión de
+ * soporte y devuelve al superadmin a su propia sesión, que nunca se tocó.
  */
 export function ImpersonationBanner({
   userName,
@@ -35,7 +35,7 @@ export function ImpersonationBanner({
             </span>
           ) : null}
           <span className="text-xs text-sky-700/70 dark:text-sky-300/70">
-            · Solo lectura
+            · Puedes editar
             {byName ? ` · Soporte de ${byName}` : ""}
           </span>
         </span>

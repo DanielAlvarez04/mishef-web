@@ -31,11 +31,12 @@ interface ImpersonationResponse {
 }
 
 /**
- * Abre una sesión de soporte de solo lectura como otro usuario.
+ * Abre una sesión de soporte como otro usuario.
  *
  * No reemplaza `np_at` ni `np_rt`: escribe una cookie aparte (`np_imp`) que la
  * API prefiere mientras exista. La sesión real del superadmin y todas las del
- * usuario objetivo quedan intactas.
+ * usuario objetivo quedan intactas. Dentro se pueden editar los datos del
+ * negocio; la API bloquea credenciales, 2FA y suscripción.
  */
 export async function startImpersonation(
   userId: string,
