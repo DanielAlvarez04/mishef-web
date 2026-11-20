@@ -84,11 +84,15 @@ function Definition({ label, value }: { label: string; value: string }) {
   )
 }
 
-/** Correo/apodo de la cuenta autorizada; el ID queda como respaldo. */
+/** Correo/apodo + ID de la cuenta autorizada, con respaldo visible. */
 function accountLabel(connection: MercadoPagoConnection | null): string {
   if (!connection) return "Sin conexión"
 
-  return connection.mpEmail ?? connection.mpNickname ?? connection.mpUserId
+  const identity = connection.mpEmail ?? connection.mpNickname
+
+  return identity
+    ? `${identity} · ${connection.mpUserId}`
+    : `${connection.mpUserId} · correo no disponible`
 }
 
 function DiagnosticItem({ label, value }: { label: string; value: string }) {
@@ -255,11 +259,7 @@ export function MercadoPagoCard({
 
     const text = [
       `Terminal: ${terminal.name ?? "Sin nombre"} (${terminal.terminalId})`,
-      `Cuenta Mercado Pago: ${
-        connection
-          ? `${accountLabel(connection)} (${connection.mpUserId})`
-          : "Sin conexión"
-      }`,
+      `Cuenta Mercado Pago: ${accountLabel(connection)}`,
       `Modelo: ${model}`,
       `Modo: ${terminal.operatingMode ?? "Desconocido"}`,
       `Sucursal MP (store_id): ${terminal.storeId ?? "Sin sucursal"}`,
@@ -352,11 +352,7 @@ export function MercadoPagoCard({
             <div className="grid gap-4 rounded-lg border border-border/60 p-4 text-sm sm:grid-cols-2">
               <Definition
                 label="Cuenta de Mercado Pago"
-                value={
-                  connection.mpEmail || connection.mpNickname
-                    ? `${accountLabel(connection)} · ${connection.mpUserId}`
-                    : connection.mpUserId
-                }
+                value={accountLabel(connection)}
               />
               <Definition
                 label="Conectada el"
@@ -648,7 +644,7 @@ export function MercadoPagoCard({
                       <dl className="mt-2 grid gap-2 sm:grid-cols-2">
                         <DiagnosticItem
                           label="Cuenta de Mercado Pago"
-                          value={connection?.mpUserId ?? "Sin conexión"}
+                          value={accountLabel(connection)}
                         />
                         <DiagnosticItem
                           label="Sucursal MP (store_id)"
