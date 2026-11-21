@@ -77,6 +77,16 @@ export async function setPracticeMode(
   )
 }
 
+/** Activa/desactiva la capa Intel para el negocio. */
+export async function setIntelEnabled(enabled: boolean): Promise<ActionResult> {
+  return mutateApi(
+    "/intel/settings",
+    "PATCH",
+    { enabled },
+    ["/settings", "/intel"]
+  )
+}
+
 export interface OrganizationNameInput {
   name?: string
   domain?: string

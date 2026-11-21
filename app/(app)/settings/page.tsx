@@ -17,6 +17,7 @@ import {
   KitchenPrepCard,
 } from "@/components/settings/kitchen-settings-card"
 import { PracticeModeCard } from "@/components/settings/practice-mode-card"
+import { IntelCard } from "@/components/settings/intel-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
 import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
@@ -63,6 +64,7 @@ import {
 import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
 import type { FiscalProfile } from "@/lib/fiscal"
+import type { IntelConfig } from "@/lib/intel"
 import type { KitchenSettings } from "@/lib/kitchen"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { PosPairedDevice } from "@/lib/pos-device"
@@ -279,6 +281,11 @@ export default async function SettingsPage({
   // Fase 0 de CFDI: solo lectura/escritura de datos fiscales, sin timbrado.
   const fiscalResponse = admin ? await apiFetch("/fiscal/profile") : null
   const fiscalProfile = await readJson<FiscalProfile>(fiscalResponse)
+
+  const intelResponse = admin ? await apiFetch("/intel/config") : null
+  const intelConfig: IntelConfig | null = intelResponse?.ok
+    ? ((await intelResponse.json()) as IntelConfig)
+    : null
 
   const kitchenSettingsResponse = await apiFetch("/kitchen/settings")
   const kitchenSettings: KitchenSettings | null = kitchenSettingsResponse.ok
@@ -572,6 +579,16 @@ export default async function SettingsPage({
                   until={user.organizationPracticeUntil}
                   canManage={admin}
                 />
+                {intelConfig ? (
+                  <IntelCard
+                    enabled={intelConfig.enabled}
+                    configured={intelConfig.configured}
+                    models={intelConfig.models}
+                    monthlyTokenLimit={intelConfig.monthlyTokenLimit}
+                    usage={intelConfig.usage}
+                    canManage={admin}
+                  />
+                ) : null}
                 <div className="flex flex-col gap-1 text-sm">
                   <span className="font-medium">Equipo</span>
                   <span className="text-muted-foreground">

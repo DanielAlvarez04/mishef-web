@@ -12,6 +12,7 @@ import {
   Settings2Icon,
   ShieldAlertIcon,
   ShoppingBasketIcon,
+  SparklesIcon,
   StoreIcon,
   Trash2Icon,
   UsersIcon,
@@ -69,6 +70,12 @@ export const SERVICE_NAV: NavItem[] = [
 
 /** Grupo «Aplicación»: solo en el sidebar completo. */
 export const APPLICATION_NAV: NavItem[] = [
+  {
+    title: "Intel",
+    url: "/intel",
+    icon: SparklesIcon,
+    roles: ["ADMIN", "INVENTORY_MANAGER"],
+  },
   {
     title: "Catálogo",
     url: "/catalog",
