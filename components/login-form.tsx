@@ -62,12 +62,17 @@ export function LoginForm({
   } | null) {
     void clearOfflineShells()
 
-    const baseDomain = (
+    const configuredBase = (
       process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
     )
       .trim()
       .toLowerCase()
     const host = window.location.hostname.toLowerCase()
+    const baseDomain = host.startsWith("app.")
+      ? host.slice(4)
+      : host.startsWith("www.")
+        ? host.slice(4)
+        : configuredBase
     const slug = user?.organizationSlug
 
     // Desde el dominio principal, el dueño entra a su subdominio. En local o
@@ -234,7 +239,8 @@ export function LoginForm({
           </p>
           {!tenant ? (
             <p className="text-xs text-balance text-muted-foreground">
-              Si eres parte del equipo, entra por el subdominio de tu negocio.
+              Los administradores pueden entrar aquí; el resto del equipo debe
+              usar el subdominio de su negocio.
             </p>
           ) : null}
         </div>
@@ -293,52 +299,54 @@ export function LoginForm({
             {loading ? "Entrando..." : "Entrar"}
           </Button>
         </Field>
-        {tenant ? null : (
-          <>
-            <FieldSeparator>O continúa con</FieldSeparator>
-            <Field>
-              {/* Es navegación, no un botón: un <a> conserva la semántica de enlace
-                  y evita que Base UI le añada role="button". */}
-              <a
-                href={`${API_BASE_URL}/auth/google`}
-                className={cn(buttonVariants({ variant: "outline" }))}
+        <FieldSeparator>O continúa con</FieldSeparator>
+        <Field>
+          {/* Es navegación, no un botón: un <a> conserva la semántica de enlace
+              y evita que Base UI le añada role="button". */}
+          <a
+            href={`${API_BASE_URL}/auth/google${
+              tenant ? `?tenant=${encodeURIComponent(tenant)}` : ""
+            }`}
+            className={cn(buttonVariants({ variant: "outline" }))}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.27-4.74 3.27-8.09Z"
+                fill="#4285F4"
+              />
+              <path
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
+                fill="#34A853"
+              />
+              <path
+                d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z"
+                fill="#FBBC05"
+              />
+              <path
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
+                fill="#EA4335"
+              />
+            </svg>
+            Continuar con Google
+          </a>
+          <FieldDescription className="text-center">
+            {tenant
+              ? "Solo funciona si ya vinculaste tu cuenta de Google desde Configuración."
+              : "¿No tienes cuenta? "}
+            {!tenant ? (
+              <Link
+                href="/register"
+                className="underline underline-offset-4 hover:text-foreground"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 24 24"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.76h3.57c2.08-1.92 3.27-4.74 3.27-8.09Z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.76c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23Z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.11a6.6 6.6 0 0 1 0-4.22V7.05H2.18a11 11 0 0 0 0 9.9l3.66-2.84Z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15A11 11 0 0 0 2.18 7.05l3.66 2.84C6.71 7.31 9.14 5.38 12 5.38Z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                Continuar con Google
-              </a>
-              <FieldDescription className="text-center">
-                ¿No tienes cuenta?{" "}
-                <Link
-                  href="/register"
-                  className="underline underline-offset-4 hover:text-foreground"
-                >
-                  Crea tu negocio
-                </Link>
-              </FieldDescription>
-            </Field>
-          </>
-        )}
+                Crea tu negocio
+              </Link>
+            ) : null}
+          </FieldDescription>
+        </Field>
       </FieldGroup>
     </form>
   )

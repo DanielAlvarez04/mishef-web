@@ -221,11 +221,16 @@ export async function finishOnboarding(): Promise<
     .split(":")[0]
     .trim()
     .toLowerCase()
-  const baseDomain = (
+  const configuredBase = (
     process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
   )
     .trim()
     .toLowerCase()
+  const baseDomain = host.startsWith("app.")
+    ? host.slice(4)
+    : host.startsWith("www.")
+      ? host.slice(4)
+      : configuredBase
   const isLocal =
     host === "localhost" ||
     host === "127.0.0.1" ||

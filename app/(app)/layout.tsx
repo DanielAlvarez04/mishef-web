@@ -64,11 +64,16 @@ export default async function AppLayout({
     host === "127.0.0.1" ||
     host.endsWith(".local") ||
     /^\d+\.\d+\.\d+\.\d+$/.test(host)
-  const baseDomain = (
+  const configuredBase = (
     process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
   )
     .trim()
     .toLowerCase()
+  const baseDomain = host.startsWith("app.")
+    ? host.slice(4)
+    : host.startsWith("www.")
+      ? host.slice(4)
+      : configuredBase
   const tenantHome = user.organizationSlug
     ? `https://${user.organizationSlug}.${baseDomain}`
     : null
