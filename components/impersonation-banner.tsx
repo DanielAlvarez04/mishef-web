@@ -1,4 +1,8 @@
-import { UserRoundSearchIcon } from "lucide-react"
+"use client"
+
+import * as React from "react"
+import { Loader2Icon, UserRoundSearchIcon } from "lucide-react"
+import { toast } from "sonner"
 
 import { stopImpersonation } from "@/app/(app)/users/impersonation-actions"
 import { Button } from "@/components/ui/button"
@@ -19,6 +23,23 @@ export function ImpersonationBanner({
   organizationName: string | null
   byName: string | null
 }) {
+  const [pending, startTransition] = React.useTransition()
+
+  function handleStop() {
+    startTransition(async () => {
+      const result = await stopImpersonation()
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No pudimos salir de la impersonación")
+        return
+      }
+
+      if (result.data?.redirectTo) {
+        window.location.assign(result.data.redirectTo)
+      }
+    })
+  }
+
   return (
     <div
       role="status"
@@ -39,11 +60,16 @@ export function ImpersonationBanner({
             {byName ? ` · Soporte de ${byName}` : ""}
           </span>
         </span>
-        <form action={stopImpersonation}>
-          <Button type="submit" size="sm" variant="outline">
-            Salir de la impersonación
-          </Button>
-        </form>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={handleStop}
+          disabled={pending}
+        >
+          {pending ? <Loader2Icon className="animate-spin" /> : null}
+          Salir de la impersonación
+        </Button>
       </div>
     </div>
   )

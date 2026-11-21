@@ -29,7 +29,7 @@ import {
   LogOutIcon,
 } from "lucide-react"
 
-import { API_BASE_URL } from "@/lib/api-base"
+import { logout } from "@/app/(app)/logout-action"
 import { clearOfflineShells } from "@/lib/offline/clear"
 import { roleLabel } from "@/lib/roles"
 
@@ -57,17 +57,21 @@ export function NavUser({ user }: { user: NavUserData }) {
     setLoggingOut(true)
 
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
-        method: "POST",
-        credentials: "include",
-      })
-    } finally {
+      const result = await logout()
+
       // Las copias offline del POS y la cocina son HTML autenticado: no deben
       // sobrevivir al cierre de sesión en un dispositivo compartido.
       void clearOfflineShells()
-      // `refresh` hace que el servidor vuelva a evaluar la sesión.
+
+      if (result.ok && result.data?.redirectTo) {
+        window.location.assign(result.data.redirectTo)
+        return
+      }
+
       router.replace("/login")
       router.refresh()
+    } finally {
+      setLoggingOut(false)
     }
   }
 

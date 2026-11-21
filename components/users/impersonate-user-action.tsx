@@ -45,6 +45,11 @@ export function ImpersonateUserAction({
 
       if (!result.ok) {
         toast.error(result.message ?? "No pudimos abrir la sesión de soporte")
+        return
+      }
+
+      if (result.data?.redirectTo) {
+        window.location.assign(result.data.redirectTo)
       }
     })
   }

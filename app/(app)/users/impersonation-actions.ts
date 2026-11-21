@@ -2,9 +2,9 @@
 
 import { revalidatePath } from "next/cache"
 import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
 
 import { apiFetch, BRANCH_COOKIE, IMPERSONATION_COOKIE } from "@/lib/api"
+import { tenantDashboardUrl, mainAppOrigin } from "@/lib/app-origin"
 import { apiErrorMessage } from "@/lib/http-error"
 import { requireUser } from "@/lib/session"
 import type { ActionResult } from "@/lib/server-api"
@@ -26,6 +26,7 @@ interface ImpersonationResponse {
     name: string | null
     email: string | null
     organizationName: string
+    organizationSlug: string
   }
   actor: { id: string; name: string }
 }
@@ -41,7 +42,7 @@ interface ImpersonationResponse {
 export async function startImpersonation(
   userId: string,
   organizationId: string
-): Promise<ActionResult<ImpersonationResponse>> {
+): Promise<ActionResult<{ redirectTo: string }>> {
   const actor = await requireUser()
 
   if (!actor.isPlatformAdmin) {
@@ -104,7 +105,15 @@ export async function startImpersonation(
   store.delete(BRANCH_COOKIE)
 
   revalidatePath("/", "layout")
-  redirect("/dashboard")
+
+  return {
+    ok: true,
+    data: {
+      redirectTo: payload.user.organizationSlug
+        ? await tenantDashboardUrl(payload.user.organizationSlug)
+        : "/dashboard",
+    },
+  }
 }
 
 /**
@@ -113,7 +122,9 @@ export async function startImpersonation(
  * Aunque la API no responda, la cookie local se borra: el token caduca solo a
  * los 30 minutos y no hay refresh.
  */
-export async function stopImpersonation(): Promise<void> {
+export async function stopImpersonation(): Promise<
+  ActionResult<{ redirectTo: string }>
+> {
   const store = await cookies()
 
   if (store.get(IMPERSONATION_COOKIE)?.value) {
@@ -138,5 +149,11 @@ export async function stopImpersonation(): Promise<void> {
   store.delete(BRANCH_COOKIE)
 
   revalidatePath("/", "layout")
-  redirect("/users")
+
+  const origin = await mainAppOrigin()
+
+  return {
+    ok: true,
+    data: { redirectTo: origin ? `${origin}/users` : "/users" },
+  }
 }
