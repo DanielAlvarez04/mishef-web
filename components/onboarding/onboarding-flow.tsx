@@ -7,13 +7,16 @@ import { useState } from "react"
 import { ClockIcon, GalleryVerticalEndIcon, SparklesIcon } from "lucide-react"
 
 import {
+  checkOnboardingSlug,
   finishOnboarding,
+  suggestOnboardingSlug,
   updateOnboardingBusiness,
   updateOnboardingBusinessType,
   updateOnboardingCurrency,
   updateOnboardingGoals,
   updateOnboardingProfile,
   updateOnboardingServiceTypes,
+  updateOnboardingSlug,
 } from "@/app/onboarding/actions"
 import { AvailabilityLabel } from "@/components/availability-field"
 import {
@@ -27,6 +30,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { useActionForm } from "@/hooks/use-action-form"
 import { CURRENCY_OPTIONS } from "@/lib/currency-config"
 import { sameText } from "@/lib/diff"
@@ -92,12 +96,31 @@ const GOALS = [
 const ONBOARDING_ITEMS = [
   { name: "businessType", required: true },
   { name: "business", required: true },
+  { name: "address", required: true },
   { name: "currency", required: true },
   { name: "profile", required: true },
   { name: "serviceTypes", required: false },
   { name: "goals", required: false },
   { name: "welcome", required: false },
 ] as const
+
+/** `Naranja Pimienta` → `naranja-pimienta`. */
+function slugify(value: string): string {
+  return (
+    value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 32) || "mi-negocio"
+  )
+}
+
+type SlugStatus =
+  | { state: "idle" | "checking" }
+  | { state: "available" | "taken" | "invalid" | "current"; message: string }
+  | { state: "error"; message: string }
 
 /** `daniel@pimientanaranja.com` → `daniel`. */
 function localPart(value: string): string {
@@ -119,15 +142,19 @@ export function OnboardingFlow({
   initialBusinessName,
   initialName,
   initialUsername,
+  initialSlug,
   initialCurrency,
   currentUsername,
+  tenantDomain,
 }: {
   initialBusinessName: string
   initialName: string
   initialUsername: string
+  initialSlug: string
   /** Moneda configurada; MXN si la organización aún no eligió otra. */
   initialCurrency: string
   currentUsername: string | null
+  tenantDomain: string
 }) {
   const router = useRouter()
   const questionnaireRef = React.useRef<HTMLFormElement>(null)
@@ -135,16 +162,20 @@ export function OnboardingFlow({
   // State
   const [businessType, setBusinessType] = useState("")
   const [businessName, setBusinessName] = useState(initialBusinessName)
+  const [slug, setSlug] = useState(initialSlug || slugify(initialBusinessName))
+  const [savedSlug, setSavedSlug] = useState(initialSlug)
+  const [remoteSlug, setRemoteSlug] = useState<{
+    slug: string
+    status: SlugStatus
+  } | null>(null)
   const [hasBranches, setHasBranches] = useState(false)
   const [branchName, setBranchName] = useState("")
 
   const accountName = splitDisplayName(initialName)
   const [firstName, setFirstName] = useState(accountName.first)
   const [lastName, setLastName] = useState(accountName.surname)
-  // El dominio ya se configuró en el paso anterior: aquí solo se edita la
-  // parte local (`daniel`), que se combina con el dominio del negocio.
-  // Mientras no se edite a mano, el ID se recalcula con el nombre y apellido,
-  // igual que en /users.
+  // El username es local al negocio: no lleva dominio. Mientras no se edite a
+  // mano, se recalcula con el nombre y apellido, igual que en /users.
   const [manualLocal, setManualLocal] = useState<string | null>(null)
   const initialLocal = localPart(initialUsername)
   const suggestion = useSuggestedUsername(`${firstName} ${lastName}`, {
@@ -164,14 +195,70 @@ export function OnboardingFlow({
   /** Última moneda confirmada por la API (evita repeticiones al avanzar). */
   const [savedCurrency, setSavedCurrency] = useState(initialCurrency || "MXN")
 
+  // Disponibilidad del subdominio con debounce. El estado inmediato se deriva
+  // en el render; el efecto solo guarda el resultado remoto.
+  const slugImmediate: SlugStatus = !slug
+    ? { state: "idle" }
+    : slug === savedSlug
+      ? { state: "current", message: "Es la dirección actual" }
+      : slug.length < 3 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+        ? {
+            state: "invalid",
+            message: "Solo minúsculas, números y guiones (3–32).",
+          }
+        : { state: "checking" }
+
+  React.useEffect(() => {
+    if (slugImmediate.state !== "checking") return
+
+    let cancelled = false
+
+    const timer = setTimeout(async () => {
+      const result = await checkOnboardingSlug(slug)
+      if (cancelled) return
+
+      const status: SlugStatus =
+        !result.ok || !result.data
+          ? { state: "error", message: "No pudimos verificar la dirección." }
+          : result.data.available
+            ? { state: "available", message: "Disponible" }
+            : result.data.reason === "taken"
+              ? { state: "taken", message: "Ya está en uso" }
+              : {
+                  state: "invalid",
+                  message: "Dirección no válida o reservada",
+                }
+
+      setRemoteSlug({ slug, status })
+    }, 400)
+
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [slug, slugImmediate.state])
+
+  const slugStatus: SlugStatus =
+    slugImmediate.state === "checking"
+      ? remoteSlug?.slug === slug
+        ? remoteSlug.status
+        : { state: "checking" }
+      : slugImmediate
+
   // Forms
   const businessTypeForm = useActionForm(() => {})
   const businessForm = useActionForm(() => {})
+  const addressForm = useActionForm()
   const currencyForm = useActionForm(() => {})
   const profileForm = useActionForm(() => {})
   const serviceTypesForm = useActionForm(() => {})
   const goalsForm = useActionForm(() => {})
-  const finishForm = useActionForm(() => {
+  const finishForm = useActionForm<{ redirectTo: string }>((result) => {
+    const target = result.data?.redirectTo
+    if (target) {
+      window.location.assign(target)
+      return
+    }
     router.push("/dashboard")
     router.refresh()
   })
@@ -188,6 +275,18 @@ export function OnboardingFlow({
     fd.append("branchName", branchName)
     fd.append("hasBranches", hasBranches.toString())
     return businessForm.run(() => updateOnboardingBusiness(fd))
+  }
+
+  const handleAddressSubmit = () => {
+    if (slug === savedSlug) {
+      return Promise.resolve(true)
+    }
+
+    return addressForm.run(async () => {
+      const result = await updateOnboardingSlug(slug)
+      if (result.ok) setSavedSlug(slug)
+      return result
+    })
   }
 
   const handleCurrencySubmit = () => {
@@ -376,7 +475,102 @@ export function OnboardingFlow({
           </div>
         </QuestionnaireItem>
 
-        {/* Paso 3: Moneda */}
+        {/* Paso 3: Dirección del negocio */}
+        <QuestionnaireItem name="address" required>
+          <div className="flex flex-col gap-6">
+            <QuestionnaireTitle>
+              ¿Cuál será la dirección de tu negocio?
+            </QuestionnaireTitle>
+            <p className="text-base text-muted-foreground text-center">
+              Tus clientes y tu equipo entrarán por esta dirección.
+            </p>
+
+            <Field>
+              <FieldLabel htmlFor="business-slug">Dirección</FieldLabel>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="business-slug"
+                  name="slug"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={32}
+                  placeholder="mi-cafeteria"
+                  value={slug}
+                  onChange={(event) => {
+                    setSlug(
+                      event.target.value
+                        .toLowerCase()
+                        .replace(/[^a-z0-9-]+/g, "-")
+                        .replace(/-+/g, "-")
+                        .replace(/^-+/, "")
+                        .slice(0, 32)
+                    )
+                  }}
+                />
+                <span className="shrink-0 text-sm text-muted-foreground">
+                  .{tenantDomain}
+                </span>
+              </div>
+              <FieldDescription>
+                Solo minúsculas, números y guiones. Podrás cambiarla una vez
+                más desde Configuración.
+              </FieldDescription>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit"
+                onClick={() => {
+                  void (async () => {
+                    const result = await suggestOnboardingSlug(businessName)
+                    if (result.ok && result.data?.slug) {
+                      setSlug(result.data.slug)
+                      addressForm.setError(null)
+                    } else {
+                      addressForm.setError(
+                        "No pudimos sugerir otra dirección. Inténtalo de nuevo."
+                      )
+                    }
+                  })()
+                }}
+              >
+                Sugerir otra
+              </Button>
+              {slugStatus.state === "checking" ? (
+                <p className="text-xs text-muted-foreground">Verificando…</p>
+              ) : slugStatus.state === "available" ||
+                slugStatus.state === "current" ? (
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {slugStatus.message}
+                </p>
+              ) : slugStatus.state === "taken" ||
+                slugStatus.state === "invalid" ||
+                slugStatus.state === "error" ? (
+                <p className="text-xs text-destructive">
+                  {slugStatus.message}
+                </p>
+              ) : null}
+            </Field>
+
+            <QuestionnaireError>{addressForm.error}</QuestionnaireError>
+            <QuestionnaireActions>
+              <QuestionnairePrevious />
+              <QuestionnaireNext
+                onClick={handleAddressSubmit}
+                disabled={
+                  !slug ||
+                  (slugStatus.state !== "available" &&
+                    slugStatus.state !== "current")
+                }
+              >
+                Continuar
+              </QuestionnaireNext>
+            </QuestionnaireActions>
+          </div>
+        </QuestionnaireItem>
+
+        {/* Paso 4: Moneda */}
         <QuestionnaireItem name="currency" required>
           <div className="flex flex-col gap-6">
             <QuestionnaireTitle>¿Con qué moneda trabajas?</QuestionnaireTitle>
@@ -451,7 +645,7 @@ export function OnboardingFlow({
             <Field>
               <AvailabilityLabel
                 htmlFor="owner-username"
-                label="ID de usuario"
+                label="Usuario"
                 status={usernameStatus}
               />
               <div className="flex items-stretch overflow-hidden rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 dark:bg-input/30">
@@ -461,7 +655,7 @@ export function OnboardingFlow({
                   autoComplete="off"
                   autoCapitalize="none"
                   spellCheck={false}
-                  maxLength={64}
+                  maxLength={32}
                   placeholder="daniel"
                   value={local}
                   onChange={(e) =>
@@ -588,11 +782,17 @@ export function OnboardingFlow({
                 <dd className="font-medium">{businessName.trim()}</dd>
               </div>
               <div className="flex items-center justify-center gap-4">
+                <dt className="text-muted-foreground">Dirección</dt>
+                <dd className="font-medium">
+                  {slug || "mi-negocio"}.{tenantDomain}
+                </dd>
+              </div>
+              <div className="flex items-center justify-center gap-4">
                 <dt className="text-muted-foreground">Moneda</dt>
                 <dd className="font-medium">{currency}</dd>
               </div>
               <div className="flex items-center justify-center gap-4">
-                <dt className="text-muted-foreground">ID de usuario</dt>
+                <dt className="text-muted-foreground">Usuario</dt>
                 <dd className="font-medium">{username.trim().toLowerCase()}</dd>
               </div>
               {branchName.trim() && (

@@ -17,12 +17,18 @@ import { apiErrorMessage } from "@/lib/http-error"
 interface JoinFormProps {
   token: string
   email: string
+  initialName?: string
   alreadyHasAccount: boolean
 }
 
-export function JoinForm({ token, email, alreadyHasAccount }: JoinFormProps) {
+export function JoinForm({
+  token,
+  email,
+  initialName = "",
+  alreadyHasAccount,
+}: JoinFormProps) {
   const router = useRouter()
-  const [name, setName] = useState("")
+  const [name, setName] = useState(initialName)
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)

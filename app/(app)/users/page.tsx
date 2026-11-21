@@ -91,7 +91,6 @@ export default async function UsersPage() {
         branches={branches}
         activeBranch={activeBranch}
         currentUserId={user.id}
-        organizationDomain={user.organizationDomain ?? ""}
       />
     </div>
   )

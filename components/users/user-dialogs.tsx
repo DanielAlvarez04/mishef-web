@@ -22,7 +22,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldLabel,
+} from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -51,6 +56,7 @@ interface UserDraft {
   name: string
   surname: string
   password: string
+  email: string
   username: string
   branchId: string
   roles: RoleCode[]
@@ -102,62 +108,6 @@ function RolePicker({
           </label>
         )
       })}
-    </div>
-  )
-}
-
-/**
- * Input de usuario del equipo con la parte del dominio fija.
- *
- * Solo la parte local (antes del `@`) es editable. El dominio del negocio se
- * muestra como texto no editable a la derecha, y el valor completo
- * (`local@dominio`) se envía en el formulario a través de un input oculto.
- *
- * `displayValue` es lo que se muestra (sugerencia o edición manual).
- * `onChange` recibe la parte local y marca como edición manual.
- */
-function UsernameWithDomainInput({
-  id,
-  domain,
-  displayValue,
-  placeholder,
-  onChange,
-  required,
-  disabled,
-}: {
-  id: string
-  domain: string
-  displayValue: string
-  placeholder: string
-  onChange?: (localPart: string) => void
-  required?: boolean
-  disabled?: boolean
-}) {
-  return (
-    <div className="relative flex items-center w-full">
-      <Input
-        id={id}
-        autoComplete="off"
-        autoCapitalize="none"
-        spellCheck={false}
-        maxLength={120}
-        placeholder={placeholder}
-        value={displayValue}
-        onChange={(event) => onChange?.(event.target.value)}
-        required={required}
-        disabled={disabled}
-        className="pr-12"
-      />
-      <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-muted-foreground group-data-[disabled=true]/field:opacity-50">
-        @{domain}
-      </span>
-      {disabled ? null : (
-        <input
-          type="hidden"
-          name="username"
-          value={displayValue ? `${displayValue}@${domain}` : ""}
-        />
-      )}
     </div>
   )
 }
@@ -288,11 +238,9 @@ function splitDisplayName(name: string): { first: string; surname: string } {
 
 export function CreateUserDialog({
   onClose,
-  organizationDomain,
   branches,
 }: {
   onClose: () => void
-  organizationDomain: string
   branches: Branch[]
 }) {
   const router = useRouter()
@@ -302,21 +250,17 @@ export function CreateUserDialog({
   const [branchId, setBranchId] = useState(draft?.branchId ?? "")
   const [name, setName] = useState(draft?.name ?? "")
   const [surname, setSurname] = useState(draft?.surname ?? "")
-  const [manualUsernameLocalPart, setManualUsernameLocalPart] = useState(
-    draft?.username ?? ""
-  )
+  const [manualUsername, setManualUsername] = useState(draft?.username ?? "")
+  const [email, setEmail] = useState(draft?.email ?? "")
   const [password, setPassword] = useState(draft?.password ?? "")
-  const domain = organizationDomain
   const hasBranches = branches.some((branch) => branch.isActive)
-  const manualUsername = manualUsernameLocalPart
-    ? `${manualUsernameLocalPart}@${domain}`
-    : null
+  const invited = email.trim().length > 0
 
   // Nombre completo para la sugerencia de username (nombre + apellido)
   const fullName = [name.trim(), surname.trim()].filter(Boolean).join(" ")
 
-  // Generamos los candidatos locales (incluye opción con solo el nombre y con inicial+último apellido)
-  const localCandidates = generateUsernameCandidates(fullName, domain)
+  // Candidatos locales (nombre, inicial + apellido, con números).
+  const localCandidates = generateUsernameCandidates(fullName)
 
   // Índice del candidato del cual mostramos el username. Se reinicia cuando
   // cambia el nombre completo (ajuste durante el render, sin efectos).
@@ -330,8 +274,7 @@ export function CreateUserDialog({
     candidate.name === fullName ? candidate.index : 0
 
   // Elegimos el candidato activo: prioridad edición manual > candidato local actual
-  const activeCandidate = manualUsername ?? localCandidates[candidateIndex] ?? ""
-  const displayUsername = activeCandidate ? activeCandidate.split("@")[0] : ""
+  const activeCandidate = manualUsername || localCandidates[candidateIndex] || ""
   const username = activeCandidate
   const usernameStatus = useUsernameStatus(username)
 
@@ -350,6 +293,9 @@ export function CreateUserDialog({
     clearDraft(draftKey)
     onClose()
     router.refresh()
+    toast.success(
+      invited ? "Invitación enviada por correo" : "Usuario creado"
+    )
   })
 
   /** Guarda el borrador antes de cerrar, para recuperarlo al reabrir. */
@@ -358,7 +304,8 @@ export function CreateUserDialog({
       name,
       surname,
       password,
-      username: manualUsernameLocalPart,
+      email,
+      username: manualUsername,
       branchId,
       roles,
     })
@@ -371,7 +318,8 @@ export function CreateUserDialog({
     setName("")
     setSurname("")
     setPassword("")
-    setManualUsernameLocalPart("")
+    setEmail("")
+    setManualUsername("")
     setBranchId("")
     setRoles(["WAITER"])
   }
@@ -382,7 +330,9 @@ export function CreateUserDialog({
         <DialogHeader>
           <DialogTitle>Nuevo usuario del equipo</DialogTitle>
           <DialogDescription>
-            La cuenta funciona con usuario y contraseña.
+            {invited
+              ? "Con correo se envía una invitación para que la persona defina su contraseña."
+              : "La cuenta funciona con usuario y contraseña inicial."}
           </DialogDescription>
         </DialogHeader>
 
@@ -436,35 +386,72 @@ export function CreateUserDialog({
               <Field>
                 <AvailabilityLabel
                   htmlFor="new-username"
-                  label="ID de usuario"
+                  label="Usuario"
                   status={usernameStatus}
                   required
                 />
-                <UsernameWithDomainInput
+                <Input
                   id="new-username"
-                  domain={domain}
-                  displayValue={displayUsername}
+                  name="username"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={32}
                   placeholder="elizabeth"
-                  onChange={setManualUsernameLocalPart}
+                  value={username}
+                  onChange={(event) => setManualUsername(event.target.value)}
                   required
                 />
+                <FieldDescription>
+                  Solo para este negocio: letras, números, punto, guion o guion
+                  bajo. Sin @dominio.
+                </FieldDescription>
               </Field>
             </div>
 
-            {/* Fila 2: Contraseña y Sucursal. */}
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* Fila 2: Contraseña, correo y sucursal. */}
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field>
-                <FieldLabel htmlFor="new-password" required>
+                <FieldLabel htmlFor="new-password" required={!invited}>
                   Contraseña inicial
                 </FieldLabel>
                 <PasswordInput
                   id="new-password"
                   name="password"
-                  placeholder="Letras y números, mínimo 8"
+                  placeholder={
+                    invited
+                      ? "La persona la define al aceptar"
+                      : "Letras y números, mínimo 8"
+                  }
                   value={password}
                   onChange={setPassword}
-                  required
+                  required={!invited}
+                  disabled={invited}
                 />
+                {invited ? (
+                  <FieldDescription>
+                    Con correo se envía una invitación; no compartas
+                    contraseñas.
+                  </FieldDescription>
+                ) : null}
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="new-email">Correo (opcional)</FieldLabel>
+                <Input
+                  id="new-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  maxLength={120}
+                  placeholder="elizabeth@correo.com"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+                <FieldDescription>
+                  Si lo agregas, se envía una invitación para que la persona
+                  defina su contraseña.
+                </FieldDescription>
               </Field>
 
               <BranchPicker
@@ -508,6 +495,7 @@ export function CreateUserDialog({
                   pending ||
                   roles.length === 0 ||
                   usernameStatus.state !== "ok" ||
+                  (!invited && !password) ||
                   (hasBranches && !branchId)
                 }
               >
@@ -530,12 +518,10 @@ export function EditUserDialog({
   user,
   onClose,
   branches,
-  organizationDomain,
 }: {
   user: InternalUser
   onClose: () => void
   branches: Branch[]
-  organizationDomain: string
 }) {
   const router = useRouter()
   const initialName = splitDisplayName(user.name ?? "")
@@ -552,15 +538,13 @@ export function EditUserDialog({
     draft?.branchId ?? user.branchId ?? ""
   )
   const [password, setPassword] = useState(draft?.password ?? "")
-
-  // El ID de usuario no se puede cambiar: se muestra tal cual está guardado.
-  const storedUsername = user.username ?? ""
-  const [usernameLocalPart, usernameDomain] = storedUsername.includes("@")
-    ? [
-        storedUsername.slice(0, storedUsername.lastIndexOf("@")),
-        storedUsername.slice(storedUsername.lastIndexOf("@") + 1),
-      ]
-    : [storedUsername, organizationDomain]
+  const [username, setUsername] = useState(
+    draft?.username ?? user.username ?? ""
+  )
+  const [email, setEmail] = useState(draft?.email ?? user.email ?? "")
+  const usernameStatus = useUsernameStatus(username, {
+    currentUsername: user.username,
+  })
 
   const { pending, error, run } = useActionForm(() => {
     clearDraft(draftKey)
@@ -574,7 +558,8 @@ export function EditUserDialog({
       name,
       surname,
       password,
-      username: "",
+      email,
+      username,
       branchId,
       roles,
     })
@@ -589,8 +574,8 @@ export function EditUserDialog({
             Editar {user.name ?? user.username ?? "usuario"}
           </DialogTitle>
           <DialogDescription>
-            Cambia el nombre, los roles o la contraseña. Guardar una nueva
-            contraseña cierra todas sus sesiones activas.
+            Cambia el nombre, el usuario, el correo, los roles o la contraseña.
+            Guardar una nueva contraseña cierra todas sus sesiones activas.
           </DialogDescription>
         </DialogHeader>
 
@@ -607,6 +592,12 @@ export function EditUserDialog({
               ...(sameText(initialName.surname, surname)
                 ? {}
                 : { surname: surname.trim() }),
+              ...(sameText(user.username ?? "", username)
+                ? {}
+                : { username: username.trim() }),
+              ...(sameText(user.email ?? "", email)
+                ? {}
+                : { email: email.trim() }),
               ...(password.trim() ? { password: password.trim() } : {}),
               ...(sameStringSet(user.roles, roles) ? {} : { roles }),
               ...(hasActiveBranches && (user.branchId ?? "") !== branchId
@@ -651,20 +642,28 @@ export function EditUserDialog({
                   onChange={(event) => setSurname(event.target.value)}
                 />
               </Field>
-              <Field data-disabled>
-                <FieldLabel htmlFor="edit-username">ID de usuario</FieldLabel>
-                <UsernameWithDomainInput
+              <Field>
+                <AvailabilityLabel
+                  htmlFor="edit-username"
+                  label="Usuario"
+                  status={usernameStatus}
+                />
+                <Input
                   id="edit-username"
-                  domain={usernameDomain}
-                  displayValue={usernameLocalPart}
+                  name="username"
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  maxLength={32}
                   placeholder="Sin usuario"
-                  disabled
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
                 />
               </Field>
             </div>
 
-            {/* Fila 2: Nueva contraseña y Sucursal. */}
-            <div className="grid gap-3 sm:grid-cols-2">
+            {/* Fila 2: Nueva contraseña, correo y sucursal. */}
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field>
                 <FieldLabel htmlFor="edit-password">
                   Nueva contraseña
@@ -675,6 +674,20 @@ export function EditUserDialog({
                   placeholder="Déjalo vacío para conservarla"
                   value={password}
                   onChange={setPassword}
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel htmlFor="edit-email">Correo</FieldLabel>
+                <Input
+                  id="edit-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  maxLength={120}
+                  placeholder="Sin correo"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
                 />
               </Field>
 
@@ -707,7 +720,16 @@ export function EditUserDialog({
               <Button type="button" variant="outline" onClick={handleClose}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={pending || roles.length === 0}>
+              <Button
+                type="submit"
+                disabled={
+                  pending ||
+                  roles.length === 0 ||
+                  usernameStatus.state === "taken" ||
+                  usernameStatus.state === "invalid" ||
+                  usernameStatus.state === "checking"
+                }
+              >
                 {pending ? (
                   <Loader2Icon className="animate-spin" />
                 ) : (

@@ -15,7 +15,7 @@ import {
   type InventoryMovement,
 } from "@/lib/catalog"
 import type { InventoryReport } from "@/lib/dashboard"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 /** Ventana del reporte de consumo que alimenta las tarjetas de resumen. */
 const SUMMARY_DAYS = 30
@@ -25,7 +25,7 @@ function dateParam(date: Date): string {
 }
 
 export default async function InventoryPage() {
-  const user = await requireUser()
+  const user = await requireAnyRole(["ADMIN", "INVENTORY_MANAGER"])
 
   const today = new Date()
   const since = new Date(today.getTime() - (SUMMARY_DAYS - 1) * 86400000)

@@ -256,8 +256,8 @@ function pass(request: NextRequest, headers?: Headers): NextResponse {
   return NextResponse.next({ request: { headers: next } });
 }
 
-function clearImpersonationCookie(response: NextResponse): NextResponse {
-  response.cookies.set(IMPERSONATION_COOKIE, "", {
+function clearAuthCookie(response: NextResponse, name: string): NextResponse {
+  response.cookies.set(name, "", {
     path: "/",
     maxAge: 0,
     httpOnly: true,
@@ -269,14 +269,18 @@ function clearImpersonationCookie(response: NextResponse): NextResponse {
   return response
 }
 
+function clearImpersonationCookie(response: NextResponse): NextResponse {
+  return clearAuthCookie(response, IMPERSONATION_COOKIE)
+}
+
 function redirectToLogin(request: NextRequest): NextResponse {
   // Una caja vinculada por QR entra con PIN en lugar de contraseña.
   const hasDevice = Boolean(request.cookies.get("np_pos_device")?.value)
   const response = NextResponse.redirect(
     new URL(hasDevice ? "/pos/unlock" : "/login", request.url)
   )
-  response.cookies.delete(ACCESS_TOKEN_COOKIE)
-  response.cookies.delete(REFRESH_TOKEN_COOKIE)
+  clearAuthCookie(response, ACCESS_TOKEN_COOKIE)
+  clearAuthCookie(response, REFRESH_TOKEN_COOKIE)
   clearImpersonationCookie(response)
   return response
 }
@@ -457,8 +461,8 @@ export async function proxy(request: NextRequest) {
     }
 
     const response = pass(request)
-    response.cookies.delete(ACCESS_TOKEN_COOKIE)
-    response.cookies.delete(REFRESH_TOKEN_COOKIE)
+    clearAuthCookie(response, ACCESS_TOKEN_COOKIE)
+    clearAuthCookie(response, REFRESH_TOKEN_COOKIE)
     return response
   }
 

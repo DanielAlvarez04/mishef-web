@@ -8,12 +8,15 @@ import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
+import { Button } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { resendVerificationForm } from "@/app/(app)/settings/security-actions"
 import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
+import { getTenant } from "@/lib/tenant"
 
 /**
  * Rutas del panel de plataforma. Un superadmin no ve el panel del negocio:
@@ -43,7 +46,48 @@ export default async function AppLayout({
 
   // El proxy inyecta `x-pathname`; sin esa cabecera se deja pasar para no
   // provocar un bucle de redirecciones.
-  const pathname = ((await headers()).get("x-pathname") ?? "").split("?")[0]
+  const requestHeaders = await headers()
+  const pathname = (requestHeaders.get("x-pathname") ?? "").split("?")[0]
+  const host = (
+    requestHeaders.get("x-forwarded-host") ??
+    requestHeaders.get("host") ??
+    ""
+  )
+    .split(":")[0]
+    .trim()
+    .toLowerCase()
+  const tenantSlug = requestHeaders.get("x-tenant")?.trim().toLowerCase() ?? null
+  const tenantDomain =
+    requestHeaders.get("x-tenant-domain")?.trim().toLowerCase() ?? null
+  const isLocalHost =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".local") ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(host)
+  const baseDomain = (
+    process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
+  )
+    .trim()
+    .toLowerCase()
+  const tenantHome = user.organizationSlug
+    ? `https://${user.organizationSlug}.${baseDomain}`
+    : null
+
+  // Solo el dominio principal permite al dueño; el resto de usuarios debe
+  // entrar por su subdominio. Además, una sesión de otro negocio nunca se
+  // reutiliza en el host equivocado.
+  if (!user.isPlatformAdmin && !isLocalHost && tenantHome) {
+    if (tenantSlug || tenantDomain) {
+      const tenant = await getTenant()
+
+      if (tenant?.slug && tenant.slug !== user.organizationSlug) {
+        redirect(`${tenantHome}${pathname || "/dashboard"}`)
+      }
+    } else if (host === `app.${baseDomain}` || host === baseDomain) {
+      redirect(`${tenantHome}${pathname || "/dashboard"}`)
+    }
+  }
+
   const platformArea = PLATFORM_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`)
   )
@@ -55,6 +99,10 @@ export default async function AppLayout({
 
   // El superadmin opera sobre `mishef-platform`: no necesita sucursales y la
   // consulta solo añadiría latencia.
+  if (user.mustChangePassword && pathname && pathname !== "/settings") {
+    redirect("/settings?password=required")
+  }
+
   const [branches, activeBranch] = platformMode
     ? ([[] as Branch[], null] as [Branch[], Branch | null])
     : await Promise.all([getBranches(), getActiveBranch()])
@@ -87,6 +135,7 @@ export default async function AppLayout({
             organizationName={user.organizationName}
             isAdmin={isAdmin(user)}
             isPlatformAdmin={user.isPlatformAdmin}
+            roles={user.roles}
             branches={branches}
             activeBranchId={activeBranch?.id ?? user.branchId ?? null}
             lockedBranch={Boolean(user.branchId)}
@@ -104,6 +153,21 @@ export default async function AppLayout({
               }
               showClock={!platformMode}
             />
+            {!user.isPlatformAdmin && user.email && !user.emailVerified ? (
+              <div className="border-b bg-amber-500/10 px-4 py-2 text-sm lg:px-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-amber-800 dark:text-amber-300">
+                    Verifica tu correo <strong>{user.email}</strong> para
+                    desbloquear facturación, dominio propio y 2FA.
+                  </span>
+                  <form action={resendVerificationForm}>
+                    <Button type="submit" size="sm" variant="outline">
+                      Reenviar verificación
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            ) : null}
             {user.impersonation ? (
               <ImpersonationBanner
                 userName={displayName(user)}
@@ -116,7 +180,10 @@ export default async function AppLayout({
               {children}
             </div>
           </SidebarInset>
-          <MobileTabBar isPlatformAdmin={user.isPlatformAdmin} />
+          <MobileTabBar
+            isPlatformAdmin={user.isPlatformAdmin}
+            roles={user.roles}
+          />
         </SidebarProvider>
       </OfflineProvider>
     </CurrencyProvider>

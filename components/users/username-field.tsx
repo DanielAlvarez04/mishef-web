@@ -70,10 +70,16 @@ export function useUsernameStatus(
         setRemote({
           username: target,
           status: result.available
-            ? { state: "ok", message: "Disponible" }
+            ? { state: "ok", message: result.message ?? "Disponible" }
             : result.reason === "taken"
-              ? { state: "taken", message: "Ya está en uso" }
-              : { state: "invalid", message: INVALID_MESSAGE },
+              ? {
+                  state: "taken",
+                  message: result.message ?? "Ya está en uso en este negocio",
+                }
+              : {
+                  state: "invalid",
+                  message: result.message ?? INVALID_MESSAGE,
+                },
         })
       } catch {
         setRemote({
@@ -119,17 +125,11 @@ export function splitName(name: string): { first: string; surname: string } {
  * Genera candidatos de usuario localmente (sin llamar a la API).
  *
  * Patrones (en orden de preferencia):
- *   1. Sólo el nombre:                      chiqui@dominio
- *   2. Inicial del nombre + último apellido: cflores@dominio o cfrosas@dominio
+ *   1. Sólo el nombre:                      chiqui
+ *   2. Inicial del nombre + último apellido: cflores
  *   3. Números consecutivos para ambos patrones
- *
- * Los apellidos se separan por espacios; para la variante de inicial
- * sólo se usa el **último** apellido (en caso de varios).
  */
-export function generateUsernameCandidates(
-  name: string,
-  domain: string | null
-): string[] {
+export function generateUsernameCandidates(name: string): string[] {
   const words = name
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
@@ -147,23 +147,21 @@ export function generateUsernameCandidates(
   const surnames = words.slice(1)
   const lastSurname = surnames.length ? surnames[surnames.length - 1] : ""
 
-  const suffix = domain ? `@${domain}` : ""
-
   const candidates: string[] = []
 
   // 1. Sólo el nombre
-  candidates.push(`${first}${suffix}`)
+  candidates.push(first)
 
   // 2. Inicial del nombre + último apellido (si existe)
   if (lastSurname) {
-    candidates.push(`${first[0]}${lastSurname}${suffix}`)
+    candidates.push(`${first[0]}${lastSurname}`)
   }
 
   // 3. Números consecutivos para ambos patrones
   for (let n = 2; n <= 9; n++) {
-    candidates.push(`${first}${n}${suffix}`)
+    candidates.push(`${first}${n}`)
     if (lastSurname) {
-      candidates.push(`${first[0]}${lastSurname}${n}${suffix}`)
+      candidates.push(`${first[0]}${lastSurname}${n}`)
     }
   }
 
@@ -171,10 +169,10 @@ export function generateUsernameCandidates(
 }
 
 /**
- * Usuario propuesto por la API para un nombre: `ana@dominio` y, si ya existe,
- * `a.perez@dominio`. Solo consulta mientras el campo no se edite a mano.
+ * Usuario propuesto por la API para un nombre: `ana` y, si ya existe,
+ * `a.perez`. Solo consulta mientras el campo no se edite a mano.
  *
- * `resetKey` (por ejemplo el dominio del negocio) descarta la propuesta cuando
+ * `resetKey` (por ejemplo el nombre del negocio) descarta la propuesta cuando
  * cambia algo de lo que depende en el servidor. La clave incluye el nombre y
  * `resetKey`, así que una propuesta vieja nunca se muestra para un negocio
  * distinto.

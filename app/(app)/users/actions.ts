@@ -40,42 +40,9 @@ export async function checkUsernameAvailability(
 }
 
 /**
- * Busca un usuario por correo para precargar nombre y apellido.
- *
- * Devuelve `{ found: true, name }` cuando el correo ya existe (registro con
- * correo o Google), o `{ found: false }` cuando no.
- */
-export async function findUserByEmail(
-  email: string
-): Promise<{ found: boolean; name?: string | null; email?: string | null; username?: string | null }> {
-  await requireUser()
-
-  const response = await apiFetch(
-    `/users/by-email?email=${encodeURIComponent(email.trim())}`
-  )
-
-  if (!response.ok) {
-    throw new Error(
-      apiErrorMessage(
-        await response.json().catch(() => null),
-        "No pudimos buscar el usuario por correo"
-      )
-    )
-  }
-
-  return (await response.json()) as {
-    found: boolean
-    name?: string | null
-    email?: string | null
-    username?: string | null
-  }
-}
-
-/**
  * Pide a la API el usuario propuesto para un nombre.
  *
- * Tiene en cuenta el dominio del negocio y los usuarios ya ocupados:
- * `ana@naranjapimienta.cafe` → `a.perez@naranjapimienta.cafe`.
+ * Devuelve solo la parte local: el subdominio ya resuelve el negocio.
  */
 export async function suggestUsername(name: string): Promise<UsernameSuggestion> {
   await requireUser()
@@ -112,14 +79,34 @@ function roles(formData: FormData): RoleCode[] {
 export async function createInternalUser(
   formData: FormData
 ): Promise<ActionResult> {
+  const email = text(formData, "email")
+  const name = text(formData, "name")
+  const surname = text(formData, "surname")
+  const fullName = [name, surname].filter(Boolean).join(" ") || undefined
+
+  // Con correo se envía una invitación: la persona elige su propia contraseña.
+  if (email) {
+    return mutateApi(
+      "/users/invitations",
+      "POST",
+      {
+        email,
+        name: fullName,
+        username: text(formData, "username"),
+        roles: roles(formData),
+        branchId: text(formData, "branchId"),
+      },
+      USER_PATHS
+    )
+  }
+
   return mutateApi(
     "/users",
     "POST",
     {
       username: text(formData, "username"),
-      email: text(formData, "email"),
-      name: text(formData, "name"),
-      surname: text(formData, "surname"),
+      name,
+      surname,
       password: text(formData, "password"),
       roles: roles(formData),
       branchId: text(formData, "branchId"),
@@ -131,6 +118,8 @@ export async function createInternalUser(
 export interface UserUpdateInput {
   name?: string
   surname?: string
+  username?: string
+  email?: string
   password?: string
   roles?: RoleCode[]
   branchId?: string

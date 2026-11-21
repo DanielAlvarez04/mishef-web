@@ -7,6 +7,8 @@ export interface InvitationPreview {
   organizationName: string
   organizationSlug: string
   email: string
+  name: string | null
+  username: string | null
   roles: string[]
   expiresAt: string
   alreadyHasAccount: boolean

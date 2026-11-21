@@ -17,8 +17,12 @@ export default async function OnboardingPage() {
       initialBusinessName={user.organizationName ?? ""}
       initialName={user.name ?? ""}
       initialUsername={user.username ?? ""}
+      initialSlug={user.organizationSlug ?? ""}
       initialCurrency={user.organizationCurrency}
       currentUsername={user.username}
+      tenantDomain={
+        process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
+      }
     />
   )
 }

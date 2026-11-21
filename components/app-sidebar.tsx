@@ -27,6 +27,7 @@ import {
   PLATFORM_NAV,
   SERVICE_NAV,
   SETTINGS_NAV,
+  canSeeNavItem,
   type NavItem,
 } from "@/lib/navigation"
 import {
@@ -44,8 +45,6 @@ function withIcons(items: NavItem[]) {
   })
 }
 
-const navService = withIcons(SERVICE_NAV)
-const navApplication = withIcons(APPLICATION_NAV)
 const navPlatform = withIcons(PLATFORM_NAV)
 const navSecondaryBase = withIcons([SETTINGS_NAV])
 
@@ -54,6 +53,7 @@ export function AppSidebar({
   organizationName,
   isAdmin = false,
   isPlatformAdmin = false,
+  roles = [],
   branches = [],
   activeBranchId = null,
   lockedBranch = false,
@@ -63,11 +63,22 @@ export function AppSidebar({
   organizationName?: string | null
   isAdmin?: boolean
   isPlatformAdmin?: boolean
+  roles?: string[]
   branches?: Branch[]
   activeBranchId?: string | null
   lockedBranch?: boolean
 }) {
   const { setOpenMobile } = useSidebar()
+
+  const serviceItems = React.useMemo(
+    () => withIcons(SERVICE_NAV.filter((item) => canSeeNavItem(item, roles))),
+    [roles]
+  )
+  const applicationItems = React.useMemo(
+    () =>
+      withIcons(APPLICATION_NAV.filter((item) => canSeeNavItem(item, roles))),
+    [roles]
+  )
 
   // En móvil el sidebar es un Sheet: al elegir una página debe cerrarse para
   // no seguir tapando el contenido. Se hace en el click, no en un efecto,
@@ -146,13 +157,13 @@ export function AppSidebar({
               </>
             ) : null}
             <NavMain
-              items={navService}
+              items={serviceItems}
               label="Servicio"
               onNavigate={closeMobileSidebar}
             />
             <SidebarSeparator />
             <NavMain
-              items={navApplication}
+              items={applicationItems}
               label="Aplicación"
               onNavigate={closeMobileSidebar}
             />

@@ -2,12 +2,20 @@
 
 import { useState, useTransition } from "react"
 
-export function useActionForm(onSuccess?: () => void) {
+export interface ActionFormResult<T = unknown> {
+  ok: boolean
+  message?: string
+  data?: T
+}
+
+export function useActionForm<T = unknown>(
+  onSuccess?: (result: ActionFormResult<T>) => void
+) {
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
   function run(
-    action: () => Promise<{ ok: boolean; message?: string }>
+    action: () => Promise<ActionFormResult<T>>
   ): Promise<boolean> {
     setError(null)
 
@@ -20,7 +28,7 @@ export function useActionForm(onSuccess?: () => void) {
             resolve(false)
             return
           }
-          onSuccess?.()
+          onSuccess?.(result)
           resolve(true)
         } catch (cause) {
           setError(

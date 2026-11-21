@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { MenuIcon } from "lucide-react"
@@ -8,6 +9,7 @@ import { useSidebar } from "@/components/ui/sidebar"
 import {
   PLATFORM_NAV,
   SERVICE_NAV,
+  canSeeNavItem,
   isNavItemActive,
   type NavItem,
 } from "@/lib/navigation"
@@ -26,13 +28,21 @@ import { cn } from "cn"
  */
 export function MobileTabBar({
   isPlatformAdmin = false,
+  roles = [],
 }: {
   isPlatformAdmin?: boolean
+  roles?: string[]
 }) {
   const pathname = usePathname()
   const { setOpenMobile } = useSidebar()
-  const items = isPlatformAdmin ? PLATFORM_NAV : SERVICE_NAV
-  const centerIndex = isPlatformAdmin ? -1 : 2
+  const items = React.useMemo(
+    () =>
+      isPlatformAdmin
+        ? PLATFORM_NAV
+        : SERVICE_NAV.filter((item) => canSeeNavItem(item, roles)),
+    [isPlatformAdmin, roles]
+  )
+  const centerIndex = items.findIndex((item) => item.url === "/pos")
 
   return (
     <>

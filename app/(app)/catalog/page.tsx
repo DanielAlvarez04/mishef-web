@@ -19,10 +19,10 @@ import {
   type OptionGroupPreset,
   type Recipe,
 } from "@/lib/catalog"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 export default async function CatalogPage() {
-  const user = await requireUser()
+  const user = await requireAnyRole(["ADMIN", "INVENTORY_MANAGER"])
 
   const [
     recipesResponse,

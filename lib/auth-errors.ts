@@ -8,6 +8,8 @@ const OAUTH_ERRORS: Record<string, string> = {
     "Tu cuenta no tiene acceso a ninguna organización activa.",
   google_mismatch:
     "Esa cuenta de Google no coincide con la cuenta vinculada. Usa la cuenta correcta.",
+  google_subdomain_required:
+    "Las cuentas del equipo deben entrar por el subdominio de su negocio. Pide la dirección a tu administrador.",
   google_unverified_email:
     "Google no ha verificado ese correo, así que no podemos iniciar sesión.",
 }

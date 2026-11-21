@@ -16,10 +16,10 @@ import {
 import type { CashSessionPayload } from "@/lib/cash"
 import type { PosDisplayInfo } from "@/lib/pos-display"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 export default async function PointOfSalePage() {
-  const user = await requireUser()
+  const user = await requireAnyRole(["ADMIN", "WAITER", "CASHIER"])
   const canRegister = canRegisterPayments(user.roles)
 
   const [

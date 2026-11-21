@@ -39,6 +39,7 @@ export function SettingsTabs({
   inventory,
   personalization,
   initialTab,
+  canManage = false,
 }: {
   account: ReactNode
   business: ReactNode
@@ -49,10 +50,16 @@ export function SettingsTabs({
   personalization: ReactNode
   /** Pestaña que debe abrirse al entrar (p. ej. al volver de Mercado Pago). */
   initialTab?: (typeof SETTINGS_TABS)[number]
+  /** Solo el ADMIN ve las pestañas de negocio; el resto ve su cuenta. */
+  canManage?: boolean
 }) {
+  const visibleTabs = canManage
+    ? SETTINGS_TABS
+    : (["account"] as const)
+
   const [tab, setTab] = usePersistentTab(
     "settings-tab",
-    SETTINGS_TABS,
+    visibleTabs,
     "account"
   )
 
@@ -74,30 +81,34 @@ export function SettingsTabs({
           <UserIcon className="size-4" />
           Cuenta
         </TabsTrigger>
-        <TabsTrigger value="business">
-          <Building2Icon className="size-4" />
-          Negocio
-        </TabsTrigger>
-        <TabsTrigger value="payments">
-          <CreditCardIcon className="size-4" />
-          Pagos
-        </TabsTrigger>
-        <TabsTrigger value="catalog">
-          <CookingPotIcon className="size-4" />
-          Catálogo
-        </TabsTrigger>
-        <TabsTrigger value="kitchen">
-          <ChefHatIcon className="size-4" />
-          Cocina
-        </TabsTrigger>
-        <TabsTrigger value="inventory">
-          <PackageIcon className="size-4" />
-          Inventario
-        </TabsTrigger>
-        <TabsTrigger value="personalization">
-          <PaletteIcon className="size-4" />
-          Personalización
-        </TabsTrigger>
+        {canManage ? (
+          <>
+            <TabsTrigger value="business">
+              <Building2Icon className="size-4" />
+              Negocio
+            </TabsTrigger>
+            <TabsTrigger value="payments">
+              <CreditCardIcon className="size-4" />
+              Pagos
+            </TabsTrigger>
+            <TabsTrigger value="catalog">
+              <CookingPotIcon className="size-4" />
+              Catálogo
+            </TabsTrigger>
+            <TabsTrigger value="kitchen">
+              <ChefHatIcon className="size-4" />
+              Cocina
+            </TabsTrigger>
+            <TabsTrigger value="inventory">
+              <PackageIcon className="size-4" />
+              Inventario
+            </TabsTrigger>
+            <TabsTrigger value="personalization">
+              <PaletteIcon className="size-4" />
+              Personalización
+            </TabsTrigger>
+          </>
+        ) : null}
       </TabsList>
 
       <TabsContent value="account" className="flex min-w-0 flex-col gap-6">

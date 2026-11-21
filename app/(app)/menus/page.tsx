@@ -10,10 +10,14 @@ import {
 import { apiFetch } from "@/lib/api"
 import { canManageCatalog, type ArticleListItem } from "@/lib/catalog"
 import type { Menu } from "@/lib/menus"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 export default async function MenusPage() {
-  const user = await requireUser()
+  const user = await requireAnyRole([
+    "ADMIN",
+    "WAITER",
+    "INVENTORY_MANAGER",
+  ])
 
   const [menusResponse, itemsResponse] = await Promise.all([
     apiFetch("/catalog/menus?includeInactive=true"),

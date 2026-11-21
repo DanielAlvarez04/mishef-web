@@ -1,5 +1,7 @@
 "use server"
 
+import { headers } from "next/headers"
+
 import { isSupportedCurrency } from "@/lib/currency-config"
 import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 
@@ -75,6 +77,34 @@ export async function updateOnboardingBusiness(
   }
 
   return updated
+}
+
+/** Paso de dirección: disponibilidad y sugerencia del subdominio. */
+export async function suggestOnboardingSlug(name: string) {
+  return readApi<{ slug: string; available: boolean }>(
+    `/public/slug-suggestion?name=${encodeURIComponent(name.trim())}`
+  )
+}
+
+export async function checkOnboardingSlug(slug: string) {
+  return readApi<{
+    slug: string
+    available: boolean
+    reason?: "taken" | "invalid" | "reserved"
+  }>(`/public/slug-available?slug=${encodeURIComponent(slug.trim())}`)
+}
+
+export async function updateOnboardingSlug(slug: string): Promise<ActionResult> {
+  if (!slug.trim()) {
+    return { ok: false, message: "Elige una dirección para tu negocio." }
+  }
+
+  return mutateApi(
+    "/organizations/slug",
+    "PATCH",
+    { slug: slug.trim() },
+    ["/onboarding", "/dashboard", "/settings"]
+  )
 }
 
 /** Paso 3: moneda del negocio (MXN o USD). */
@@ -157,10 +187,63 @@ export async function updateOnboardingGoals(
   )
 }
 
-/** Paso final: marca el onboarding como completado. */
-export async function finishOnboarding(): Promise<ActionResult> {
-  return mutateApi("/auth/onboarding/complete", "POST", undefined, [
-    "/onboarding",
-    "/dashboard",
-  ])
+/** Paso final: marca el onboarding como completado y calcula el subdominio. */
+export async function finishOnboarding(): Promise<
+  ActionResult<{ redirectTo: string }>
+> {
+  const completed = await mutateApi(
+    "/auth/onboarding/complete",
+    "POST",
+    undefined,
+    ["/onboarding", "/dashboard"]
+  )
+
+  if (!completed.ok) {
+    return completed as ActionResult<{ redirectTo: string }>
+  }
+
+  const me = await readApi<{
+    organizationSlug?: string | null
+    organization?: { slug?: string | null } | null
+  }>("/auth/me")
+
+  const slug =
+    me.ok && me.data
+      ? (me.data.organizationSlug ?? me.data.organization?.slug ?? null)
+      : null
+
+  const requestHeaders = await headers()
+  const host = (
+    requestHeaders.get("x-forwarded-host") ??
+    requestHeaders.get("host") ??
+    ""
+  )
+    .split(":")[0]
+    .trim()
+    .toLowerCase()
+  const baseDomain = (
+    process.env.NEXT_PUBLIC_TENANT_DOMAIN ?? "mishef.co"
+  )
+    .trim()
+    .toLowerCase()
+  const isLocal =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    host.endsWith(".local") ||
+    /^\d+\.\d+\.\d+\.\d+$/.test(host)
+
+  if (!slug || isLocal) {
+    return { ok: true, data: { redirectTo: "/dashboard" } }
+  }
+
+  const alreadyOnTenant = host === `${slug}.${baseDomain}`
+
+  return {
+    ok: true,
+    data: {
+      redirectTo: alreadyOnTenant
+        ? "/dashboard"
+        : `https://${slug}.${baseDomain}/dashboard`,
+    },
+  }
 }

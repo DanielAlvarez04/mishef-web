@@ -85,14 +85,12 @@ export function UsersTable({
   branches,
   activeBranch,
   currentUserId,
-  organizationDomain,
 }: {
   users: InternalUser[]
   branches: Branch[]
   /** Sucursal activa; `null` = vista consolidada de todas las sucursales. */
   activeBranch: Branch | null
   currentUserId: string
-  organizationDomain: string
 }) {
   const [creating, setCreating] = React.useState(false)
   const [editing, setEditing] = React.useState<InternalUser | null>(null)
@@ -377,7 +375,6 @@ export function UsersTable({
       {creating ? (
         <CreateUserDialog
           onClose={() => setCreating(false)}
-          organizationDomain={organizationDomain}
           branches={branches}
         />
       ) : null}
@@ -386,7 +383,6 @@ export function UsersTable({
           user={editing}
           onClose={() => setEditing(null)}
           branches={branches}
-          organizationDomain={organizationDomain}
         />
       ) : null}
 

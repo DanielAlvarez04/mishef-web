@@ -39,6 +39,7 @@ export default async function LoginPage({
   const error = oauthErrorMessage(first(params.error))
   const challengeId = first(params.challengeId)
   const email = first(params.email)
+  const challengeMethod = first(params.method) === "TOTP" ? "TOTP" : "EMAIL"
 
   const notice = params.reset
     ? "Contraseña actualizada. Inicia sesión con tu nueva contraseña."
@@ -58,7 +59,9 @@ export default async function LoginPage({
         initialError={error}
         notice={notice}
         initialChallenge={
-          challengeId ? { challengeId, email: email ?? "" } : undefined
+          challengeId
+            ? { challengeId, email: email ?? "", method: challengeMethod }
+            : undefined
         }
       />
     </AuthShell>

@@ -18,7 +18,7 @@ import {
   type OptionGroup,
   type OptionGroupPreset,
 } from "@/lib/catalog"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 export default async function ProductDetailPage({
   params,
@@ -26,7 +26,7 @@ export default async function ProductDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const user = await requireUser()
+  const user = await requireAnyRole(["ADMIN", "INVENTORY_MANAGER"])
 
   const [
     productResponse,

@@ -2,7 +2,6 @@ import Link from "next/link"
 import {
   CheckCircle2Icon,
   CircleAlertIcon,
-  KeyRoundIcon,
   LinkIcon,
   ShieldCheckIcon,
   UsersIcon,
@@ -30,7 +29,11 @@ import { CoreProductsCard } from "@/components/settings/core-products-card"
 import { CurrencyCard } from "@/components/settings/currency-card"
 import { InventoryPreferencesCard } from "@/components/settings/inventory-preferences-card"
 import { SettingsTabs } from "@/components/settings/settings-tabs"
+import { PasswordCard } from "@/components/settings/password-card"
+import { ProfileCard } from "@/components/settings/profile-card"
+import { SessionCard, type AuthSessionInfo } from "@/components/settings/session-card"
 import { TaxSettingsCard } from "@/components/settings/tax-settings-card"
+import { TwoFactorCard } from "@/components/settings/two-factor-card"
 import { UnitsCard } from "@/components/settings/units-card"
 import { InstallApp } from "@/components/offline/install-app"
 import { Badge } from "@/components/ui/badge"
@@ -220,6 +223,7 @@ export default async function SettingsPage({
   const notice = googleLinkNotice(first(params.google))
   const mp = first(params.mp)
   const mpNotice = mercadoPagoNotice(mp)
+  const passwordRequired = first(params.password) === "required"
   const admin = isAdmin(user)
 
   const organizationResponse = await apiFetch("/organizations/current")
@@ -266,6 +270,11 @@ export default async function SettingsPage({
   const mpStatus: MercadoPagoStatus | null = mpStatusResponse?.ok
     ? ((await mpStatusResponse.json()) as MercadoPagoStatus)
     : null
+
+  const sessionsResponse = await apiFetch("/auth/sessions")
+  const sessions: AuthSessionInfo[] = sessionsResponse.ok
+    ? ((await sessionsResponse.json()) as AuthSessionInfo[])
+    : []
 
   // Fase 0 de CFDI: solo lectura/escritura de datos fiscales, sin timbrado.
   const fiscalResponse = admin ? await apiFetch("/fiscal/profile") : null
@@ -331,10 +340,19 @@ export default async function SettingsPage({
       </div>
 
       {notice ? <Notice {...notice} /> : null}
+      {passwordRequired ? (
+        <Notice
+          tone="warning"
+          message="Debes cambiar la contraseña inicial antes de usar el panel."
+        />
+      ) : null}
       {mpNotice ? <Notice {...mpNotice} /> : null}
 
       <SettingsTabs
-        initialTab={mp ? "payments" : undefined}
+        initialTab={
+          passwordRequired ? "account" : mp ? "payments" : undefined
+        }
+        canManage={admin}
         account={
           <>
             <Card>
@@ -394,6 +412,13 @@ export default async function SettingsPage({
               </CardContent>
             </Card>
 
+            <ProfileCard
+              name={user.name}
+              username={user.username}
+              email={user.email}
+              emailVerified={user.emailVerified}
+            />
+
             <Card>
               <CardHeader>
                 <CardTitle>Acceso con Google</CardTitle>
@@ -441,45 +466,16 @@ export default async function SettingsPage({
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Seguridad</CardTitle>
-                <CardDescription>
-                  Cómo proteges el acceso a tu cuenta.
-                </CardDescription>
-                <CardAction>
-                  {user.twoFactorEnabled ? (
-                    <Badge variant="secondary">
-                      <ShieldCheckIcon data-icon="inline-start" />
-                      Activa
-                    </Badge>
-                  ) : (
-                    <Badge variant="outline">Inactiva</Badge>
-                  )}
-                </CardAction>
-              </CardHeader>
-              <CardContent className="gap-3">
-                <div className="flex items-start gap-3 rounded-lg border border-border/60 p-3">
-                  <KeyRoundIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                  <div className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium">
-                      Verificación en dos pasos
-                      {user.twoFactorEnabled ? " activa" : " desactivada"}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {user.twoFactorEnabled
-                        ? "Cada inicio de sesión pide un código enviado a tu correo."
-                        : "Cuando la actives, cada inicio de sesión pedirá un código enviado a tu correo."}
-                    </span>
-                  </div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {user.email
-                    ? "La gestión de la verificación en dos pasos estará disponible en esta sección próximamente."
-                    : "Tu cuenta no tiene correo, así que no puede usar la verificación en dos pasos. Pide a un administrador que añada uno."}
-                </p>
-              </CardContent>
-            </Card>
+            <TwoFactorCard
+              enabled={user.twoFactorEnabled}
+              totpEnabled={user.twoFactorTotpEnabled}
+              email={user.email}
+              emailVerified={user.emailVerified}
+            />
+
+            <PasswordCard />
+
+            <SessionCard sessions={sessions} />
 
             <PosPinCard />
 

@@ -10,10 +10,10 @@ import {
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
 import { canWorkKitchen, type KitchenRound } from "@/lib/orders"
-import { requireUser } from "@/lib/session"
+import { requireAnyRole } from "@/lib/session"
 
 export default async function KitchenPage() {
-  const user = await requireUser()
+  const user = await requireAnyRole(["ADMIN", "WAITER", "KITCHEN"])
 
   const [response, branch, settingsResponse] = await Promise.all([
     apiFetch("/kitchen/rounds"),

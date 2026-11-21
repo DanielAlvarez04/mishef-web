@@ -46,10 +46,16 @@ export default async function JoinPage({
           <p className="mt-1 text-muted-foreground">
             Rol: {invitation.roles.map(roleLabel).join(", ") || "Mesero"}
           </p>
+          {invitation.username ? (
+            <p className="mt-1 text-muted-foreground">
+              Usuario: <span className="font-mono">{invitation.username}</span>
+            </p>
+          ) : null}
         </div>
         <JoinForm
           token={token}
           email={invitation.email}
+          initialName={invitation.name ?? ""}
           alreadyHasAccount={invitation.alreadyHasAccount}
         />
       </div>

@@ -10,6 +10,10 @@ export interface SessionUser {
   name: string | null
   emailVerified: boolean
   twoFactorEnabled: boolean
+  /** 2FA con app autenticadora (TOTP). */
+  twoFactorTotpEnabled: boolean
+  /** Debe cambiar la contraseña inicial antes de operar. */
+  mustChangePassword: boolean
   onboarded: boolean
   googleLinked: boolean
   roles: string[]
@@ -34,6 +38,12 @@ export interface SessionUser {
   organizationUseCoreOptionGroups: boolean
   /** Acceso al panel de plataforma (`/platform`, `/plans`, `/subscriptions`). */
   isPlatformAdmin: boolean
+  /** Dueño del negocio; único que puede iniciar sesión desde el dominio principal. */
+  isOwner: boolean
+  /** Slug del negocio de la sesión (`mi-cafe`). */
+  organizationSlug: string | null
+  /** Permisos efectivos según los roles de la membresía. */
+  permissions: string[]
   /** Modo práctica: no se registra analítica de operación. */
   organizationPracticeMode: boolean
   /** `true` si el modo práctica está vigente (no expiró). */
@@ -55,15 +65,23 @@ interface MeResponse {
   name: string | null
   emailVerified: boolean
   twoFactorEnabled: boolean
+  /** 2FA con app autenticadora (TOTP). */
+  twoFactorTotpEnabled: boolean
+  /** Debe cambiar la contraseña inicial antes de operar. */
+  mustChangePassword: boolean
   onboarded?: boolean
   googleLinked?: boolean
   isPlatformAdmin?: boolean
+  isOwner?: boolean
+  organizationSlug?: string | null
+  permissions?: string[]
   roles: string[]
   organizationId?: string | null
   branchId?: string | null
   organization?: {
     id: string
     name: string
+    slug?: string | null
     domain?: string | null
     brandColor?: string | null
     logoUrl?: string | null
@@ -102,9 +120,14 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
       name: data.name,
       emailVerified: data.emailVerified,
       twoFactorEnabled: data.twoFactorEnabled,
+      twoFactorTotpEnabled: data.twoFactorTotpEnabled ?? false,
+      mustChangePassword: data.mustChangePassword ?? false,
       onboarded: data.onboarded ?? false,
       googleLinked: data.googleLinked ?? false,
       isPlatformAdmin: data.isPlatformAdmin ?? false,
+      isOwner: data.isOwner ?? false,
+      organizationSlug: data.organizationSlug ?? data.organization?.slug ?? null,
+      permissions: data.permissions ?? [],
       roles: data.roles ?? [],
       organizationId: data.organizationId ?? data.organization?.id ?? null,
       branchId: data.branchId ?? null,
@@ -135,6 +158,28 @@ export async function requireUser(): Promise<SessionUser> {
 
   if (!user) {
     redirect("/login")
+  }
+
+  return user
+}
+
+/**
+ * Exige uno de los roles indicados para renderizar la página.
+ *
+ * La API sigue siendo la barrera real; esto evita que un rol sin acceso vea
+ * una pantalla vacía o datos que no le corresponden.
+ */
+export async function requireAnyRole(
+  roles: readonly string[],
+  redirectTo = "/dashboard"
+): Promise<SessionUser> {
+  const user = await requireUser()
+
+  if (
+    !user.isPlatformAdmin &&
+    !user.roles.some((role) => roles.includes(role))
+  ) {
+    redirect(redirectTo)
   }
 
   return user

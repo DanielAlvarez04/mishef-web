@@ -1,4 +1,4 @@
-import { cookies } from "next/headers"
+import { cookies, headers as getHeaders } from "next/headers"
 
 import { API_BASE_URL } from "./api-base"
 
@@ -76,6 +76,13 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
   const headers = new Headers(init.headers)
   if (cookieHeader) {
     headers.set("cookie", cookieHeader)
+  }
+
+  // El host del negocio viaja a la API para que una sesión de otra organización
+  // no pueda operar en este subdominio.
+  const tenantSlug = (await getHeaders()).get("x-tenant")?.trim().toLowerCase()
+  if (tenantSlug) {
+    headers.set("x-tenant-slug", tenantSlug)
   }
 
   // La sucursal activa sólo aplica a datos de negocio: `/auth/*` debe seguir
