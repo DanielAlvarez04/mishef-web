@@ -99,8 +99,8 @@ function playNewOrderSound() {
 }
 
 /** Etapas de la comanda, en orden, con la duración hasta la siguiente. */
-function roundSteps(round: KitchenRound) {
-  const timings = roundTimings(round)
+function roundSteps(round: KitchenRound, now: number) {
+  const timings = roundTimings(round, now)
 
   return [
     {
@@ -114,8 +114,8 @@ function roundSteps(round: KitchenRound) {
   ]
 }
 
-function RoundTimeline({ round }: { round: KitchenRound }) {
-  const steps = roundSteps(round).filter((step) => Boolean(step.at))
+function RoundTimeline({ round, now }: { round: KitchenRound; now: number }) {
+  const steps = roundSteps(round, now).filter((step) => Boolean(step.at))
 
   return (
     <ol className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[11px] leading-none">
@@ -149,6 +149,7 @@ export function KitchenView({
   canWork,
   branch,
   suggestedByDefault = true,
+  serverNow,
 }: {
   rounds: KitchenRound[]
   canWork: boolean
@@ -156,6 +157,8 @@ export function KitchenView({
   branch: Branch | null
   /** Preferencia guardada del negocio para ordenar por urgencia. */
   suggestedByDefault?: boolean
+  /** Hora del render del servidor, para que la hidratación coincida. */
+  serverNow: string
 }) {
   const router = useRouter()
   const money = useMoney()
@@ -166,6 +169,7 @@ export function KitchenView({
   const [fullscreen, setFullscreen] = React.useState(false)
   const [onlyDelayed, setOnlyDelayed] = React.useState(false)
   const [suggested, setSuggested] = React.useState(suggestedByDefault)
+  const [now, setNow] = React.useState(() => new Date(serverNow).getTime())
   const [activeStatus, setActiveStatus] = usePersistentTab(
     "kitchen-status",
     COLUMNS,
@@ -208,11 +212,18 @@ export function KitchenView({
     }
   }
 
-  // Los minutos transcurridos se recalculan sin recargar la página.
-  const [, setTick] = React.useState(0)
+  // Los minutos transcurridos se recalculan sin recargar la página. El primer
+  // render usa la hora del servidor para no romper la hidratación; el primer
+  // update se difiere para no hacer `setState` síncrono dentro del efecto.
   React.useEffect(() => {
-    const timer = setInterval(() => setTick((value) => value + 1), 30_000)
-    return () => clearInterval(timer)
+    const update = () => setNow(Date.now())
+    const immediate = setTimeout(update, 0)
+    const timer = setInterval(update, 30_000)
+
+    return () => {
+      clearTimeout(immediate)
+      clearInterval(timer)
+    }
   }, [])
 
   // Tiempo real por SSE; si la conexión falla se cae a sondeo periódico.
@@ -317,7 +328,7 @@ export function KitchenView({
    */
   const priorityOf = (round: KitchenRound): PrepPriority =>
     prepPriority(
-      (roundTimings(round).stage?.minutes ?? 0) /
+      (roundTimings(round, now).stage?.minutes ?? 0) /
         Math.max(1, round.estimateMinutes)
     )
 
@@ -432,7 +443,7 @@ export function KitchenView({
             <span className="text-muted-foreground">
               ·{" "}
               {topSuggestion.reasons[0] ??
-                `lleva ${roundTimings(topSuggestion).stage?.minutes ?? 0} min`}
+                `lleva ${roundTimings(topSuggestion, now).stage?.minutes ?? 0} min`}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -546,7 +557,7 @@ export function KitchenView({
               ) : (
                 <ul className="flex flex-col gap-3">
                   {columnRounds.map((round) => {
-                    const timings = roundTimings(round)
+                    const timings = roundTimings(round, now)
                     const stageMinutes = timings.stage?.minutes ?? 0
                     const priority = priorityOf(round)
                     const delayed = priority === "late"
@@ -607,7 +618,7 @@ export function KitchenView({
                           </div>
                         </div>
 
-                        <RoundTimeline round={round} />
+                        <RoundTimeline round={round} now={now} />
 
                         <ul className="flex flex-col gap-1 text-sm">
                           {round.items.map((item) => (
