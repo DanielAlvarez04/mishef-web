@@ -78,6 +78,14 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     headers.set("cookie", cookieHeader)
   }
 
+  // La API exige `Origin` en mutaciones autenticadas por cookie (CSRF).
+  // `mutateApi` ya lo manda; las rutas que llaman a `apiFetch` directo
+  // (p. ej. el proxy SSE de Intel) también deben hacerlo.
+  const method = (init.method ?? "GET").toUpperCase()
+  if (method !== "GET" && method !== "HEAD" && !headers.has("origin")) {
+    headers.set("origin", process.env.WEB_ORIGIN ?? "http://localhost:3000")
+  }
+
   // El host del negocio viaja a la API para que una sesión de otra organización
   // no pueda operar en este subdominio.
   const tenantSlug = (await getHeaders()).get("x-tenant")?.trim().toLowerCase()
