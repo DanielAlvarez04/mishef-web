@@ -49,6 +49,7 @@ export default async function KitchenPage() {
       canWork={canWorkKitchen(user.roles)}
       branch={branch}
       suggestedByDefault={settings?.suggestOrder ?? true}
+      serverNow={new Date().toISOString()}
     />
   )
 }

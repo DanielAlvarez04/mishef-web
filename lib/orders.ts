@@ -500,10 +500,19 @@ export function orderLabel(order: {
   return order.isTakeaway ? "Mostrador" : "Sin mesa"
 }
 
-/** Minutos transcurridos desde una fecha ISO. */
-export function elapsedMinutes(value: string | null): number {
+/**
+ * Minutos transcurridos desde una fecha ISO.
+ *
+ * `now` permite congelar la referencia en el render del servidor y reutilizarla
+ * durante la hidratación, de modo que el HTML y el primer render del cliente
+ * coincidan.
+ */
+export function elapsedMinutes(
+  value: string | null,
+  now: number = Date.now()
+): number {
   if (!value) return 0
-  return Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60000))
+  return Math.max(0, Math.floor((now - new Date(value).getTime()) / 60000))
 }
 
 /** Minutos entre dos fechas ISO, o `null` si falta alguna. */
@@ -535,14 +544,17 @@ export interface RoundTimings {
  * Las etapas sin marca de tiempo quedan en `null` para no inventar tiempos; la
  * etapa en curso se mide hasta ahora.
  */
-export function roundTimings(round: {
-  status: RoundStatus
-  sentAt: string | null
-  startedAt: string | null
-  readyAt: string | null
-  deliveredAt: string | null
-  createdAt: string
-}): RoundTimings {
+export function roundTimings(
+  round: {
+    status: RoundStatus
+    sentAt: string | null
+    startedAt: string | null
+    readyAt: string | null
+    deliveredAt: string | null
+    createdAt: string
+  },
+  now: number = Date.now()
+): RoundTimings {
   const sent = round.sentAt ?? round.createdAt
   const stageSince =
     round.status === "PENDING"
@@ -565,7 +577,7 @@ export function roundTimings(round: {
         ? {
             status: round.status,
             since: stageSince,
-            minutes: elapsedMinutes(stageSince),
+            minutes: elapsedMinutes(stageSince, now),
           }
         : null,
   }

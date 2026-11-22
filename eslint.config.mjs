@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Plantillas de skills: no son código de la aplicación.
+    ".agents/**",
   ]),
 ]);
 
