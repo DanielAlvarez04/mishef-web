@@ -145,6 +145,23 @@ export interface CashReconciliationAlert {
   message: string
 }
 
+export interface PendingReviewPayment {
+  id: string
+  orderId: string
+  method: PaymentMethod
+  amount: number
+  tipAmount: number
+  reference: string | null
+  deviceId: string | null
+  createdOfflineAt: string | null
+  createdAt: string
+  order: {
+    id: string
+    tableNumber: string | null
+    isTakeaway: boolean
+  }
+}
+
 export interface CashReconciliation {
   sessionId: string
   status: string
@@ -169,6 +186,11 @@ export interface CashReconciliation {
   }>
   tips: { total: number; cash: number; other: number }
   totals: { payments: number; amount: number }
+  pending: {
+    count: number
+    amount: number
+    items: PendingReviewPayment[]
+  }
   proposed: { counted: number; difference: number } | null
   alerts: CashReconciliationAlert[]
 }

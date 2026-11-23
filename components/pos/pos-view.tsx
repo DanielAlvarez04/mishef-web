@@ -645,6 +645,21 @@ ull` = vista consolidada. */
         offline.operations
           .filter(
             (operation) =>
+              operation.kind === "checkout" &&
+              operation.payment.method !== "CARD" &&
+              Boolean(operation.orderId)
+          )
+          .map((operation) => (operation as { orderId: string }).orderId)
+      ),
+    [offline.operations]
+  )
+
+  const offlineCheckoutOrderIds = React.useMemo(
+    () =>
+      new Set(
+        offline.operations
+          .filter(
+            (operation) =>
               operation.kind === "checkout" && Boolean(operation.orderId)
           )
           .map((operation) => (operation as { orderId: string }).orderId)
@@ -2507,6 +2522,17 @@ ull` = vista consolidada. */
                             : undefined
                     }
                     onClick={() => {
+                      if (offlineCheckoutOrderIds.has(activeOrder.id)) {
+                        toast.info(
+                          "Ya hay un cobro guardado en este dispositivo para esta cuenta.",
+                          {
+                            description:
+                              "Espera a que se sincronice o resuélvelo antes de cobrar de nuevo.",
+                          }
+                        )
+                        return
+                      }
+
                       if (offline.isOnline) setCharging(true)
                       else setOfflineCharging(true)
                     }}
@@ -2514,7 +2540,7 @@ ull` = vista consolidada. */
                     {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
                     {offline.isOnline
                       ? "Cobrar cuenta"
-                      : "Cobrar en efectivo sin conexión"}
+                      : "Cobrar sin conexión"}
                   </Button>
                   {!cash.session ? (
                     <p className="text-xs text-muted-foreground">

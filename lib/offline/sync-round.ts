@@ -24,6 +24,8 @@ export interface SyncResult {
   /** `true` si la cuenta se unió a una mesa ya abierta en el servidor. */
   reconciled: boolean
   orderId: string | null
+  /** El cobro con tarjeta quedó registrado y espera conciliación. */
+  pendingReview?: boolean
   message?: string
 }
 

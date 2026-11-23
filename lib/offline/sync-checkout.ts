@@ -1,7 +1,10 @@
 import type { ActionResult } from "@/lib/server-api"
 import type { Order } from "@/lib/orders"
 import type { CreateOrderInput, SendRoundInput } from "@/lib/order-actions"
-import type { RegisterPaymentInput } from "@/lib/payment-actions"
+import type {
+  RegisterOfflineCardInput,
+  RegisterPaymentInput,
+} from "@/lib/payment-actions"
 import type { QueuedCheckout } from "./types"
 import type { SyncResult } from "./sync-round"
 
@@ -14,6 +17,10 @@ export interface CheckoutDeps {
   registerPayment: (
     orderId: string,
     input: RegisterPaymentInput,
+  ) => Promise<ActionResult<unknown>>
+  registerOfflineCard: (
+    orderId: string,
+    input: RegisterOfflineCardInput,
   ) => Promise<ActionResult<unknown>>
   closeOrder: (orderId: string) => Promise<ActionResult<Order>>
   persist: (operation: QueuedCheckout) => Promise<void>
@@ -90,6 +97,35 @@ export async function syncQueuedCheckout(
       if (!sent.ok) {
         return fail(attempt, sent, deps, orderId, reconciled)
       }
+    }
+
+    if (attempt.payment.method === "CARD") {
+      const registered = await deps.registerOfflineCard(orderId, {
+        amount: attempt.payment.amount,
+        tipAmount: attempt.payment.tipAmount,
+        tipPercent: attempt.payment.tipPercent ?? null,
+        tipSource: attempt.payment.tipSource,
+        tipBaseAmount: attempt.payment.tipBaseAmount ?? null,
+        reference: attempt.payment.reference?.trim() ?? "",
+        deviceId: attempt.payment.deviceId ?? "",
+        createdOfflineAt: attempt.payment.createdOfflineAt
+          ? new Date(attempt.payment.createdOfflineAt).toISOString()
+          : undefined,
+        idempotencyKey: attempt.payment.idempotencyKey,
+      });
+
+      if (!registered.ok) {
+        return fail(attempt, registered, deps, orderId, reconciled);
+      }
+
+      await deps.remove(attempt.id);
+
+      return {
+        outcome: "done",
+        reconciled,
+        orderId,
+        pendingReview: true,
+      };
     }
 
     const paid = await deps.registerPayment(orderId, {
