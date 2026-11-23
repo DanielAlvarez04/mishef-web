@@ -11,6 +11,7 @@ import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { resendVerificationForm } from "@/app/(app)/settings/security-actions"
+import { apiFetch } from "@/lib/api"
 import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
@@ -112,6 +113,22 @@ export default async function AppLayout({
     ? ([[] as Branch[], null] as [Branch[], Branch | null])
     : await Promise.all([getBranches(), getActiveBranch()])
 
+  const canUseIntel =
+    !platformMode &&
+    (isAdmin(user) || user.roles.includes("INVENTORY_MANAGER"))
+  let intelUnread: number | undefined
+
+  if (canUseIntel) {
+    try {
+      const response = await apiFetch("/intel/notifications/unread-count")
+      intelUnread = response.ok
+        ? ((await response.json()) as { count: number }).count
+        : 0
+    } catch {
+      intelUnread = 0
+    }
+  }
+
   // El `SidebarProvider` guarda el estado en la cookie `sidebar_state`: se lee
   // aquí para que el sidebar arranque colapsado si el usuario lo dejó así.
   const cookieStore = await cookies()
@@ -157,6 +174,7 @@ export default async function AppLayout({
                 branches.length > 1 ? (activeBranch?.name ?? null) : null
               }
               showClock={!platformMode}
+              intelUnread={intelUnread}
             />
             {!user.isPlatformAdmin && user.email && !user.emailVerified ? (
               <div className="border-b bg-amber-500/10 px-4 py-2 text-sm lg:px-6">

@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { ClockIcon } from "lucide-react"
+import { BellIcon, ClockIcon } from "lucide-react"
 
 import { OfflineStatus } from "@/components/offline/offline-status"
 import { ModeToggle } from "@/components/mode-toggle"
@@ -23,6 +23,8 @@ const pageTitles: Record<string, string> = {
   "/reports/benchmark": "Benchmark",
   "/attendance": "Asistencia",
   "/waste": "Merma",
+  "/intel": "Intel",
+  "/intel/notifications": "Bandeja",
   "/settings": "Configuración",
   "/platform": "Plataforma",
   "/plans": "Planes",
@@ -34,9 +36,12 @@ const pageTitles: Record<string, string> = {
 export function SiteHeader({
   branchName,
   showClock = false,
+  intelUnread,
 }: {
   branchName?: string | null
   showClock?: boolean
+  /** Si está definido, muestra la campana de la bandeja de Intel. */
+  intelUnread?: number
 }) {
   const pathname = usePathname()
 
@@ -61,6 +66,24 @@ export function SiteHeader({
         <h1 className="text-base font-medium">{title}</h1>
         <div className="ml-auto flex items-center gap-2">
           <ModeToggle />
+          {typeof intelUnread === "number" ? (
+            <Button
+              variant="outline"
+              size="icon"
+              className="relative"
+              title="Bandeja de Intel"
+              nativeButton={false}
+              render={<Link href="/intel/notifications" />}
+            >
+              <BellIcon className="size-4" />
+              {intelUnread > 0 ? (
+                <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
+                  {intelUnread > 9 ? "9+" : intelUnread}
+                </span>
+              ) : null}
+              <span className="sr-only">Bandeja de Intel</span>
+            </Button>
+          ) : null}
           {showClock ? (
             <Button
               variant="outline"

@@ -1,6 +1,7 @@
 import {
   BarChart3Icon,
   BadgeDollarSignIcon,
+  BellIcon,
   ChartBarIcon,
   ChefHatIcon,
   ClockIcon,
@@ -74,6 +75,12 @@ export const APPLICATION_NAV: NavItem[] = [
     title: "Intel",
     url: "/intel",
     icon: SparklesIcon,
+    roles: ["ADMIN", "INVENTORY_MANAGER"],
+  },
+  {
+    title: "Bandeja",
+    url: "/intel/notifications",
+    icon: BellIcon,
     roles: ["ADMIN", "INVENTORY_MANAGER"],
   },
   {
