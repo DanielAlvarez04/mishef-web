@@ -26,12 +26,13 @@ export async function generateCatalogProposals(
 
 export async function applyCatalogProposal(
   proposalId: string,
-  fields: CatalogAiField[]
+  fields: CatalogAiField[],
+  values?: Record<string, unknown>
 ): Promise<ActionResult<{ itemId: string; applied: string[] }>> {
   return mutateApi(
     `/intel/catalog/proposals/${proposalId}/apply`,
     "POST",
-    { fields },
+    { fields, values },
     ["/catalog", "/catalog/ai"]
   )
 }

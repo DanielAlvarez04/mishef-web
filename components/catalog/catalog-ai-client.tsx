@@ -418,10 +418,48 @@ function ProposalCard({
       return
     }
 
+    const values: Record<string, unknown> = {}
+
+    if (checked.has("description")) {
+      values.description = description.trim()
+    }
+
+    if (checked.has("allergens")) {
+      values.allergens = allergens
+        .split(",")
+        .map((allergen) => allergen.trim())
+        .filter(Boolean)
+    }
+
+    if (checked.has("category") && categoryName.trim()) {
+      values.categoryName = categoryName.trim()
+    }
+
+    if (checked.has("translations")) {
+      const english: Record<string, string> = {}
+
+      if (englishName.trim()) english.name = englishName.trim()
+      if (englishDescription.trim()) {
+        english.description = englishDescription.trim()
+      }
+
+      if (Object.keys(english).length > 0) {
+        values.translations = { en: english }
+      }
+    }
+
+    if (checked.has("marketingCopy")) {
+      values.marketingCopy = marketingCopy.trim()
+    }
+
     // Las ediciones locales viajan en el payload de aplicación para que la
     // persona pueda corregir la propuesta antes de escribir el catálogo.
     startTransition(async () => {
-      const result = await applyCatalogProposal(proposal.id, [...checked])
+      const result = await applyCatalogProposal(
+        proposal.id,
+        [...checked],
+        values
+      )
 
       if (!result.ok) {
         toast.error(result.message ?? "No pudimos aplicar la propuesta")
