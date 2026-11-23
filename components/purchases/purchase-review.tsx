@@ -150,6 +150,18 @@ export function PurchaseReview({
     purchase.status === "APPROVED" || purchase.status === "REJECTED"
   const editable = canManage && !closed
   const duplicateId = duplicatePurchaseId(purchase)
+  const extractedJson = purchase.extractedJson
+  const extractedMeta =
+    extractedJson && typeof extractedJson === "object" && !Array.isArray(extractedJson)
+      ? (extractedJson as Record<string, unknown>)
+      : null
+  const detectedSupplier =
+    typeof extractedMeta?.supplierName === "string"
+      ? extractedMeta.supplierName.trim()
+      : ""
+  const dateDetected =
+    typeof extractedMeta?.purchasedAt === "string" &&
+    extractedMeta.purchasedAt.trim().length > 0
 
   const linesTotal = items.reduce(
     (sum, item) => sum + (Number(item.lineTotalGross) || 0),
@@ -427,6 +439,21 @@ export function PurchaseReview({
                 </option>
               ))}
             </select>
+            {detectedSupplier && !supplierId ? (
+              <p className="text-xs text-muted-foreground">
+                La IA detectó{" "}
+                <span className="font-medium text-foreground">
+                  {detectedSupplier}
+                </span>
+                .{" "}
+                <Link
+                  href="/suppliers"
+                  className="underline underline-offset-4"
+                >
+                  Crear o mapear proveedor
+                </Link>
+              </p>
+            ) : null}
           </Field>
 
           <Field>
@@ -450,6 +477,11 @@ export function PurchaseReview({
               disabled={!editable}
               onChange={(event) => setPurchasedAt(event.target.value)}
             />
+            {!dateDetected ? (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                La IA no detectó una fecha impresa; se usó la fecha de captura.
+              </p>
+            ) : null}
           </Field>
 
           <Field>
