@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound } from "next/navigation"
 import { TriangleAlertIcon } from "lucide-react"
 
+import { PurchaseProcessingWatcher } from "@/components/purchases/purchase-processing-watcher"
 import { PurchaseReview } from "@/components/purchases/purchase-review"
 import { Button } from "@/components/ui/button"
 import {
@@ -71,6 +72,8 @@ export default async function PurchaseDetailPage({
           ← Compras
         </Button>
       </div>
+
+      <PurchaseProcessingWatcher status={purchase.status} />
 
       <PurchaseReview
         purchase={purchase}

@@ -7,7 +7,6 @@ import { toast } from "sonner"
 
 import {
   createTicket,
-  extractTicket,
   presignTicket,
 } from "@/app/(app)/purchases/actions"
 import { useOfflineSync } from "@/components/offline/offline-provider"
@@ -153,20 +152,9 @@ export function TicketCapture() {
           return
         }
 
-        setPhase("reading")
-        toast.info("Leyendo el ticket con IA. Puede tardar unos segundos…")
-
-        const extracted = await extractTicket(created.data.id)
-
-        if (!extracted.ok) {
-          toast.warning(
-            extracted.message ??
-              "No se pudo leer el ticket. Captura las líneas a mano."
-          )
-        } else {
-          toast.success("Ticket leído. Revisa las líneas antes de aprobar.")
-        }
-
+        toast.info(
+          "Ticket recibido. La IA lo está leyendo en segundo plano…"
+        )
         router.push(`/purchases/${created.data.id}`)
         router.refresh()
       } finally {
