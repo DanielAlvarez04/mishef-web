@@ -163,8 +163,9 @@ input[type=number] {
 
 /*
  * Oculta la barra de desplazamiento sin desactivar el scroll.
- * Se usa en los diálogos altos (artículo, receta, importaciones) para que el
- * contenido se desplace sin el carril visible.
+ * Se usa en el contenedor principal de la app y en los diálogos altos
+ * (artículo, receta, importaciones) para que el contenido se desplace sin el
+ * carril visible.
  */
 @utility no-scrollbar {
   scrollbar-width: none;

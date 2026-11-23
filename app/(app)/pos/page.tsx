@@ -4,7 +4,7 @@ import { OfflineSnapshot } from "@/components/offline/offline-snapshot"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
 import type { Category, ItemListItem } from "@/lib/catalog"
-import type { Menu } from "@/lib/menus"
+import type { Menu, MenuTrendingPayload } from "@/lib/menus"
 import {
   canConfirmPayments,
   canDraftOrders,
@@ -31,6 +31,7 @@ export default async function PointOfSalePage() {
     cashResponse,
     displaysResponse,
     pointConfigResponse,
+    trendingResponse,
   ] = await Promise.all([
     apiFetch("/catalog/items"),
     apiFetch("/catalog/categories"),
@@ -42,6 +43,7 @@ export default async function PointOfSalePage() {
     canRegister
       ? apiFetch("/mercadopago/point-config")
       : Promise.resolve(null),
+    apiFetch("/catalog/menus/trending"),
   ])
 
   if (
@@ -58,11 +60,14 @@ export default async function PointOfSalePage() {
     )
   }
 
-  const [products, categories, orders, menus] = await Promise.all([
+  const [products, categories, orders, menus, trending] = await Promise.all([
     productsResponse.json() as Promise<ItemListItem[]>,
     categoriesResponse.json() as Promise<Category[]>,
     ordersResponse.json() as Promise<Order[]>,
     menusResponse.json() as Promise<Menu[]>,
+    trendingResponse.ok
+      ? (trendingResponse.json() as Promise<MenuTrendingPayload>)
+      : Promise.resolve({ days: 30, items: [] } as MenuTrendingPayload),
   ])
 
   const pointConfigRaw: MercadoPagoPointConfig = pointConfigResponse?.ok
@@ -99,9 +104,9 @@ export default async function PointOfSalePage() {
       />
       <PosView
       products={products}
-      categories={categories}
       orders={orders}
       menus={menus}
+      trendingItems={trending.items}
       canDraft={canDraftOrders(user.roles)}
       canSend={canSendOrders(user.roles)}
       canRegister={canRegister}

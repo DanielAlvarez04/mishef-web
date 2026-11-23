@@ -37,6 +37,17 @@ export interface Menu {
   items: MenuItemEntry[]
 }
 
+/** Ranking de artículos vendidos para el chip «Tendencia» del POS. */
+export interface MenuTrendingItem {
+  itemId: string
+  quantity: number
+}
+
+export interface MenuTrendingPayload {
+  days: number
+  items: MenuTrendingItem[]
+}
+
 export const MENU_DAY_LABELS = [
   "Dom",
   "Lun",

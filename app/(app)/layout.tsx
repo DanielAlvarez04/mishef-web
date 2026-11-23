@@ -168,7 +168,7 @@ export default async function AppLayout({
               role: user.roles[0],
             }}
           />
-          <SidebarInset className="h-svh overflow-y-auto max-lg:landscape:pl-[calc(4rem_+_env(safe-area-inset-left))]">
+          <SidebarInset className="no-scrollbar h-svh overflow-y-auto max-lg:landscape:pl-[calc(4rem_+_env(safe-area-inset-left))]">
             <SiteHeader
               branchName={
                 branches.length > 1 ? (activeBranch?.name ?? null) : null
