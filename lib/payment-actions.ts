@@ -36,6 +36,31 @@ export interface RegisterPaymentInput {
   idempotencyKey?: string
 }
 
+/** Cobro con tarjeta capturado sin conexión. Queda pendiente de conciliar. */
+export interface RegisterOfflineCardInput {
+  amount: number
+  tipAmount?: number
+  tipPercent?: number | null
+  tipSource?: TipSource
+  tipBaseAmount?: number | null
+  reference: string
+  deviceId: string
+  createdOfflineAt?: string
+  idempotencyKey: string
+}
+
+export interface ReconcilePaymentInput {
+  resolution: "CONFIRM" | "REJECT"
+  reason?: string
+  closeOrder?: boolean
+}
+
+export interface ReconcilePaymentResult {
+  payment: Payment
+  closed: boolean
+  closeMessage: string | null
+}
+
 /** Registra un pago pendiente sobre una cuenta abierta. */
 export async function registerPayment(
   orderId: string,
@@ -43,6 +68,37 @@ export async function registerPayment(
 ): Promise<ActionResult<Payment>> {
   return mutateApi<Payment>(
     `/orders/${orderId}/payments`,
+    "POST",
+    input,
+    PAYMENT_PATHS
+  )
+}
+
+/**
+ * Registra un cobro con tarjeta capturado sin conexión.
+ *
+ * No lo confirma: queda PENDING y marcado para conciliación. La cuenta no se
+ * cierra hasta que un rol autorizado lo confirme.
+ */
+export async function registerOfflineCardPayment(
+  orderId: string,
+  input: RegisterOfflineCardInput
+): Promise<ActionResult<Payment>> {
+  return mutateApi<Payment>(
+    `/orders/${orderId}/payments/offline-card`,
+    "POST",
+    input,
+    PAYMENT_PATHS
+  )
+}
+
+/** Confirma o rechaza un cobro offline desde la cola de conciliación. */
+export async function reconcilePayment(
+  paymentId: string,
+  input: ReconcilePaymentInput
+): Promise<ActionResult<ReconcilePaymentResult>> {
+  return mutateApi<ReconcilePaymentResult>(
+    `/payments/${paymentId}/reconcile`,
     "POST",
     input,
     PAYMENT_PATHS

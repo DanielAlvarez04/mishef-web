@@ -6,14 +6,19 @@ import {
   Loader2Icon,
   PencilIcon,
   PlusIcon,
-  TagsIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { createCategory, updateCategory } from "@/app/(app)/catalog/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -37,9 +42,8 @@ import { diffFields, isEmptyPatch, sameText } from "@/lib/diff"
 /**
  * Pestaña de categorías de artículos.
  *
- * Usa el mismo estilo de tarjeta que los artículos, pero con el fondo gris
- * por defecto en lugar de una imagen. Las categorías core solo permiten
- * personalizar su descripción; el nombre es compartido.
+ * Cards simples, sin imagen ni icono de respaldo. Las categorías core solo
+ * permiten personalizar su descripción; el nombre es compartido.
  */
 export function CategoriesTab({
   categories,
@@ -142,7 +146,6 @@ export function CategoriesTab({
 
       {categories.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center text-muted-foreground">
-          <TagsIcon className="size-7" />
           <p className="text-sm">Todavía no hay categorías de artículos.</p>
         </div>
       ) : (
@@ -151,52 +154,37 @@ export function CategoriesTab({
             const count = category._count.items ?? 0
 
             return (
-              <Card
-                key={category.id}
-                size="sm"
-                className="gap-0 overflow-hidden p-0 py-0"
-              >
-                <div className="relative aspect-square w-full bg-muted">
-                  <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
-                    <TagsIcon className="size-12" aria-hidden />
+              <Card key={category.id} className="flex flex-col gap-3">
+                <CardHeader className="gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <CardTitle className="min-w-0 truncate text-base">
+                      {category.name}
+                    </CardTitle>
+                    {category.isCore ? (
+                      <Badge variant="outline">Core</Badge>
+                    ) : null}
                   </div>
+                  <CardDescription className="line-clamp-2 min-h-8">
+                    {category.description || "Sin descripción"}
+                  </CardDescription>
+                </CardHeader>
 
-                  <div className="relative flex size-full flex-col p-3">
-                    <div className="flex items-start justify-between gap-2">
-                      {category.isCore ? (
-                        <Badge variant="outline">Core</Badge>
-                      ) : (
-                        <span />
-                      )}
-                      <span className="text-[11px] text-muted-foreground tabular-nums">
-                        {count} artículo{count === 1 ? "" : "s"}
-                      </span>
-                    </div>
-
-                    <div className="mt-auto flex min-w-0 flex-col gap-1">
-                      <p className="line-clamp-2 text-pretty text-base font-semibold leading-snug">
-                        {category.name}
-                      </p>
-                      <p className="line-clamp-2 text-xs text-muted-foreground">
-                        {category.description || "Sin descripción"}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex min-h-11 items-center justify-end border-t bg-muted px-2 py-2">
+                <CardContent className="mt-auto flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {count} artículo{count === 1 ? "" : "s"}
+                  </span>
                   {canManage ? (
                     <Button
                       type="button"
                       size="sm"
-                      className="w-max shadow-sm"
+                      variant="outline"
                       onClick={() => openEdit(category)}
                     >
                       <PencilIcon className="size-4" />
                       Editar
                     </Button>
                   ) : null}
-                </div>
+                </CardContent>
               </Card>
             )
           })}

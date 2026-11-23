@@ -6,12 +6,24 @@ import {
   ArrowDownToLineIcon,
   ArrowUpFromLineIcon,
   ChevronDownIcon,
+  CreditCardIcon,
   Loader2Icon,
   LockIcon,
   ReceiptTextIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
@@ -46,12 +58,14 @@ import {
   getCashReconciliation,
   openCashSession,
 } from "@/lib/cash-actions"
+import { reconcilePayment } from "@/lib/payment-actions"
 import {
   CASH_MOVEMENT_LABELS,
   type CashMovementType,
   type CashReconciliation,
   type CashSession,
   type CashSummary,
+  type PendingReviewPayment,
 } from "@/lib/cash"
 
 const MOVEMENT_TYPES: CashMovementType[] = [
@@ -250,6 +264,7 @@ function CloseDialog({
   onDone: () => void
 }) {
   const money = useMoney()
+  const router = useRouter()
   const offline = useOfflineSync()
   const [countedCash, setCountedCash] = React.useState("")
   const [notes, setNotes] = React.useState("")
@@ -259,6 +274,14 @@ function CloseDialog({
     React.useState<CashReconciliation | null>(null)
   const [loadingReconciliation, setLoadingReconciliation] =
     React.useState(false)
+  const [reconciliationVersion, setReconciliationVersion] =
+    React.useState(0)
+  const [reconcilePending, setReconcilePending] =
+    React.useState<PendingReviewPayment | null>(null)
+  const [reconcileMode, setReconcileMode] =
+    React.useState<"CONFIRM" | "REJECT">("CONFIRM")
+  const [reconcileReason, setReconcileReason] = React.useState("")
+  const [reconciling, setReconciling] = React.useState(false)
 
   // Conciliación en vivo: se pide al servidor para que el desglose y las
   // alertas sean los mismos que se guardan al cerrar, no una copia en cliente.
@@ -282,7 +305,7 @@ function CloseDialog({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [showReconciliation, countedCash, session.id])
+  }, [showReconciliation, countedCash, session.id, reconciliationVersion])
 
   // Conteo ciego: no se muestra el esperado antes de cerrar.
   const submit = async () => {
@@ -357,8 +380,56 @@ function CloseDialog({
     }
   }
 
+  const resolvePending = async () => {
+    if (!reconcilePending) return
+
+    if (reconcileMode === "REJECT" && reconcileReason.trim().length < 3) {
+      toast.error("Indica el motivo del rechazo")
+      return
+    }
+
+    setReconciling(true)
+
+    try {
+      const result = await reconcilePayment(reconcilePending.id, {
+        resolution: reconcileMode,
+        reason:
+          reconcileMode === "REJECT" ? reconcileReason.trim() : undefined,
+        closeOrder: reconcileMode === "CONFIRM",
+      })
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo conciliar el cobro")
+        return
+      }
+
+      if (reconcileMode === "CONFIRM") {
+        toast.success("Cobro confirmado")
+        if (result.data?.closeMessage) {
+          toast.info("La cuenta no se cerró", {
+            description: result.data.closeMessage,
+          })
+        }
+      } else {
+        toast.success("Cobro rechazado", {
+          description: "El pago quedó anulado.",
+        })
+      }
+
+      setReconcilePending(null)
+      setReconcileReason("")
+      setReconciliationVersion((value) => value + 1)
+      router.refresh()
+    } finally {
+      setReconciling(false)
+    }
+  }
+
+  const pendingReviewCount = reconciliation?.pending.count ?? 0
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Cerrar caja</DialogTitle>
@@ -462,6 +533,68 @@ function CloseDialog({
                         Sin alertas: el turno cuadra con lo registrado.
                       </p>
                     )}
+
+                    {reconciliation.pending.count > 0 ? (
+                      <div className="flex flex-col gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-2">
+                        <div className="flex items-center justify-between text-xs font-medium text-amber-800 dark:text-amber-300">
+                          <span>
+                            Pagos por conciliar ({reconciliation.pending.count})
+                          </span>
+                          <span>{money(reconciliation.pending.amount)}</span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          El cierre está bloqueado hasta confirmarlos o anularlos.
+                        </p>
+                        <ul className="flex flex-col gap-2">
+                          {reconciliation.pending.items.map((payment) => (
+                            <li
+                              key={payment.id}
+                              className="flex items-center justify-between gap-2 rounded-md bg-background/70 p-2"
+                            >
+                              <div className="min-w-0">
+                                <p className="truncate text-xs font-medium">
+                                  {payment.order.isTakeaway
+                                    ? "Para llevar"
+                                    : payment.order.tableNumber
+                                      ? `Mesa ${payment.order.tableNumber}`
+                                      : "Cuenta"}{" "}
+                                  · {money(payment.amount + payment.tipAmount)}
+                                </p>
+                                <p className="truncate text-[11px] text-muted-foreground">
+                                  {payment.reference ?? "Sin referencia"} ·{" "}
+                                  {payment.deviceId ?? "dispositivo"}
+                                </p>
+                              </div>
+                              <div className="flex shrink-0 gap-1">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  onClick={() => {
+                                    setReconcileMode("CONFIRM")
+                                    setReconcileReason("")
+                                    setReconcilePending(payment)
+                                  }}
+                                >
+                                  Confirmar
+                                </Button>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setReconcileMode("REJECT")
+                                    setReconcileReason("")
+                                    setReconcilePending(payment)
+                                  }}
+                                >
+                                  Anular
+                                </Button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                   </>
                 ) : (
                   <span className="text-muted-foreground">
@@ -499,13 +632,89 @@ function CloseDialog({
           >
             Cancelar
           </Button>
-          <Button type="button" onClick={submit} disabled={pending}>
+          <Button
+            type="button"
+            onClick={submit}
+            disabled={pending || pendingReviewCount > 0}
+          >
             {pending ? <Loader2Icon className="animate-spin" /> : null}
             {offline.isOnline ? "Cerrar caja" : "Guardar cierre"}
           </Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
+      </Dialog>
+
+      <AlertDialog
+        open={Boolean(reconcilePending)}
+        onOpenChange={(open) => {
+          if (!open && !reconciling) setReconcilePending(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia
+              className={
+                reconcileMode === "REJECT"
+                  ? "bg-destructive/10 text-destructive"
+                  : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+              }
+            >
+              <CreditCardIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>
+              {reconcileMode === "CONFIRM"
+                ? "Confirmar cobro con tarjeta"
+                : "Anular cobro con tarjeta"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {reconcilePending
+                ? `${money(
+                    reconcilePending.amount + reconcilePending.tipAmount
+                  )} · ${reconcilePending.reference ?? "Sin referencia"} · ${
+                    reconcilePending.deviceId ?? "dispositivo"
+                  }. ${
+                    reconcileMode === "CONFIRM"
+                      ? "Se marcará como cobrado y se intentará cerrar la cuenta."
+                      : "El pago quedará anulado y no se cobrará."
+                  }`
+                : null}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          {reconcileMode === "REJECT" ? (
+            <div className="flex flex-col gap-2 px-4 pb-2">
+              <Label htmlFor="reconcile-reason">Motivo</Label>
+              <Textarea
+                id="reconcile-reason"
+                value={reconcileReason}
+                onChange={(event) => setReconcileReason(event.target.value)}
+                maxLength={200}
+                rows={2}
+                placeholder="Ej. el voucher no corresponde o la terminal no cobró"
+              />
+            </div>
+          ) : null}
+
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reconciling}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant={reconcileMode === "REJECT" ? "destructive" : "default"}
+              disabled={
+                reconciling ||
+                (reconcileMode === "REJECT" &&
+                  reconcileReason.trim().length < 3)
+              }
+              onClick={() => void resolvePending()}
+            >
+              {reconciling ? <Loader2Icon className="animate-spin" /> : null}
+              {reconcileMode === "CONFIRM" ? "Confirmar cobro" : "Anular cobro"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   )
 }
 

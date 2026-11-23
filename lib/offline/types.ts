@@ -3,9 +3,9 @@ import type { TipSource } from "@/lib/orders"
 /**
  * Operaciones que la PWA guarda sin conexión (plan.md §7.1).
  *
- * Se encolan comandas, cobros en efectivo y cierres de caja. Nunca se encola
- * un cobro con tarjeta ni una confirmación de proveedor: esos movimientos
- * necesitan respuesta en línea para no cobrar dos veces.
+ * Se encolan comandas, cobros en efectivo, cobros con tarjeta pendientes de
+ * conciliar y cierres de caja. Un cobro con tarjeta nunca se marca como
+ * confirmado sin respuesta del proveedor o revisión humana.
  */
 
 export type QueuedRoundStatus = "queued" | "syncing" | "error"
@@ -71,13 +71,21 @@ export interface QueuedCheckout extends QueuedOperationBase {
     idempotencyKey: string
   }
   payment: {
+    /** Efectivo confirmado o tarjeta pendiente de conciliar. */
+    method: "CASH" | "CARD"
     amount: number
     tipAmount: number
     tipPercent?: number | null
     tipBaseAmount?: number | null
     tipSource: TipSource
-    cashReceived: number
+    cashReceived?: number
     changeGiven?: number
+    /** Voucher o autorización de la terminal (solo tarjeta). */
+    reference?: string
+    /** Identificador local del dispositivo (solo tarjeta). */
+    deviceId?: string
+    /** Hora local de captura, en milisegundos (solo tarjeta). */
+    createdOfflineAt?: number
     idempotencyKey: string
   }
   closeOrder: boolean
