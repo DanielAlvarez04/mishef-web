@@ -11,6 +11,7 @@ import {
   SERVICE_NAV,
   canSeeNavItem,
   isNavItemActive,
+  sortServiceNav,
   type NavItem,
 } from "@/lib/navigation"
 import { cn } from "cn"
@@ -43,6 +44,9 @@ export function MobileTabBar({
     [isPlatformAdmin, roles]
   )
   const centerIndex = items.findIndex((item) => item.url === "/pos")
+  // El riel horizontal usa el mismo orden que el sidebar de escritorio; la
+  // barra inferior conserva el orden con el POS al centro.
+  const railItems = React.useMemo(() => sortServiceNav(items), [items])
 
   return (
     <>
@@ -77,7 +81,7 @@ export function MobileTabBar({
         aria-label="Navegación principal"
         className="fixed inset-y-0 left-0 z-40 hidden w-[calc(4rem_+_env(safe-area-inset-left))] flex-col gap-1 border-r bg-card/95 px-1 pt-[calc(0.5rem_+_env(safe-area-inset-top))] pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-card/85 max-lg:landscape:flex"
       >
-        {items.map((item) =>
+        {railItems.map((item) =>
           item.url === "/pos" && !isPlatformAdmin ? (
             <PosItem
               key={item.url}

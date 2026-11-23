@@ -98,8 +98,10 @@ import {
   type PriceRange,
 } from "@/components/catalog/article-price-filter"
 import { useShake } from "@/hooks/use-shake"
+import { usePersistentBoolean } from "@/hooks/use-persistent-boolean"
 import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
 import { usePersistentNumber } from "@/hooks/use-persistent-number"
+import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   PROMOTION_TYPE_LABELS,
   isItemOptionValueAvailable,
@@ -107,7 +109,9 @@ import {
   type Category,
   type ItemListItem,
 } from "@/lib/catalog"
+import { groupColorValue } from "@/lib/group-colors"
 import { useMoney } from "@/lib/currency"
+
 import {
   addOrderGuest,
   createOrder,
@@ -171,6 +175,8 @@ const SORT_OPTIONS: ReadonlyArray<{ value: PosSortOrder; label: string }> = [
   { value: "price-asc", label: "menor a mayor precio" },
   { value: "price-desc", label: "mayor a menor precio" },
 ]
+
+const POS_SORT_ORDERS = SORT_OPTIONS.map((option) => option.value)
 
 /** Orden alfabético en español, insensible a mayúsculas y acentos. */
 const PRODUCT_NAME_COLLATOR = new Intl.Collator("es", {
@@ -418,6 +424,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   textSize,
   showImages,
   showGroups,
+  groupColor,
   onOpen,
 }: {
   product: ItemListItem
@@ -425,6 +432,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   textSize: ArticleCardTextSize
   showImages: boolean
   showGroups: boolean
+  groupColor: string | null
   onOpen: (product: ItemListItem) => void
 }) {
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
@@ -455,6 +463,8 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
           textSize={textSize}
           showImage={showImages}
           isCombo={product.isCombo}
+          fallbackColor={groupColor}
+          hideFallbackIcon
           className="transition-shadow group-hover:ring-2 group-hover:ring-ring/60"
           badge={
             hasBadges ? (
@@ -564,10 +574,20 @@ ull` = vista consolidada. */
   )
   const cardTextScale = CARD_TEXT_SCALES[cardTextSize - 1] ?? "md"
   const [priceRange, setPriceRange] = React.useState<PriceRange | null>(null)
-  const [sortOrder, setSortOrder] = React.useState<PosSortOrder>("default")
+  const [sortOrder, setSortOrder] = usePersistentTab<PosSortOrder>(
+    "pos-sort-order",
+    POS_SORT_ORDERS,
+    "default"
+  )
   // «Información disponible»: qué se muestra sobre las cards del catálogo.
-  const [showImages, setShowImages] = React.useState(true)
-  const [showGroups, setShowGroups] = React.useState(true)
+  const [showImages, setShowImages] = usePersistentBoolean(
+    "pos-show-images",
+    true
+  )
+  const [showGroups, setShowGroups] = usePersistentBoolean(
+    "pos-show-groups",
+    true
+  )
   const dialogOpenedAtRef = React.useRef<number | null>(null)
   const dialogSavedRef = React.useRef(false)
   const [cart, setCart] = React.useState<CartLine[]>([])
@@ -1036,9 +1056,36 @@ ull` = vista consolidada. */
     }
   }, [products])
 
+  const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
+
+  // Orden y color de los grupos del menú elegido. El «Default» del POS sigue
+  // el orden en que se guardaron las secciones y los artículos en el menú.
+  const menuEntryByItem = React.useMemo(
+    () =>
+      new Map(
+        (selectedMenu?.items ?? []).map((entry) => [entry.itemId, entry])
+      ),
+    [selectedMenu]
+  )
+  const groupRank = React.useMemo(
+    () =>
+      new Map(
+        (selectedMenu?.groups ?? []).map((group, index) => [group, index])
+      ),
+    [selectedMenu]
+  )
+
+  const groupColorFor = (product: ItemListItem) => {
+    if (!selectedMenu) return null
+
+    const entry = menuEntryByItem.get(product.id)
+    if (!entry?.group) return null
+
+    return groupColorValue(selectedMenu.groupColors?.[entry.group])
+  }
+
   const filtered = React.useMemo(() => {
     const needle = deferredSearch.trim().toLowerCase()
-    const activeMenu = menus.find((menu) => menu.id === menuId)
 
     const matches = products.filter((product) => {
       if (categoryId && product.category?.id !== categoryId) return false
@@ -1048,8 +1095,8 @@ ull` = vista consolidada. */
       }
       // El menú global contiene todo el catálogo: no hace falta filtrar.
       if (
-        activeMenu &&
-        !activeMenu.isGlobal &&
+        selectedMenu &&
+        !selectedMenu.isGlobal &&
         !(product.menus ?? []).some(
           (menu) => menu.id === menuId && menu.isActive
         )
@@ -1059,11 +1106,46 @@ ull` = vista consolidada. */
       if (!needle) return true
       return (
         product.name.toLowerCase().includes(needle) ||
-        (product.sku ?? "").toLowerCase().includes(needle)
+        (product.sku ?? "").toLowerCase().includes(needle) ||
+        (product.category?.name ?? "").toLowerCase().includes(needle) ||
+        (product.optionGroups ?? []).some(
+          (group) =>
+            group.group.name.toLowerCase().includes(needle) ||
+            group.values.some((value) =>
+              itemOptionValueName(value).toLowerCase().includes(needle)
+            )
+        )
       )
     })
 
-    if (sortOrder === "default") return matches
+    if (sortOrder === "default") {
+      if (!selectedMenu) return matches
+
+      const ungroupedRank = selectedMenu.groups.length
+      const missingRank = ungroupedRank + 1
+
+      return [...matches].sort((left, right) => {
+        const leftEntry = menuEntryByItem.get(left.id)
+        const rightEntry = menuEntryByItem.get(right.id)
+        const leftRank = leftEntry
+          ? leftEntry.group
+            ? (groupRank.get(leftEntry.group) ?? ungroupedRank)
+            : ungroupedRank
+          : missingRank
+        const rightRank = rightEntry
+          ? rightEntry.group
+            ? (groupRank.get(rightEntry.group) ?? ungroupedRank)
+            : ungroupedRank
+          : missingRank
+
+        return (
+          leftRank - rightRank ||
+          (leftEntry?.sortOrder ?? left.sortOrder) -
+            (rightEntry?.sortOrder ?? right.sortOrder) ||
+          PRODUCT_NAME_COLLATOR.compare(left.name, right.name)
+        )
+      })
+    }
 
     const sorted = [...matches]
 
@@ -1100,9 +1182,11 @@ ull` = vista consolidada. */
     deferredSearch,
     categoryId,
     menuId,
-    menus,
     priceRange,
     sortOrder,
+    selectedMenu,
+    menuEntryByItem,
+    groupRank,
   ])
 
   // Una búsqueda sin resultados es señal de catálogo incompleto o de nombres
@@ -1117,8 +1201,6 @@ ull` = vista consolidada. */
 
   const activeFilterCount =
     (categoryId ? 1 : 0) + (priceRange ? 1 : 0)
-
-  const selectedMenu = menus.find((menu) => menu.id === menuId) ?? null
 
   const selectedItemIds = React.useMemo(
     () =>
@@ -1152,6 +1234,7 @@ ull` = vista consolidada. */
         textSize={cardTextScale}
         showImages={showImages}
         showGroups={showGroups}
+        groupColor={groupColorFor(product)}
         onOpen={handleOpenProduct}
       />
     )
@@ -2478,9 +2561,9 @@ ull` = vista consolidada. */
                     if (value.trim()) posCapture.noteSearch(value)
                     else posCapture.endSearch()
                   }}
-                  placeholder="Buscar artículo"
+                  placeholder="Buscar por nombre"
                   className="pl-8"
-                  aria-label="Buscar artículos"
+                  aria-label="Buscar por nombre, categoría o grupo"
                 />
               </div>
 

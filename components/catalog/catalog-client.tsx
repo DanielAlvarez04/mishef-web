@@ -6,6 +6,7 @@ import {
   BlenderIcon,
   GroupIcon,
   SoupIcon,
+  TagsIcon,
   Trash2Icon,
   UnlinkIcon,
 } from "lucide-react"
@@ -24,6 +25,7 @@ import {
 } from "@/app/(app)/catalog/actions"
 import type { ProductSaveAs } from "@/components/catalog/product-dialog"
 import { ArticlesTable } from "@/components/catalog/articles-table"
+import { CategoriesTab } from "@/components/catalog/categories-tab"
 import { CatalogSummary } from "@/components/catalog/catalog-summary"
 import { CategoryDialog } from "@/components/catalog/category-dialog"
 import { CombosSummary } from "@/components/catalog/combos-summary"
@@ -60,7 +62,7 @@ import type {
   Recipe,
 } from "@/lib/catalog"
 
-const CATALOG_TABS = ["articulos", "recetas", "combos"] as const
+const CATALOG_TABS = ["articulos", "recetas", "combos", "categorias"] as const
 
 /**
  * El diálogo de artículo es el componente más pesado del panel (~99 KB) y solo
@@ -371,21 +373,27 @@ export function CatalogClient({
               <GroupIcon className="size-4" />
               Combos
             </TabsTrigger>
+            <TabsTrigger type="button" value="categorias">
+              <TagsIcon className="size-4" />
+              Categorías
+            </TabsTrigger>
           </TabsList>
 
-          <div className="flex items-center gap-2">
-            <Label
-              htmlFor="catalog-show-kpis"
-              className="text-sm font-normal"
-            >
-              Mostrar KPI&apos;s
-            </Label>
-            <Switch
-              id="catalog-show-kpis"
-              checked={showKpis}
-              onCheckedChange={setShowKpis}
-            />
-          </div>
+          {tab === "categorias" ? null : (
+            <div className="flex items-center gap-2">
+              <Label
+                htmlFor="catalog-show-kpis"
+                className="text-sm font-normal"
+              >
+                Mostrar KPI&apos;s
+              </Label>
+              <Switch
+                id="catalog-show-kpis"
+                checked={showKpis}
+                onCheckedChange={setShowKpis}
+              />
+            </div>
+          )}
         </div>
 
         <TabsContent value="articulos" keepMounted>
@@ -483,6 +491,12 @@ export function CatalogClient({
           </div>
         </TabsContent>
 
+        <TabsContent value="categorias" keepMounted>
+          <CategoriesTab
+            categories={articleCategories}
+            canManage={canManage}
+          />
+        </TabsContent>
       </Tabs>
 
       {canManage && dialogOpen ? (

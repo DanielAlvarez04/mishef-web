@@ -185,7 +185,7 @@ export function MenusTable({
       layout="sidebar"
       search={{
         label: "Buscar menú",
-        placeholder: "Buscar por menú o artículo",
+        placeholder: "Buscar por nombre",
         value: globalFilter,
         onValueChange: setGlobalFilter,
       }}

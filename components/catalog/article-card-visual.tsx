@@ -77,6 +77,8 @@ export function ArticleCardVisual({
   compact = false,
   showImage = true,
   isCombo = false,
+  fallbackColor = null,
+  hideFallbackIcon = false,
 }: {
   name: string
   price: string
@@ -108,6 +110,10 @@ export function ArticleCardVisual({
    * catálogo del POS, donde el texto puede crecer hasta extra grande.
    */
   compact?: boolean
+  /** Color de fondo cuando no hay imagen (color del grupo del menú en el POS). */
+  fallbackColor?: string | null
+  /** Oculta el icono de respaldo: la card solo muestra el color de fondo. */
+  hideFallbackIcon?: boolean
 }) {
   const [failedSrc, setFailedSrc] = React.useState<string | null>(null)
   const showFallback = !showImage || !imageUrl || failedSrc === imageUrl
@@ -150,19 +156,32 @@ export function ArticleCardVisual({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden rounded-xl border bg-muted text-left select-none",
+        "relative w-full overflow-hidden rounded-xl border bg-white text-left select-none",
         showImage ? "aspect-square" : "aspect-[5/3]",
         selected && "ring-2 ring-primary",
         !isActive && "opacity-80",
         className
       )}
     >
-      <div className="absolute inset-0 bg-muted">
+      {/* Dos capas: el fondo blanco de la card y encima el tinte gris/categoría. */}
+      <div className="absolute inset-0 bg-white">
         {showFallback ? (
-          <div className="flex size-full items-center justify-center text-muted-foreground">
-            <FallbackIcon className="size-8" aria-hidden />
-            <span className="sr-only">Sin imagen</span>
-          </div>
+          <>
+            <div
+              className="absolute inset-0"
+              style={{
+                backgroundColor: fallbackColor ?? "var(--muted)",
+              }}
+            />
+            {hideFallbackIcon ? (
+              <span className="sr-only">Sin imagen</span>
+            ) : (
+              <div className="absolute inset-0 flex items-center justify-center text-muted-foreground">
+                <FallbackIcon className="size-8" aria-hidden />
+                <span className="sr-only">Sin imagen</span>
+              </div>
+            )}
+          </>
         ) : (
           <EntityImage
             src={imageUrl}

@@ -43,8 +43,28 @@ export async function createCategory(
     {
       name: text(formData, "name"),
       description: text(formData, "description"),
+      color: text(formData, "color"),
       kind: text(formData, "kind") ?? "ARTICLE",
     },
+    CATALOG_PATHS
+  )
+}
+
+export interface CategoryUpdateInput {
+  name?: string
+  description?: string | null
+  color?: string | null
+}
+
+/** Actualiza solo los campos recibidos (diff calculado en el formulario). */
+export async function updateCategory(
+  id: string,
+  input: Partial<CategoryUpdateInput>
+): Promise<ActionResult> {
+  return mutateApi(
+    `/catalog/categories/${id}`,
+    "PATCH",
+    input,
     CATALOG_PATHS
   )
 }

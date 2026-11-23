@@ -67,6 +67,24 @@ export const SERVICE_NAV: NavItem[] = [
   },
 ]
 
+/**
+ * Orden de «Servicio» en el sidebar de escritorio y en el riel horizontal.
+ *
+ * La barra inferior vertical conserva el orden de `SERVICE_NAV` (el POS va al
+ * centro de la barra).
+ */
+const SERVICE_DESKTOP_ORDER = new Map(
+  ["/dashboard", "/pos", "/kitchen", "/menus"].map((url, index) => [url, index])
+)
+
+export function sortServiceNav<T extends { url: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (left, right) =>
+      (SERVICE_DESKTOP_ORDER.get(left.url) ?? Number.MAX_SAFE_INTEGER) -
+      (SERVICE_DESKTOP_ORDER.get(right.url) ?? Number.MAX_SAFE_INTEGER)
+  )
+}
+
 /** Grupo «Aplicación»: solo en el sidebar completo. */
 export const APPLICATION_NAV: NavItem[] = [
   {

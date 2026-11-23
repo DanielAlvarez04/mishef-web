@@ -89,7 +89,7 @@ export function UnassignedItemsSheet({
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Buscar artículo o categoría"
+              placeholder="Buscar por nombre"
               className="pl-8"
               aria-label="Buscar artículos sin menú"
             />

@@ -32,6 +32,8 @@ export interface Menu {
   isAvailableNow: boolean
   /** Secciones del menú, en el orden en que se muestran. */
   groups: string[]
+  /** Color por sección: `{ "Bebidas": "sky-500" }`. */
+  groupColors: Record<string, string>
   items: MenuItemEntry[]
 }
 

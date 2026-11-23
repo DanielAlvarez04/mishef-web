@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
   CheckCircle2Icon,
@@ -81,6 +82,7 @@ export function KioskDialog({
   const router = useRouter()
   const [data, setData] = React.useState<KioskData | null>(null)
   const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
   const [reloadKey, setReloadKey] = React.useState(0)
   const [selected, setSelected] = React.useState<KioskEmployee | null>(null)
   const [pin, setPin] = React.useState("")
@@ -99,12 +101,14 @@ export function KioskDialog({
 
       if (!result.ok || !result.data) {
         setData(null)
+        setLoadError(result.message ?? "No pudimos abrir el checador")
         toast.error(result.message ?? "No pudimos abrir el checador")
         setLoading(false)
         return
       }
 
       setData(result.data)
+      setLoadError(null)
       setLoading(false)
     }
 
@@ -120,6 +124,7 @@ export function KioskDialog({
     setSelected(null)
     setPin("")
     setMessage(null)
+    setLoadError(null)
     setReloadKey((current) => current + 1)
   }
 
@@ -219,10 +224,22 @@ export function KioskDialog({
             <Loader2Icon className="size-4 animate-spin" /> Cargando turnos…
           </p>
         ) : !data ? (
-          <p className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            <ShieldAlertIcon className="mt-0.5 size-4 shrink-0" />
-            No pudimos cargar el checador.
-          </p>
+          <div className="flex flex-col gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <p className="flex items-start gap-2">
+              <ShieldAlertIcon className="mt-0.5 size-4 shrink-0" />
+              {loadError ?? "No pudimos cargar el checador."}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              nativeButton={false}
+              render={<Link href="/attendance" />}
+            >
+              Ir a mi checador
+            </Button>
+          </div>
         ) : data.employees.length === 0 ? (
           <p className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
             No hay cuentas activas en el negocio.
