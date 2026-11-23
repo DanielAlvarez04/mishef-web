@@ -1,8 +1,12 @@
 "use server"
 
-import { mutateApi, type ActionResult } from "@/lib/server-api"
+import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 import type { UnitCode } from "@/lib/catalog"
-import type { PurchaseDetail, PurchaseItem } from "@/lib/purchases"
+import type {
+  PurchaseDetail,
+  PurchaseItem,
+  PurchaseListItem,
+} from "@/lib/purchases"
 
 export interface TicketInput {
   documentKey: string
@@ -31,6 +35,13 @@ export async function createTicket(
   input: TicketInput
 ): Promise<ActionResult<{ id: string }>> {
   return mutateApi("/purchases/tickets", "POST", input, ["/purchases"])
+}
+
+/** Tickets recientes para la pestaña de pruebas de /inventory. */
+export async function getRecentTickets(): Promise<
+  ActionResult<PurchaseListItem[]>
+> {
+  return readApi("/purchases")
 }
 
 /** Extrae las líneas del ticket con el modelo de visión. */

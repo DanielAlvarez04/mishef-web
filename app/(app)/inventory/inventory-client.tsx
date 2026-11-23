@@ -1,12 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { HistoryIcon, PackageIcon } from "lucide-react"
+import { HistoryIcon, PackageIcon, ReceiptTextIcon } from "lucide-react"
 
 import { BulkIngredientsDialog } from "@/components/inventory/bulk-ingredients-dialog"
 import { ImportIngredientsDialog } from "@/components/inventory/import-ingredients-dialog"
 import { IngredientDialog } from "@/components/inventory/ingredient-dialog"
 import { IngredientsTable } from "@/components/inventory/ingredients-table"
+import { IntelTicketsTab } from "@/components/inventory/intel-tickets-tab"
 import { InventorySummary } from "@/components/inventory/inventory-summary"
 import { KardexTable } from "@/components/inventory/kardex-table"
 import { listIngredientCategories, listIngredientLocations } from "@/app/(app)/inventory/actions"
@@ -25,7 +26,7 @@ import {
 import type { InventoryReport } from "@/lib/dashboard"
 import { type Branch } from "@/lib/branches"
 
-const INVENTORY_TABS = ["inventario", "kardex"] as const
+const INVENTORY_TABS = ["inventario", "kardex", "tickets"] as const
 
 interface InventoryClientProps {
   initialIngredients: Ingredient[]
@@ -94,6 +95,12 @@ export function InventoryClient({
               <HistoryIcon className="size-4" />
               Kardex
             </TabsTrigger>
+            {canManage ? (
+              <TabsTrigger type="button" value="tickets">
+                <ReceiptTextIcon className="size-4" />
+                Tickets
+              </TabsTrigger>
+            ) : null}
           </TabsList>
 
           <div className="flex items-center gap-2">
@@ -137,6 +144,12 @@ export function InventoryClient({
         <TabsContent value="kardex" keepMounted>
           <KardexTable movements={initialMovements} branch={branch} />
         </TabsContent>
+
+        {canManage ? (
+          <TabsContent value="tickets">
+            <IntelTicketsTab />
+          </TabsContent>
+        ) : null}
       </Tabs>
 
       {canManage && creating ? (
