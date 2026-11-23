@@ -158,7 +158,9 @@ export function PurchaseReview({
   const ticketTotal = Number(total) || 0
   const difference = linesTotal - ticketTotal
   const mismatch = Math.abs(difference) > 0.5
-  const unmapped = items.filter((item) => !item.ingredientId).length
+  const unmapped = items.filter(
+    (item) => Number(item.lineTotalGross) > 0 && !item.ingredientId
+  ).length
 
   function updateItem(key: string, patch: Partial<DraftItem>) {
     setItems((current) =>
