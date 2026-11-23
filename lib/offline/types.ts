@@ -10,7 +10,7 @@ import type { TipSource } from "@/lib/orders"
 
 export type QueuedRoundStatus = "queued" | "syncing" | "error"
 
-export type OfflineOperationKind = "round" | "checkout" | "cash_close"
+export type OfflineOperationKind = "round" | "checkout" | "cash_close" | "ticket"
 
 export interface QueuedRoundItem {
   itemId: string
@@ -92,7 +92,26 @@ export interface QueuedCashClose extends QueuedOperationBase {
   idempotencyKey: string
 }
 
-export type QueuedOperation = QueuedRound | QueuedCheckout | QueuedCashClose
+/**
+ * Foto de un ticket de compra guardada en el dispositivo.
+ *
+ * El archivo se conserva como `Blob` en IndexedDB. Al sincronizar se firma la
+ * subida, se manda directo a R2 y se dispara la extracción; si la extracción
+ * falla, la compra queda en revisión para capturarla a mano.
+ */
+export interface QueuedTicket extends QueuedOperationBase {
+  kind: "ticket"
+  file: Blob
+  fileName: string
+  mimeType: string
+  size: number
+}
+
+export type QueuedOperation =
+  | QueuedRound
+  | QueuedCheckout
+  | QueuedCashClose
+  | QueuedTicket
 
 export const QUEUED_STATUS_LABELS: Record<QueuedRoundStatus, string> = {
   queued: "Pendiente de sincronizar",

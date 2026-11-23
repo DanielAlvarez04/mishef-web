@@ -10,6 +10,7 @@ import {
   extractTicket,
   presignTicket,
 } from "@/app/(app)/purchases/actions"
+import { useOfflineSync } from "@/components/offline/offline-provider"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -53,6 +54,7 @@ function validate(file: File): string | null {
  */
 export function TicketCapture() {
   const router = useRouter()
+  const { isOnline, enqueueTicket } = useOfflineSync()
   const [pending, startTransition] = useTransition()
   const [phase, setPhase] = useState<Phase>("idle")
   const [file, setFile] = useState<File | null>(null)
@@ -82,9 +84,30 @@ export function TicketCapture() {
     if (galleryRef.current) galleryRef.current.value = ""
   }
 
+  async function saveOffline() {
+    if (!file) return
+
+    await enqueueTicket({
+      file,
+      fileName: file.name,
+      mimeType: file.type || "image/jpeg",
+    })
+
+    toast.info("Ticket guardado en este dispositivo", {
+      description:
+        "Se enviará y leerá automáticamente cuando vuelva la conexión.",
+    })
+    reset()
+  }
+
   function submit() {
     if (!file) {
       toast.error("Toma o elige una foto del ticket")
+      return
+    }
+
+    if (!isOnline) {
+      void saveOffline()
       return
     }
 
@@ -95,6 +118,11 @@ export function TicketCapture() {
         const presign = await presignTicket(file.type, file.size)
 
         if (!presign.ok || !presign.data) {
+          if (presign.network) {
+            await saveOffline()
+            return
+          }
+
           toast.error(presign.message ?? "No pudimos preparar la foto")
           return
         }
@@ -106,7 +134,7 @@ export function TicketCapture() {
         }).catch(() => null)
 
         if (!upload?.ok) {
-          toast.error("No pudimos subir la foto del ticket")
+          await saveOffline()
           return
         }
 
@@ -116,6 +144,11 @@ export function TicketCapture() {
         })
 
         if (!created.ok || !created.data) {
+          if (created.network) {
+            await saveOffline()
+            return
+          }
+
           toast.error(created.message ?? "No pudimos registrar el ticket")
           return
         }

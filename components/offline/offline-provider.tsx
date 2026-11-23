@@ -16,10 +16,17 @@ import type {
   QueuedOperation,
   QueuedRound,
   QueuedRoundItem,
+  QueuedTicket,
 } from "@/lib/offline/types"
 import { syncQueuedCashClose } from "@/lib/offline/sync-cash-close"
 import { syncQueuedCheckout } from "@/lib/offline/sync-checkout"
 import { syncQueuedRound } from "@/lib/offline/sync-round"
+import { syncQueuedTicket } from "@/lib/offline/sync-ticket"
+import {
+  createTicket,
+  extractTicket,
+  presignTicket,
+} from "@/app/(app)/purchases/actions"
 import { closeCashSession } from "@/lib/cash-actions"
 import { createOrder, sendRound } from "@/lib/order-actions"
 import { closeOrder, registerPayment } from "@/lib/payment-actions"
@@ -74,6 +81,13 @@ export interface EnqueueCashCloseInput {
   label?: string
 }
 
+export interface EnqueueTicketInput {
+  file: Blob
+  fileName: string
+  mimeType: string
+  label?: string
+}
+
 interface OfflineSyncValue {
   isOnline: boolean
   operations: QueuedOperation[]
@@ -83,6 +97,7 @@ interface OfflineSyncValue {
   enqueueRound: (input: EnqueueRoundInput) => Promise<QueuedRound>
   enqueueCheckout: (input: EnqueueCheckoutInput) => Promise<QueuedCheckout>
   enqueueCashClose: (input: EnqueueCashCloseInput) => Promise<QueuedCashClose>
+  enqueueTicket: (input: EnqueueTicketInput) => Promise<QueuedTicket>
   hasPendingCashClose: (sessionId: string) => boolean
   syncNow: () => Promise<void>
   retryOperation: (id: string) => Promise<void>
@@ -179,6 +194,14 @@ export function OfflineProvider({
           persist,
           remove: deleteQueuedOperation,
         })
+      } else if (operation.kind === "ticket") {
+        result = await syncQueuedTicket(operation, {
+          presignTicket,
+          createTicket,
+          extractTicket,
+          persist,
+          remove: deleteQueuedOperation,
+        })
       } else {
         result = await syncQueuedCashClose(operation, {
           closeCashSession,
@@ -201,9 +224,16 @@ export function OfflineProvider({
             ? "Ronda"
             : operation.kind === "checkout"
               ? "Venta"
-              : "Cierre de caja"
+              : operation.kind === "ticket"
+                ? "Ticket"
+                : "Cierre de caja"
 
-        toast.success(`${noun} sincronizada · ${money(operation.total)}`, {
+        const amount =
+          operation.kind === "ticket" ? "" : ` · ${money(operation.total)}`
+        const verb =
+          operation.kind === "ticket" ? "sincronizado" : "sincronizada"
+
+        toast.success(`${noun} ${verb}${amount}`, {
           description: operation.label,
         })
 
@@ -429,6 +459,31 @@ export function OfflineProvider({
     [persist, userId]
   )
 
+  const enqueueTicket = React.useCallback(
+    async (input: EnqueueTicketInput): Promise<QueuedTicket> => {
+      const now = Date.now()
+      const operation: QueuedTicket = {
+        id: newKey(),
+        userId,
+        kind: "ticket",
+        status: "queued",
+        createdAt: now,
+        updatedAt: now,
+        attempts: 0,
+        label: input.label ?? input.fileName,
+        total: 0,
+        file: input.file,
+        fileName: input.fileName,
+        mimeType: input.mimeType,
+        size: input.file.size,
+      }
+
+      await persist(operation)
+      return operation
+    },
+    [persist, userId]
+  )
+
   const hasPendingCashClose = React.useCallback(
     (sessionId: string) =>
       operations.some(
@@ -479,6 +534,7 @@ export function OfflineProvider({
       enqueueRound,
       enqueueCheckout,
       enqueueCashClose,
+      enqueueTicket,
       hasPendingCashClose,
       syncNow: flush,
       retryOperation,
@@ -489,6 +545,7 @@ export function OfflineProvider({
       enqueueCashClose,
       enqueueCheckout,
       enqueueRound,
+      enqueueTicket,
       errorCount,
       flush,
       hasPendingCashClose,

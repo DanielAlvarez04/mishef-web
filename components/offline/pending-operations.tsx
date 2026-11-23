@@ -69,8 +69,13 @@ export function PendingOperations() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{operation.label}</p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  {money(operation.total)} · {operation.attempts}{" "}
-                  {operation.attempts === 1 ? "intento" : "intentos"}
+                  {operation.kind === "ticket"
+                    ? `${operation.attempts} ${
+                        operation.attempts === 1 ? "intento" : "intentos"
+                      }`
+                    : `${money(operation.total)} · ${operation.attempts} ${
+                        operation.attempts === 1 ? "intento" : "intentos"
+                      }`}
                 </p>
               </div>
               <Badge variant={statusVariant(operation.status)}>
