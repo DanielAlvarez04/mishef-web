@@ -15,9 +15,6 @@ import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
 } from "@/components/ui/card"
 import {
   Dialog,
@@ -154,37 +151,47 @@ export function CategoriesTab({
             const count = category._count.items ?? 0
 
             return (
-              <Card key={category.id} className="flex flex-col gap-3">
-                <CardHeader className="gap-1">
-                  <div className="flex items-start justify-between gap-2">
-                    <CardTitle className="min-w-0 truncate text-base">
-                      {category.name}
-                    </CardTitle>
+              <Card
+                key={category.id}
+                size="sm"
+                className="flex flex-col gap-0 overflow-hidden p-0 py-0"
+              >
+                <CardContent className="flex flex-1 flex-col gap-3 p-3">
+                  <div className="flex items-center justify-between gap-2">
                     {category.isCore ? (
                       <Badge variant="outline">Core</Badge>
-                    ) : null}
+                    ) : (
+                      <span />
+                    )}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {count} artículo{count === 1 ? "" : "s"}
+                    </span>
                   </div>
-                  <CardDescription className="line-clamp-2 min-h-8">
-                    {category.description || "Sin descripción"}
-                  </CardDescription>
-                </CardHeader>
 
-                <CardContent className="mt-auto flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">
-                    {count} artículo{count === 1 ? "" : "s"}
-                  </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-base font-semibold">
+                      {category.name}
+                    </p>
+                    <p className="line-clamp-2 text-sm text-muted-foreground">
+                      {category.description || "Sin descripción"}
+                    </p>
+                  </div>
+                </CardContent>
+
+                {/* Mismo footer que la card de artículo. */}
+                <div className="flex min-h-11 items-center justify-end gap-1 border-t bg-muted px-2 py-2">
                   {canManage ? (
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      className="w-max shadow-sm"
                       onClick={() => openEdit(category)}
                     >
                       <PencilIcon className="size-4" />
                       Editar
                     </Button>
                   ) : null}
-                </CardContent>
+                </div>
               </Card>
             )
           })}

@@ -76,6 +76,7 @@ export function ArticleCardVisual({
   textSize = "md",
   compact = false,
   showImage = true,
+  aspect,
   isCombo = false,
   fallbackColor = null,
   hideFallbackIcon = false,
@@ -87,6 +88,8 @@ export function ArticleCardVisual({
   isActive?: boolean
   /** Si es `false`, se oculta la imagen y la card pasa a relación 5:3. */
   showImage?: boolean
+  /** Fuerza la relación de aspecto de la card; en POS la controla “Altura”. */
+  aspect?: "square" | "wide"
   /** Cambia el icono de respaldo (combo vs. artículo). */
   isCombo?: boolean
   selected?: boolean
@@ -157,7 +160,13 @@ export function ArticleCardVisual({
     <div
       className={cn(
         "relative w-full overflow-hidden rounded-xl border bg-white text-left select-none",
-        showImage ? "aspect-square" : "aspect-[5/3]",
+        aspect === "square"
+          ? "aspect-square"
+          : aspect === "wide"
+            ? "aspect-[5/3]"
+            : showImage
+              ? "aspect-square"
+              : "aspect-[5/3]",
         selected && "ring-2 ring-primary",
         !isActive && "opacity-80",
         className
