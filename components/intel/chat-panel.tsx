@@ -24,6 +24,7 @@ import {
 import { Textarea } from "@/components/ui/textarea"
 import type { IntelModelInfo } from "@/lib/intel"
 import { cn } from "cn"
+import { ToolResultCard } from "@/components/intel/tool-result"
 
 interface ChatMessage {
   id: string
@@ -56,6 +57,10 @@ export function IntelChatPanel({
   const [error, setError] = React.useState<string | null>(null)
   const [notice, setNotice] = React.useState<string | null>(null)
   const [toolActivity, setToolActivity] = React.useState<string | null>(null)
+  const [toolResult, setToolResult] = React.useState<{
+    name: string
+    data: unknown
+  } | null>(null)
 
   const abortRef = React.useRef<AbortController | null>(null)
 
@@ -93,6 +98,7 @@ export function IntelChatPanel({
     setError(null)
     setNotice(null)
     setToolActivity(null)
+    setToolResult(null)
     setStreaming(true)
 
     const controller = new AbortController()
@@ -164,6 +170,13 @@ export function IntelChatPanel({
               setToolActivity(
                 typeof parsed.summary === "string" ? parsed.summary : null
               )
+
+              if (parsed.data !== undefined) {
+                setToolResult({
+                  name: typeof name === "string" ? name : "tool",
+                  data: parsed.data,
+                })
+              }
             } else if (status === "error") {
               setToolActivity(
                 typeof parsed.error === "string"
@@ -220,6 +233,7 @@ export function IntelChatPanel({
     setError(null)
     setNotice(null)
     setToolActivity(null)
+    setToolResult(null)
   }
 
   return (
@@ -305,6 +319,15 @@ export function IntelChatPanel({
                       </MessageScrollerItem>
                     ))
                   )}
+
+                  {toolResult ? (
+                    <MessageScrollerItem messageId="tool-result">
+                      <ToolResultCard
+                        name={toolResult.name}
+                        data={toolResult.data}
+                      />
+                    </MessageScrollerItem>
+                  ) : null}
 
                   {toolActivity ? (
                     <MessageScrollerItem messageId="tool-activity">
