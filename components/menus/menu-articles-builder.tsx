@@ -77,6 +77,7 @@ import {
   menuWheelTargetAt,
   menuWheelTargetCenter,
 } from "./menu-wheel-groups"
+import { GroupColorPicker } from "./group-color-picker"
 
 /** Identificadores de las dos columnas que pueden tener selección. */
 type SelectionSource = "catalog" | "builder"
@@ -202,16 +203,22 @@ const baseCollisionDetection: CollisionDetection = (args) => {
 export function MenuArticlesBuilder({
   articles,
   groups,
+  groupColors,
   selected,
   onGroupsChange,
+  onGroupColorChange,
+  onGroupRename,
   onSelectedChange,
   disabled = false,
   layout = "split-scroll",
 }: {
   articles: ArticleListItem[]
   groups: string[]
+  groupColors: Record<string, string>
   selected: MenuItemInput[]
   onGroupsChange: (groups: string[]) => void
+  onGroupColorChange: (group: string, color: string) => void
+  onGroupRename?: (previous: string, next: string) => void
   onSelectedChange: (items: MenuItemInput[]) => void
   disabled?: boolean
   layout?: MenuBuilderLayout
@@ -1115,6 +1122,7 @@ export function MenuArticlesBuilder({
       setDestination(name)
     }
 
+    onGroupRename?.(previous, name)
     onGroupsChange(groups.map((group) => (group === previous ? name : group)))
     onSelectedChange(
       selected.map((row) =>
@@ -1595,6 +1603,16 @@ export function MenuArticlesBuilder({
                   onSort={(next) => sortGroup(group, next)}
                   onRename={(next) => renameGroup(group, next)}
                   onRemove={() => removeGroup(group)}
+                  color={groupColors[group] ?? null}
+                  usedColors={
+                    new Set(
+                      groups
+                        .filter((other) => other !== group)
+                        .map((other) => groupColors[other])
+                        .filter((value): value is string => Boolean(value))
+                    )
+                  }
+                  onColorChange={(color) => onGroupColorChange(group, color)}
                   onToggleItem={toggleSelected}
                   onRemoveItem={removeItem}
                 />
@@ -2006,6 +2024,9 @@ function GroupSection({
   onSort,
   onRename,
   onRemove,
+  color,
+  usedColors,
+  onColorChange,
   onToggleItem,
   onRemoveItem,
 }: {
@@ -2027,6 +2048,9 @@ function GroupSection({
   onSort: (mode: GroupSortMode) => void
   onRename: (next: string) => boolean
   onRemove: () => void
+  color: string | null
+  usedColors: Set<string>
+  onColorChange: (color: string) => void
   onToggleItem: (itemId: string) => void
   onRemoveItem: (itemId: string) => void
 }) {
@@ -2113,6 +2137,16 @@ function GroupSection({
         />
 
         <div className="flex shrink-0 items-center gap-1.5">
+          <GroupSortSelect mode={mode} title={title} onSort={onSort} />
+
+          <GroupColorPicker
+            group={title}
+            color={color}
+            usedColors={usedColors}
+            disabled={disabled}
+            onChange={onColorChange}
+          />
+
           {comboCount > 0 || articleCount > 0 ? (
             <div className="flex shrink-0 items-center gap-1">
               {comboCount > 0 ? (
@@ -2140,8 +2174,6 @@ function GroupSection({
               ) : null}
             </div>
           ) : null}
-
-          <GroupSortSelect mode={mode} title={title} onSort={onSort} />
 
           <Button
             type="button"

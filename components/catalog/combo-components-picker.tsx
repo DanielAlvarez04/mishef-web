@@ -192,7 +192,7 @@ export function ComboComponentsPicker({
       >
         <ComboboxInput
           aria-label="Buscar artículo del combo"
-          placeholder="Buscar artículo o presentación…"
+          placeholder="Buscar por nombre"
           showClear={Boolean(search)}
           className="w-full"
         />

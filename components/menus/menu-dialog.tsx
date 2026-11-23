@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { InfoIcon, Loader2Icon, SaveIcon, Settings2Icon } from "lucide-react"
 import { toast } from "sonner"
@@ -29,6 +29,7 @@ import { Separator } from "@/components/ui/separator"
 import { useActionForm } from "@/hooks/use-action-form"
 import type { ArticleListItem } from "@/lib/catalog"
 import { diffFields, isEmptyPatch, sameStringSet, sameText } from "@/lib/diff"
+import { defaultGroupColors } from "@/lib/group-colors"
 import {
   formatMenuSchedule,
   sortMenuDays,
@@ -119,6 +120,13 @@ export function MenuDialog({
     }))
   )
   const [groups, setGroups] = useState<string[]>(() => menu?.groups ?? [])
+  const [groupColors, setGroupColors] = useState<Record<string, string>>(
+    () => defaultGroupColors(menu?.groups ?? [], menu?.groupColors ?? {})
+  )
+  const effectiveGroupColors = useMemo(
+    () => defaultGroupColors(groups, groupColors),
+    [groups, groupColors]
+  )
   const [detailsOpen, setDetailsOpen] = useState(isGlobal)
   const nameInputRef = useRef<HTMLInputElement>(null)
 
@@ -154,6 +162,24 @@ export function MenuDialog({
     setDays(isWeekend ? [] : WEEKEND_DAYS)
   }
 
+  /** Al renombrar, el color viaja con la sección. */
+  function handleGroupRename(previous: string, next: string) {
+    setGroupColors((current) => {
+      const resolved = defaultGroupColors(groups, current)
+      const color = resolved[previous]
+
+      if (!color) return current
+
+      const updated = { ...current, [next]: color }
+      delete updated[previous]
+      return updated
+    })
+  }
+
+  function handleGroupColorChange(group: string, color: string) {
+    setGroupColors((current) => ({ ...current, [group]: color }))
+  }
+
   function save() {
     const trimmedName = name.trim()
 
@@ -179,6 +205,9 @@ export function MenuDialog({
       group: row.group ?? null,
     }))
 
+    const nextGroups = isGlobal ? (menu?.groups ?? []) : groups
+    const nextGroupColors = defaultGroupColors(nextGroups, groupColors)
+
     const next: MenuInput = {
       name: trimmedName,
       description: description.trim() || null,
@@ -192,7 +221,8 @@ export function MenuDialog({
       endTime: endTime || null,
       startsAt: startsAtIso,
       endsAt: endsAtIso,
-      groups: isGlobal ? (menu?.groups ?? []) : groups,
+      groups: nextGroups,
+      groupColors: nextGroupColors,
       items,
     }
 
@@ -227,6 +257,7 @@ export function MenuDialog({
           startsAt: menu.startsAt,
           endsAt: menu.endsAt,
           groups: menu.groups ?? [],
+          groupColors: menu.groupColors ?? {},
         },
         {
           name: next.name,
@@ -237,6 +268,7 @@ export function MenuDialog({
           startsAt: next.startsAt,
           endsAt: next.endsAt,
           groups: next.groups,
+          groupColors: next.groupColors,
         },
         {
           name: (left, right) =>
@@ -249,6 +281,8 @@ export function MenuDialog({
               (right as number[]).map(String)
             ),
           groups: (left, right) =>
+            JSON.stringify(left) === JSON.stringify(right),
+          groupColors: (left, right) =>
             JSON.stringify(left) === JSON.stringify(right),
         }
       ),
@@ -370,8 +404,11 @@ export function MenuDialog({
                 <MenuArticlesBuilder
                   articles={items}
                   groups={groups}
+                  groupColors={effectiveGroupColors}
                   selected={selected}
                   onGroupsChange={setGroups}
+                  onGroupColorChange={handleGroupColorChange}
+                  onGroupRename={handleGroupRename}
                   onSelectedChange={setSelected}
                   disabled={form.pending}
                   layout={BUILDER_LAYOUT}

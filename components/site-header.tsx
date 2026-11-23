@@ -1,9 +1,12 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { BellIcon, ClockIcon } from "lucide-react"
 
+import { KioskDialog } from "@/components/attendance/kiosk-dialog"
+import { FullscreenToggle } from "@/components/fullscreen-toggle"
 import { OfflineStatus } from "@/components/offline/offline-status"
 import { ModeToggle } from "@/components/mode-toggle"
 import { Button } from "@/components/ui/button"
@@ -44,6 +47,7 @@ export function SiteHeader({
   intelUnread?: number
 }) {
   const pathname = usePathname()
+  const [kioskOpen, setKioskOpen] = React.useState(false)
 
   const nestedTitle = Object.keys(pageTitles)
     .sort((left, right) => right.length - left.length)
@@ -56,49 +60,60 @@ export function SiteHeader({
   const title = branchName ? `${pageTitle} de ${branchName}` : pageTitle
 
   return (
-    <header className="flex h-[calc(var(--header-height)+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b bg-card pt-[env(safe-area-inset-top)] transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[calc(var(--header-height)+env(safe-area-inset-top))]">
-      <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
-        <SidebarTrigger className="-ml-1 hidden lg:inline-flex" />
-        <Separator
-          orientation="vertical"
-          className="mx-2 hidden h-4 self-center! lg:block"
-        />
-        <h1 className="text-base font-medium">{title}</h1>
-        <div className="ml-auto flex items-center gap-2">
-          <ModeToggle />
-          {typeof intelUnread === "number" ? (
-            <Button
-              variant="outline"
-              size="icon"
-              className="relative"
-              title="Bandeja de Intel"
-              nativeButton={false}
-              render={<Link href="/intel/notifications" />}
-            >
-              <BellIcon className="size-4" />
-              {intelUnread > 0 ? (
-                <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
-                  {intelUnread > 9 ? "9+" : intelUnread}
-                </span>
-              ) : null}
-              <span className="sr-only">Bandeja de Intel</span>
-            </Button>
-          ) : null}
-          {showClock ? (
-            <Button
-              variant="outline"
-              size="icon"
-              title="Checador"
-              nativeButton={false}
-              render={<Link href="/attendance" />}
-            >
-              <ClockIcon className="size-4" />
-              <span className="sr-only">Checador</span>
-            </Button>
-          ) : null}
-          <OfflineStatus />
+    <>
+      <header className="flex h-[calc(var(--header-height)+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b bg-card pt-[env(safe-area-inset-top)] transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-[calc(var(--header-height)+env(safe-area-inset-top))]">
+        <div className="flex w-full items-center gap-1 px-4 lg:gap-2 lg:px-6">
+          <SidebarTrigger className="-ml-1 hidden lg:inline-flex" />
+          <Separator
+            orientation="vertical"
+            className="mx-2 hidden h-4 self-center! lg:block"
+          />
+          <h1 className="text-base font-medium">{title}</h1>
+          <div className="ml-auto flex items-center gap-2">
+            <ModeToggle />
+            {typeof intelUnread === "number" ? (
+              <Button
+                variant="outline"
+                size="icon"
+                className="relative"
+                title="Bandeja de Intel"
+                nativeButton={false}
+                render={<Link href="/intel/notifications" />}
+              >
+                <BellIcon className="size-4" />
+                {intelUnread > 0 ? (
+                  <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground">
+                    {intelUnread > 9 ? "9+" : intelUnread}
+                  </span>
+                ) : null}
+                <span className="sr-only">Bandeja de Intel</span>
+              </Button>
+            ) : null}
+            {showClock ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                title="Checador"
+                onClick={() => setKioskOpen(true)}
+              >
+                <ClockIcon className="size-4" />
+                <span className="sr-only">Checador</span>
+              </Button>
+            ) : null}
+            <FullscreenToggle />
+            <OfflineStatus />
+          </div>
         </div>
-      </div>
-    </header>
+      </header>
+
+      {showClock ? (
+        <KioskDialog
+          key={kioskOpen ? "open" : "closed"}
+          open={kioskOpen}
+          onOpenChange={setKioskOpen}
+        />
+      ) : null}
+    </>
   )
 }

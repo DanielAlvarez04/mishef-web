@@ -28,6 +28,7 @@ import {
   SERVICE_NAV,
   SETTINGS_NAV,
   canSeeNavItem,
+  sortServiceNav,
   type NavItem,
 } from "@/lib/navigation"
 import {
@@ -71,7 +72,12 @@ export function AppSidebar({
   const { setOpenMobile } = useSidebar()
 
   const serviceItems = React.useMemo(
-    () => withIcons(SERVICE_NAV.filter((item) => canSeeNavItem(item, roles))),
+    () =>
+      withIcons(
+        sortServiceNav(
+          SERVICE_NAV.filter((item) => canSeeNavItem(item, roles))
+        )
+      ),
     [roles]
   )
   const applicationItems = React.useMemo(

@@ -89,7 +89,7 @@ export function PlatformUsersTable({
       tableClassName="[&_td]:py-1.5"
       search={{
         label: "Buscar usuario",
-        placeholder: "Buscar por nombre, correo o negocio...",
+        placeholder: "Buscar por nombre",
         value: search,
         onValueChange: setSearch,
       }}

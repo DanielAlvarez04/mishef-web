@@ -140,6 +140,8 @@ export interface Category {
   code: string | null
   name: string
   description: string | null
+  /** Token del catálogo de colores (`red-400`, `sky-600`). */
+  color: string | null
   isCore: boolean
   kind: CategoryKind
   isActive: boolean
@@ -387,7 +389,7 @@ export interface ItemListItem {
   /** Minutos de preparación propios; `null` hereda el tiempo del negocio. */
   prepMinutes: number | null
   sortOrder: number
-  category: { id: string; name: string } | null
+  category: { id: string; name: string; color: string | null } | null
   variants: Variant[]
   extras: Extra[]
   ingredientExclusions: Exclusion[]

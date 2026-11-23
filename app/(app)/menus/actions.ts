@@ -24,6 +24,7 @@ export interface MenuInput {
   startsAt?: string | null
   endsAt?: string | null
   groups?: string[]
+  groupColors?: Record<string, string>
   items: MenuItemInput[]
 }
 

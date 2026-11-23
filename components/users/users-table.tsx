@@ -519,7 +519,7 @@ export function UsersTable({
         tableClassName="[&_td]:py-1.5"
         search={{
           label: "Buscar usuario",
-          placeholder: "Buscar por nombre, usuario o correo...",
+          placeholder: "Buscar por nombre",
           value: globalFilter,
           onValueChange: setGlobalFilter,
         }}

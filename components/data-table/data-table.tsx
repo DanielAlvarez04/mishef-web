@@ -483,7 +483,7 @@ export function DataTable<TData extends RowData>({
         aria-label="Tamaño de las tarjetas"
         className="min-w-0 flex-1"
       >
-        <ButtonGroupText className="h-9 flex-1 px-2 text-xs">
+        <ButtonGroupText className="h-8 flex-1 px-2 text-xs">
           Tamaño
         </ButtonGroupText>
         {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}

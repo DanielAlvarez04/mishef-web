@@ -319,7 +319,7 @@ export function IngredientsTable({
         initialSorting={[{ id: "stock", desc: false }]}
         search={{
           label: "Buscar insumo",
-          placeholder: "Buscar por nombre o SKU...",
+          placeholder: "Buscar por nombre",
           value: globalFilter,
           onValueChange: setGlobalFilter,
         }}
