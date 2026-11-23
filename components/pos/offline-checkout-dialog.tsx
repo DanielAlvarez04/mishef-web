@@ -1,7 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { BanknoteIcon, Loader2Icon } from "lucide-react"
+import {
+  BanknoteIcon,
+  CreditCardIcon,
+  Loader2Icon,
+} from "lucide-react"
 import { toast } from "sonner"
 
 import { useOfflineSync } from "@/components/offline/offline-provider"
@@ -19,13 +23,14 @@ import { Label } from "@/components/ui/label"
 import { useMoney } from "@/lib/currency"
 import { orderLabel, type Order } from "@/lib/orders"
 
+type OfflineMethod = "CASH" | "CARD"
+
 /**
- * Cobro en efectivo de una cuenta abierta cuando no hay conexión.
+ * Cobro sin conexión de una cuenta abierta.
  *
- * Solo se ofrece a roles que pueden confirmar pagos y con una caja abierta. La
- * venta se guarda en el dispositivo y se envía al reconectar: primero el pago
- * confirmado y después el cierre de la cuenta. Nunca se anuncia como cobrada
- * hasta que el servidor lo confirma.
+ * Efectivo: se guarda como pago confirmado y la cuenta se cierra al sincronizar.
+ * Tarjeta: se guarda como pago pendiente de conciliar; nunca se marca como
+ * cobrado ni se libera la mesa hasta que un rol autorizado lo confirme.
  */
 export function OfflineCheckoutDialog({
   order,
@@ -40,8 +45,10 @@ export function OfflineCheckoutDialog({
 }) {
   const money = useMoney()
   const offline = useOfflineSync()
+  const [method, setMethod] = React.useState<OfflineMethod>("CASH")
   const [cashInput, setCashInput] = React.useState("")
   const [tipInput, setTipInput] = React.useState("")
+  const [reference, setReference] = React.useState("")
   const [pending, setPending] = React.useState(false)
 
   const confirmed = (order.payments ?? [])
@@ -58,11 +65,12 @@ export function OfflineCheckoutDialog({
     ? Math.max(Number(cashInput) || 0, 0)
     : total
   const change = Math.round((cash - total) * 100) / 100
+  const referenceReady = reference.trim().length >= 4
 
   async function submit() {
     if (pendingAmount > 0.004) {
       toast.error(
-        "Hay pagos pendientes de confirmar. Confírmalos o anúlalos antes de cobrar en efectivo.",
+        "Hay pagos pendientes de confirmar. Confírmalos o anúlalos antes de cobrar.",
       )
       return
     }
@@ -72,8 +80,13 @@ export function OfflineCheckoutDialog({
       return
     }
 
-    if (cash < total) {
+    if (method === "CASH" && cash < total) {
       toast.error("El efectivo recibido no cubre el total.")
+      return
+    }
+
+    if (method === "CARD" && !referenceReady) {
+      toast.error("Escribe la referencia o autorización del voucher.")
       return
     }
 
@@ -90,17 +103,34 @@ export function OfflineCheckoutDialog({
             : null,
         tipBaseAmount: available,
         tipSource: tip > 0 ? "CUSTOM" : "NONE",
-        cashReceived: Math.round(cash * 100) / 100,
-        changeGiven: Math.max(0, change),
-        closeOrder: true,
+        method,
+        ...(method === "CASH"
+          ? {
+              cashReceived: Math.round(cash * 100) / 100,
+              changeGiven: Math.max(0, change),
+            }
+          : { reference: reference.trim() }),
+        closeOrder: method === "CASH",
         total,
-        label: `${orderLabel(order)} · efectivo sin conexión`,
+        label: `${orderLabel(order)} · ${
+          method === "CARD"
+            ? "tarjeta pendiente sin conexión"
+            : "efectivo sin conexión"
+        }`,
       })
 
-      toast.success("Cobro guardado en este dispositivo", {
-        description:
-          "Se enviará al reconectar. La cuenta no se cierra hasta que el servidor lo confirme.",
-      })
+      if (method === "CARD") {
+        toast.success("Cobro con tarjeta guardado como pendiente", {
+          description:
+            "No se marcará como cobrado ni se liberará la mesa hasta que se concilie.",
+        })
+      } else {
+        toast.success("Cobro guardado en este dispositivo", {
+          description:
+            "Se enviará al reconectar. La cuenta no se cierra hasta que el servidor lo confirme.",
+        })
+      }
+
       onOpenChange(false)
       onQueued()
     } catch {
@@ -115,8 +145,12 @@ export function OfflineCheckoutDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <BanknoteIcon className="size-4" />
-            Cobro en efectivo sin conexión
+            {method === "CARD" ? (
+              <CreditCardIcon className="size-4" />
+            ) : (
+              <BanknoteIcon className="size-4" />
+            )}
+            Cobro sin conexión
           </DialogTitle>
           <DialogDescription>
             {orderLabel(order)} · saldo {money(available)}. Se guarda en el
@@ -125,18 +159,58 @@ export function OfflineCheckoutDialog({
         </DialogHeader>
 
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="offline-cash">Efectivo recibido</Label>
-            <Input
-              id="offline-cash"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              value={cashInput}
-              placeholder={total.toFixed(2)}
-              onChange={(event) => setCashInput(event.target.value)}
-            />
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              type="button"
+              variant={method === "CASH" ? "default" : "outline"}
+              onClick={() => setMethod("CASH")}
+              disabled={pending}
+            >
+              <BanknoteIcon />
+              Efectivo
+            </Button>
+            <Button
+              type="button"
+              variant={method === "CARD" ? "default" : "outline"}
+              onClick={() => setMethod("CARD")}
+              disabled={pending}
+            >
+              <CreditCardIcon />
+              Tarjeta
+            </Button>
           </div>
+
+          {method === "CASH" ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="offline-cash">Efectivo recibido</Label>
+              <Input
+                id="offline-cash"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                value={cashInput}
+                placeholder={total.toFixed(2)}
+                onChange={(event) => setCashInput(event.target.value)}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="offline-reference">
+                Referencia / autorización
+              </Label>
+              <Input
+                id="offline-reference"
+                value={reference}
+                maxLength={120}
+                placeholder="Voucher, autorización o últimos 4 dígitos"
+                onChange={(event) => setReference(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Se guarda para conciliar el cobro. No se almacenan datos de la
+                tarjeta.
+              </p>
+            </div>
+          )}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="offline-tip">Propina (opcional)</Label>
@@ -156,18 +230,24 @@ export function OfflineCheckoutDialog({
               <span>Total a cobrar</span>
               <span className="font-medium tabular-nums">{money(total)}</span>
             </div>
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span>Cambio</span>
-              <span className="tabular-nums">
-                {money(Math.max(0, change))}
-              </span>
-            </div>
+            {method === "CASH" ? (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Cambio</span>
+                <span className="tabular-nums">
+                  {money(Math.max(0, change))}
+                </span>
+              </div>
+            ) : (
+              <div className="text-xs text-amber-700 dark:text-amber-300">
+                Quedará como pago pendiente de conciliar. La cuenta no se cierra.
+              </div>
+            )}
           </div>
 
           {pendingAmount > 0.004 ? (
             <p className="text-xs text-destructive">
               Hay {money(pendingAmount)} en pagos por confirmar. No se puede
-              cerrar la cuenta en efectivo hasta resolverlos.
+              cerrar la cuenta hasta resolverlos.
             </p>
           ) : null}
 
@@ -189,10 +269,16 @@ export function OfflineCheckoutDialog({
           <Button
             type="button"
             onClick={() => void submit()}
-            disabled={pending || cash < total || available <= 0 || pendingAmount > 0.004}
+            disabled={
+              pending ||
+              available <= 0 ||
+              pendingAmount > 0.004 ||
+              (method === "CASH" && cash < total) ||
+              (method === "CARD" && !referenceReady)
+            }
           >
             {pending ? <Loader2Icon className="animate-spin" /> : null}
-            Guardar cobro
+            {method === "CARD" ? "Guardar tarjeta pendiente" : "Guardar cobro"}
           </Button>
         </DialogFooter>
       </DialogContent>

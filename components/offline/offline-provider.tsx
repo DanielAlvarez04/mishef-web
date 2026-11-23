@@ -22,7 +22,7 @@ import { syncQueuedCheckout } from "@/lib/offline/sync-checkout"
 import { syncQueuedRound } from "@/lib/offline/sync-round"
 import { closeCashSession } from "@/lib/cash-actions"
 import { createOrder, sendRound } from "@/lib/order-actions"
-import { closeOrder, registerPayment } from "@/lib/payment-actions"
+import { closeOrder, registerOfflineCardPayment, registerPayment } from "@/lib/payment-actions"
 
 import type { TipSource } from "@/lib/orders"
 
@@ -60,8 +60,12 @@ export interface EnqueueCheckoutInput {
   tipPercent?: number | null
   tipBaseAmount?: number | null
   tipSource?: TipSource
-  cashReceived: number
+  /** Efectivo confirmado o tarjeta pendiente de conciliar. */
+  method?: "CASH" | "CARD"
+  cashReceived?: number
   changeGiven?: number
+  /** Voucher o autorización (solo tarjeta). */
+  reference?: string
   closeOrder?: boolean
   total: number
   label: string
@@ -107,6 +111,24 @@ function newKey(): string {
   }
 
   return `op-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+}
+
+/** Identificador local del dispositivo para los cobros offline. */
+function getDeviceId(): string {
+  if (typeof window === "undefined") return "server"
+
+  const key = "np-offline-device-id"
+
+  try {
+    const existing = window.localStorage.getItem(key)
+    if (existing) return existing
+
+    const id = newKey()
+    window.localStorage.setItem(key, id)
+    return id
+  } catch {
+    return newKey()
+  }
 }
 
 /** Conectividad del navegador, sin setState dentro de un efecto. */
@@ -175,6 +197,7 @@ export function OfflineProvider({
           createOrder,
           sendRound,
           registerPayment,
+          registerOfflineCard: registerOfflineCardPayment,
           closeOrder,
           persist,
           remove: deleteQueuedOperation,
@@ -196,16 +219,23 @@ export function OfflineProvider({
 
         await refresh()
 
-        const noun =
-          operation.kind === "round"
-            ? "Ronda"
-            : operation.kind === "checkout"
-              ? "Venta"
-              : "Cierre de caja"
+        if (result.pendingReview) {
+          toast.info("Cobro con tarjeta registrado", {
+            description:
+              "Quedó pendiente de conciliación. La cuenta no se cerró ni se liberó la mesa.",
+          })
+        } else {
+          const noun =
+            operation.kind === "round"
+              ? "Ronda"
+              : operation.kind === "checkout"
+                ? "Venta"
+                : "Cierre de caja"
 
-        toast.success(`${noun} sincronizada · ${money(operation.total)}`, {
-          description: operation.label,
-        })
+          toast.success(`${noun} sincronizada · ${money(operation.total)}`, {
+            description: operation.label,
+          })
+        }
 
         // Cocina y saldos ya cambiaron en el servidor.
         router.refresh()
@@ -361,6 +391,7 @@ export function OfflineProvider({
   const enqueueCheckout = React.useCallback(
     async (input: EnqueueCheckoutInput): Promise<QueuedCheckout> => {
       const now = Date.now()
+      const method = input.method ?? "CASH"
       const operation: QueuedCheckout = {
         id: newKey(),
         userId,
@@ -386,16 +417,28 @@ export function OfflineProvider({
             }
           : undefined,
         payment: {
+          method,
           amount: input.amount,
           tipAmount: input.tipAmount ?? 0,
           tipPercent: input.tipPercent ?? null,
           tipBaseAmount: input.tipBaseAmount ?? null,
           tipSource: input.tipSource ?? "NONE",
-          cashReceived: input.cashReceived,
-          changeGiven: input.changeGiven,
+          ...(method === "CASH" && input.cashReceived !== undefined
+            ? {
+                cashReceived: input.cashReceived,
+                changeGiven: input.changeGiven,
+              }
+            : {}),
+          ...(method === "CARD"
+            ? {
+                reference: input.reference?.trim(),
+                deviceId: getDeviceId(),
+                createdOfflineAt: now,
+              }
+            : {}),
           idempotencyKey: newKey(),
         },
-        closeOrder: input.closeOrder ?? true,
+        closeOrder: method === "CARD" ? false : (input.closeOrder ?? true),
       }
 
       await persist(operation)

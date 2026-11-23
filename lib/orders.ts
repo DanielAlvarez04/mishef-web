@@ -49,6 +49,11 @@ export interface Payment {
   sessionId?: string | null
   /** Referencia externa del cobro (autorización, voucher o terminal ajena). */
   reference?: string | null
+  /** Dispositivo que capturó el cobro sin conexión. */
+  offlineDeviceId?: string | null
+  createdOfflineAt?: string | null
+  reviewRequired?: boolean
+  reviewReason?: string | null
   status: PaymentStatus
   paidAt: string | null
   confirmedAt: string | null

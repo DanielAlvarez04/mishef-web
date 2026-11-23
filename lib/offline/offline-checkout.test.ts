@@ -15,6 +15,7 @@ function checkout(overrides: Partial<QueuedCheckout> = {}): QueuedCheckout {
     total: 116,
     orderId: "o1",
     payment: {
+      method: "CASH",
       amount: 100,
       tipAmount: 16,
       tipSource: "CUSTOM",
@@ -50,10 +51,29 @@ function deps() {
     createOrder: jest.fn(),
     sendRound: jest.fn(),
     registerPayment: jest.fn(),
+    registerOfflineCard: jest.fn(),
     closeOrder: jest.fn(),
     persist: jest.fn(async () => {}),
     remove: jest.fn(async () => {}),
   };
+}
+
+function cardCheckout(overrides: Partial<QueuedCheckout> = {}): QueuedCheckout {
+  return checkout({
+    label: "Mesa 4 · tarjeta pendiente",
+    payment: {
+      method: "CARD",
+      amount: 100,
+      tipAmount: 16,
+      tipSource: "CUSTOM",
+      reference: "AUTH-1234",
+      deviceId: "dev-1",
+      createdOfflineAt: 1_700_000_000_000,
+      idempotencyKey: "pay-card",
+    },
+    closeOrder: false,
+    ...overrides,
+  });
 }
 
 describe("offline checkout", () => {
@@ -144,6 +164,48 @@ describe("offline checkout", () => {
 
     expect(result.outcome).toBe("done");
     expect(d.remove).toHaveBeenCalledWith("c1");
+  });
+
+  it("registra la tarjeta como pendiente y no cierra la cuenta", async () => {
+    const d = deps();
+    d.registerOfflineCard.mockResolvedValue({
+      ok: true,
+      data: { id: "p-card" },
+    });
+
+    const result = await syncQueuedCheckout(cardCheckout(), d);
+
+    expect(result).toMatchObject({ outcome: "done", pendingReview: true });
+    expect(d.registerOfflineCard).toHaveBeenCalledWith(
+      "o1",
+      expect.objectContaining({
+        amount: 100,
+        tipAmount: 16,
+        reference: "AUTH-1234",
+        deviceId: "dev-1",
+        idempotencyKey: "pay-card",
+      }),
+    );
+    expect(d.registerPayment).not.toHaveBeenCalled();
+    expect(d.closeOrder).not.toHaveBeenCalled();
+    expect(d.remove).toHaveBeenCalledWith("c1");
+  });
+
+  it("mantiene la tarjeta en cola si la red falla", async () => {
+    const d = deps();
+    d.registerOfflineCard.mockResolvedValue({
+      ok: false,
+      network: true,
+      message: "sin red",
+    });
+
+    const result = await syncQueuedCheckout(cardCheckout(), d);
+
+    expect(result.outcome).toBe("offline");
+    expect(d.remove).not.toHaveBeenCalled();
+    expect(d.persist).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "queued" }),
+    );
   });
 });
 
