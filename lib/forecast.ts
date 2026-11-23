@@ -20,6 +20,10 @@ export interface ForecastRow {
   unitCost: number | null
   estimatedCost: number
   lastSupplier: { id: string; name: string } | null
+  /** Promedio simple de los últimos 14 días, como línea base. */
+  baselineDailyAverage: number
+  /** Diferencia porcentual de la proyección contra la línea base. */
+  vsBaseline: number | null
 }
 
 export interface SuggestionsResponse {
