@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import gsap from "gsap"
+import { Flip } from "gsap/Flip"
 import {
   ArrowUpDownIcon,
   BanknoteIcon,
@@ -154,6 +156,10 @@ import {
 import { CashSessionActions } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(Flip)
+}
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
 
@@ -421,18 +427,20 @@ function lineToInput(line: CartLine): RoundItemInput {
 const PosCatalogCard = React.memo(function PosCatalogCard({
   product,
   selected,
+  visible,
   textSize,
-  showImages,
-  showGroups,
+  square,
   groupColor,
+  groupLabel,
   onOpen,
 }: {
   product: ItemListItem
   selected: boolean
+  visible: boolean
   textSize: ArticleCardTextSize
-  showImages: boolean
-  showGroups: boolean
+  square: boolean
   groupColor: string | null
+  groupLabel: string | null
   onOpen: (product: ItemListItem) => void
 }) {
   const shakeRef = React.useRef<HTMLDivElement | null>(null)
@@ -440,12 +448,15 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   useShake(shakeRef, selected)
 
   const promotion = product.promotions?.find((entry) => entry.isActive)
-  const hasBadges = Boolean(
-    (showGroups && product.category) || product.isCombo || promotion
-  )
+  const hasBadges = Boolean(groupLabel || product.isCombo || promotion)
 
   return (
-    <div ref={shakeRef} className={cn(selected && "np-menu-card-shake")}>
+    <div
+      ref={shakeRef}
+      data-pos-item=""
+      hidden={!visible}
+      className={cn(selected && "np-menu-card-shake")}
+    >
       <button
         type="button"
         onClick={() => onOpen(product)}
@@ -461,25 +472,27 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
           selected={selected}
           compact
           textSize={textSize}
-          showImage={showImages}
+          showImage
+          aspect={square ? "square" : "wide"}
           isCombo={product.isCombo}
-          fallbackColor={groupColor}
+          fallbackColor={groupColor ?? "var(--muted)"}
           hideFallbackIcon
           className="transition-shadow group-hover:ring-2 group-hover:ring-ring/60"
           badge={
             hasBadges ? (
               <div className="flex min-w-0 flex-col items-start gap-1">
-                {showGroups && product.category ? (
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    title={product.category.name}
-                    className="max-w-full min-w-0 truncate border-white/35 bg-black/35 text-[10px] text-white backdrop-blur-sm"
+                {groupLabel ? (
+                  <span
+                    aria-label={`Grupo: ${groupLabel}`}
+                    title={groupLabel}
+                    className="flex w-fit items-center rounded-full bg-neutral-50 p-1 dark:bg-neutral-950"
                   >
-                    <span className="min-w-0 truncate">
-                      {product.category.name}
-                    </span>
-                  </Badge>
+                    <span
+                      aria-hidden
+                      className="size-4 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                      style={{ backgroundColor: groupColor ?? "var(--muted)" }}
+                    />
+                  </span>
                 ) : null}
                 {product.isCombo ? (
                   <Badge
@@ -560,6 +573,12 @@ ull` = vista consolidada. */
   const [menuId, setMenuId] = React.useState(
     () => menus.find((menu) => menu.isGlobal)?.id ?? menus[0]?.id ?? ""
   )
+  /** Grupos seleccionados para filtrar; vacío = todos. */
+  const [selectedGroups, setSelectedGroups] = React.useState<
+    Array<string | null>
+  >([])
+  const gridRef = React.useRef<HTMLDivElement | null>(null)
+  const flipStateRef = React.useRef<Flip.FlipState | null>(null)
   const [cardColumns, setCardColumns] = usePersistentCardColumns(
     "pos-card-columns",
     4,
@@ -579,13 +598,10 @@ ull` = vista consolidada. */
     POS_SORT_ORDERS,
     "default"
   )
-  // «Información disponible»: qué se muestra sobre las cards del catálogo.
-  const [showImages, setShowImages] = usePersistentBoolean(
-    "pos-show-images",
-    true
-  )
-  const [showGroups, setShowGroups] = usePersistentBoolean(
-    "pos-show-groups",
+  // «Altura de tarjetas»: cuadrada o panorámica (la altura de cuando no había
+  // imagen). Ancho y texto tienen sus propios controles persistidos.
+  const [squareCards, setSquareCards] = usePersistentBoolean(
+    "pos-card-square",
     true
   )
   const dialogOpenedAtRef = React.useRef<number | null>(null)
@@ -1099,7 +1115,12 @@ ull` = vista consolidada. */
     return groupColorValue(selectedMenu.groupColors?.[entry.group])
   }
 
-  const filtered = React.useMemo(() => {
+  const groupLabelFor = (product: ItemListItem) => {
+    const entry = menuEntryByItem.get(product.id)
+    return entry?.group ?? product.category?.name ?? null
+  }
+
+  const baseFiltered = React.useMemo(() => {
     const needle = deferredSearch.trim().toLowerCase()
 
     const matches = products.filter((product) => {
@@ -1204,6 +1225,88 @@ ull` = vista consolidada. */
     groupRank,
   ])
 
+  const filtered = React.useMemo(() => {
+    if (selectedGroups.length === 0) return baseFiltered
+
+    return baseFiltered.filter((product) => {
+      const entry = menuEntryByItem.get(product.id)
+      return selectedGroups.includes(entry?.group ?? null)
+    })
+  }, [baseFiltered, selectedGroups, menuEntryByItem])
+
+  const captureFlipState = React.useCallback(() => {
+    const grid = gridRef.current
+    if (!grid) return
+
+    flipStateRef.current = Flip.getState(
+      grid.querySelectorAll("[data-pos-item]")
+    )
+  }, [])
+
+  React.useLayoutEffect(() => {
+    const state = flipStateRef.current
+    if (!state) return
+
+    flipStateRef.current = null
+
+    const grid = gridRef.current
+    if (!grid) return
+
+    const targets = grid.querySelectorAll("[data-pos-item]")
+    if (targets.length === 0) return
+
+    Flip.from(state, {
+      duration: 0.7,
+      scale: true,
+      ease: "power1.inOut",
+      stagger: 0.08,
+      absolute: true,
+      onEnter: (elements) =>
+        gsap.fromTo(
+          elements,
+          { opacity: 0, scale: 0 },
+          { opacity: 1, scale: 1, duration: 1 }
+        ),
+      onLeave: (elements) =>
+        gsap.to(elements, { opacity: 0, scale: 0, duration: 1 }),
+    })
+  }, [selectedGroups])
+
+  const groupFilters = React.useMemo(() => {
+    if (!selectedMenu) return []
+
+    const present = new Set(
+      selectedMenu.items.map((entry) => entry.group ?? null)
+    )
+
+    const filters: Array<{
+      group: string | null
+      label: string
+      color: string | null
+    }> = []
+
+    // Mismo orden en que se guardaron los grupos del menú.
+    for (const group of selectedMenu.groups) {
+      if (!present.has(group)) continue
+
+      filters.push({
+        group,
+        label: group,
+        color: selectedMenu.groupColors?.[group] ?? null,
+      })
+    }
+
+    if (present.has(null)) {
+      filters.push({
+        group: null,
+        label: "Sin grupo",
+        color: null,
+      })
+    }
+
+    return filters
+  }, [selectedMenu])
+
   // Una búsqueda sin resultados es señal de catálogo incompleto o de nombres
   // que no coinciden con lo que escribe el mesero.
   React.useEffect(() => {
@@ -1240,16 +1343,20 @@ ull` = vista consolidada. */
   const renderProductCard = (product: ItemListItem) => {
     const selected =
       selectedItemIds.has(product.id) || pendingProductId === product.id
+    const group = menuEntryByItem.get(product.id)?.group ?? null
+    const visible =
+      selectedGroups.length === 0 || selectedGroups.includes(group)
 
     return (
       <PosCatalogCard
         key={product.id}
         product={product}
         selected={selected}
+        visible={visible}
         textSize={cardTextScale}
-        showImages={showImages}
-        showGroups={showGroups}
+        square={squareCards}
         groupColor={groupColorFor(product)}
+        groupLabel={groupLabelFor(product)}
         onOpen={handleOpenProduct}
       />
     )
@@ -2601,6 +2708,7 @@ ull` = vista consolidada. */
                   if (!next) return
 
                   setMenuId(next)
+                  setSelectedGroups([])
                   posCapture.noteFilter()
                   trackEvent({
                     name: "pos.menu_filtered",
@@ -2743,9 +2851,9 @@ ull` = vista consolidada. */
                     <div className="grid grid-cols-2 gap-3">
                       <div className="flex flex-col gap-1.5">
                         <span className="text-xs font-medium text-muted-foreground">
-                          Tamaño de tarjetas
+                          Ancho de tarjetas
                         </span>
-                        <ButtonGroup aria-label="Tamaño de las tarjetas">
+                        <ButtonGroup aria-label="Ancho de las tarjetas">
                           {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}
                           <Button
                             type="button"
@@ -2821,30 +2929,32 @@ ull` = vista consolidada. */
 
                     <div className="flex flex-col gap-1.5">
                       <span className="text-xs font-medium text-muted-foreground">
-                        Información disponible
+                        Altura de tarjetas
                       </span>
-                      <div className="flex flex-wrap gap-1.5">
+                      <ButtonGroup aria-label="Altura de las tarjetas">
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          aria-pressed={showImages}
-                          className={jalapenoChipClass(showImages)}
-                          onClick={() => setShowImages((current) => !current)}
+                          size="icon-sm"
+                          aria-label="Tarjetas más bajas"
+                          title="Tarjetas más bajas"
+                          disabled={!squareCards}
+                          onClick={() => setSquareCards(false)}
                         >
-                          Imágenes
+                          <MinusIcon className="size-4" />
                         </Button>
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          aria-pressed={showGroups}
-                          className={jalapenoChipClass(showGroups)}
-                          onClick={() => setShowGroups((current) => !current)}
+                          size="icon-sm"
+                          aria-label="Tarjetas más altas"
+                          title="Tarjetas más altas"
+                          disabled={squareCards}
+                          onClick={() => setSquareCards(true)}
                         >
-                          Grupos
+                          <PlusIcon className="size-4" />
                         </Button>
-                      </div>
+                      </ButtonGroup>
                     </div>
                   </div>
                 </PopoverContent>
@@ -2893,6 +3003,46 @@ ull` = vista consolidada. */
             </div>
           </div>
 
+          {groupFilters.length > 0 ? (
+            <>
+              <Separator />
+              <div className="flex flex-wrap items-center gap-2">
+                {groupFilters.map((filter) => {
+                const selected = selectedGroups.includes(filter.group)
+
+                return (
+                  <Button
+                    key={filter.group ?? "__none__"}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-pressed={selected}
+                    className={cn("max-w-[14rem]", jalapenoChipClass(selected))}
+                    onClick={() => {
+                      captureFlipState()
+                      setSelectedGroups((current) =>
+                        current.includes(filter.group)
+                          ? current.filter((group) => group !== filter.group)
+                          : [...current, filter.group]
+                      )
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      className="size-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
+                      style={{
+                        backgroundColor:
+                          groupColorValue(filter.color) ?? "var(--muted)",
+                      }}
+                    />
+                    <span className="truncate">{filter.label}</span>
+                  </Button>
+                )
+              })}
+              </div>
+            </>
+          ) : null}
+
           {selectedMenu && !selectedMenu.isAvailableNow ? (
             <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
               «{selectedMenu.name}» está fuera de horario. Puedes consultarlo,
@@ -2906,8 +3056,11 @@ ull` = vista consolidada. */
               No hay artículos que coincidan con el filtro.
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(var(--np-pos-card-columns,4),minmax(0,1fr))]">
-              {filtered.map(renderProductCard)}
+            <div
+              ref={gridRef}
+              className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(var(--np-pos-card-columns,4),minmax(0,1fr))]"
+            >
+              {baseFiltered.map(renderProductCard)}
             </div>
           )}
         </div>
