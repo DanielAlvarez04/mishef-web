@@ -1,9 +1,16 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
 import Link from "next/link"
-import { ScanEyeIcon, TriangleAlertIcon } from "lucide-react"
+import {
+  CheckIcon,
+  EyeOffIcon,
+  ScanEyeIcon,
+  TriangleAlertIcon,
+} from "lucide-react"
+import { toast } from "sonner"
 
+import { reviewAnomaly } from "@/app/(app)/intel/anomalies/actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,7 +25,9 @@ import {
   ANOMALY_TYPE_LABELS,
   anomalySeverityVariant,
   evidenceText,
+  type AnomalyFinding,
   type AnomalyResponse,
+  type AnomalyReviewStatus,
   type AnomalySeverity,
 } from "@/lib/anomalies"
 
@@ -36,14 +45,42 @@ const money = new Intl.NumberFormat("es-MX", {
 
 export function AnomaliesView({ data }: { data: AnomalyResponse | null }) {
   const [severity, setSeverity] = useState<"ALL" | AnomalySeverity>("ALL")
+  const [overrides, setOverrides] = useState<
+    Record<string, AnomalyReviewStatus>
+  >({})
+  const [showDismissed, setShowDismissed] = useState(false)
+  const [pending, startTransition] = useTransition()
 
   const findings = useMemo(() => {
     const rows = data?.findings ?? []
 
-    if (severity === "ALL") return rows
+    return rows.filter((finding) => {
+      const status = overrides[finding.id] ?? finding.reviewStatus
 
-    return rows.filter((finding) => finding.severity === severity)
-  }, [data, severity])
+      if (!showDismissed && status === "DISMISSED") return false
+      if (severity !== "ALL" && finding.severity !== severity) return false
+
+      return true
+    })
+  }, [data, severity, overrides, showDismissed])
+
+  function review(finding: AnomalyFinding, status: AnomalyReviewStatus) {
+    startTransition(async () => {
+      const result = await reviewAnomaly(finding.id, status)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No pudimos guardar la revisión")
+        return
+      }
+
+      setOverrides((current) => ({ ...current, [finding.id]: status }))
+      toast.success(
+        status === "ACKNOWLEDGED"
+          ? "Anomalía reconocida"
+          : "Anomalía descartada"
+      )
+    })
+  }
 
   if (!data) {
     return (
@@ -65,8 +102,9 @@ export function AnomaliesView({ data }: { data: AnomalyResponse | null }) {
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">Anomalías</h1>
         <p className="text-sm text-muted-foreground">
-          Reglas explicables sobre descuentos, cancelaciones, caja y mermas. Cada
-          hallazgo incluye la evidencia para revisarlo.
+          Reglas explicables sobre descuentos, cancelaciones, caja, mermas,
+          mesas abiertas y cantidades inusuales. Reconoce o descarta cada
+          hallazgo después de revisarlo.
         </p>
       </div>
 
@@ -117,6 +155,14 @@ export function AnomaliesView({ data }: { data: AnomalyResponse | null }) {
             {filter.label}
           </Button>
         ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => setShowDismissed((current) => !current)}
+        >
+          {showDismissed ? "Ocultar descartadas" : "Mostrar descartadas"}
+        </Button>
         <span className="ml-auto text-xs text-muted-foreground">
           {new Date(data.from).toLocaleDateString("es-MX", {
             timeZone: "UTC",
@@ -129,30 +175,66 @@ export function AnomaliesView({ data }: { data: AnomalyResponse | null }) {
       </div>
 
       <div className="flex flex-col gap-3">
-        {findings.map((finding) => (
-          <Card key={finding.id}>
-            <CardHeader className="gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={anomalySeverityVariant(finding.severity)}>
-                  {ANOMALY_SEVERITY_LABELS[finding.severity]}
-                </Badge>
-                <Badge variant="outline">
-                  {ANOMALY_TYPE_LABELS[finding.type]}
-                </Badge>
-                <span className="text-xs text-muted-foreground">
-                  Puntaje {finding.score}/100
-                </span>
-                {finding.link ? (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    className="ml-auto"
-                    render={<Link href={finding.link} />}
-                  >
-                    Ver evidencia
-                  </Button>
-                ) : null}
-              </div>
+        {findings.map((finding) => {
+          const reviewStatus = overrides[finding.id] ?? finding.reviewStatus
+
+          return (
+            <Card key={finding.id}>
+              <CardHeader className="gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant={anomalySeverityVariant(finding.severity)}>
+                    {ANOMALY_SEVERITY_LABELS[finding.severity]}
+                  </Badge>
+                  <Badge variant="outline">
+                    {ANOMALY_TYPE_LABELS[finding.type]}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    Puntaje {finding.score}/100
+                  </span>
+                  <div className="ml-auto flex flex-wrap items-center gap-1">
+                    {finding.link ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        render={<Link href={finding.link} />}
+                      >
+                        Ver evidencia
+                      </Button>
+                    ) : null}
+                    {reviewStatus ? (
+                      <Badge
+                        variant={
+                          reviewStatus === "ACKNOWLEDGED" ? "success" : "outline"
+                        }
+                      >
+                        {reviewStatus === "ACKNOWLEDGED"
+                          ? "Reconocida"
+                          : "Descartada"}
+                      </Badge>
+                    ) : (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={pending}
+                          onClick={() => review(finding, "ACKNOWLEDGED")}
+                        >
+                          <CheckIcon data-icon="inline-start" />
+                          Reconocer
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          disabled={pending}
+                          onClick={() => review(finding, "DISMISSED")}
+                        >
+                          <EyeOffIcon data-icon="inline-start" />
+                          Descartar
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
               <CardTitle className="text-base">{finding.title}</CardTitle>
               <CardDescription>{finding.detail}</CardDescription>
             </CardHeader>
@@ -171,8 +253,9 @@ export function AnomaliesView({ data }: { data: AnomalyResponse | null }) {
                 </div>
               </details>
             </CardContent>
-          </Card>
-        ))}
+            </Card>
+          )
+        })}
 
         {findings.length === 0 ? (
           <Card>

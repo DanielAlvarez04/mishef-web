@@ -1,5 +1,12 @@
-export type AnomalyType = "DISCOUNT" | "CANCELLATION" | "CASH" | "WASTE"
+export type AnomalyType =
+  | "DISCOUNT"
+  | "CANCELLATION"
+  | "CASH"
+  | "WASTE"
+  | "OPEN_TABLE"
+  | "ITEM_QUANTITY"
 export type AnomalySeverity = "HIGH" | "MEDIUM" | "LOW"
+export type AnomalyReviewStatus = "ACKNOWLEDGED" | "DISMISSED"
 
 export interface AnomalyFinding {
   id: string
@@ -10,6 +17,7 @@ export interface AnomalyFinding {
   detail: string
   evidence: Record<string, unknown>
   link?: string
+  reviewStatus?: AnomalyReviewStatus | null
 }
 
 export interface AnomalySummary {
@@ -35,6 +43,8 @@ export const ANOMALY_TYPE_LABELS: Record<AnomalyType, string> = {
   CANCELLATION: "Cancelaciones",
   CASH: "Caja",
   WASTE: "Mermas",
+  OPEN_TABLE: "Mesas abiertas",
+  ITEM_QUANTITY: "Cantidades inusuales",
 }
 
 export const ANOMALY_SEVERITY_LABELS: Record<AnomalySeverity, string> = {

@@ -271,7 +271,7 @@ export function IntelChatPanel({
           >
             <MessageScroller className="min-h-0 flex-1">
               <MessageScrollerViewport>
-                <MessageScrollerContent>
+                <MessageScrollerContent aria-busy={streaming}>
                   {messages.length === 0 ? (
                     <MessageScrollerItem
                       messageId="empty"
