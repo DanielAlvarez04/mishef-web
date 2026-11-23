@@ -360,24 +360,48 @@ function SupplierDialog({
     supplier?: Supplier
   ) => Promise<boolean>
 }) {
-  const [name, setName] = useState("")
-  const [rfc, setRfc] = useState("")
-  const [aliases, setAliases] = useState("")
-  const [taxPercent, setTaxPercent] = useState("")
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+
+        {open ? (
+          <SupplierForm
+            key={supplier?.id ?? "new"}
+            supplier={supplier}
+            onCancel={() => onOpenChange(false)}
+            onSubmit={onSubmit}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SupplierForm({
+  supplier,
+  onCancel,
+  onSubmit,
+}: {
+  supplier?: Supplier
+  onCancel: () => void
+  onSubmit: (
+    input: SupplierInput,
+    supplier?: Supplier
+  ) => Promise<boolean>
+}) {
+  const [name, setName] = useState(supplier?.name ?? "")
+  const [rfc, setRfc] = useState(supplier?.rfc ?? "")
+  const [aliases, setAliases] = useState(supplier?.aliases.join(", ") ?? "")
+  const [taxPercent, setTaxPercent] = useState(
+    supplier?.defaultTaxRate === null || supplier?.defaultTaxRate === undefined
+      ? ""
+      : String(Number(supplier.defaultTaxRate) * 100)
+  )
   const [pending, startTransition] = useTransition()
-
-  useEffect(() => {
-    if (!open) return
-
-    setName(supplier?.name ?? "")
-    setRfc(supplier?.rfc ?? "")
-    setAliases(supplier?.aliases.join(", ") ?? "")
-    setTaxPercent(
-      supplier?.defaultTaxRate === null || supplier?.defaultTaxRate === undefined
-        ? ""
-        : String(Number(supplier.defaultTaxRate) * 100)
-    )
-  }, [open, supplier])
 
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -398,19 +422,12 @@ function SupplierDialog({
     startTransition(async () => {
       const ok = await onSubmit(input, supplier)
 
-      if (ok) onOpenChange(false)
+      if (ok) onCancel()
     })
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
-        </DialogHeader>
-
-        <form className="flex flex-col gap-3" onSubmit={submit}>
+    <form className="flex flex-col gap-3" onSubmit={submit}>
           <Field>
             <FieldLabel htmlFor="supplier-name">Nombre</FieldLabel>
             <Input
@@ -469,7 +486,7 @@ function SupplierDialog({
               type="button"
               variant="ghost"
               disabled={pending}
-              onClick={() => onOpenChange(false)}
+              onClick={onCancel}
             >
               Cancelar
             </Button>
@@ -481,8 +498,6 @@ function SupplierDialog({
             </Button>
           </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -495,8 +510,30 @@ function SupplierProductsDialog({
   ingredients: Ingredient[]
   onClose: () => void
 }) {
+  return (
+    <Dialog open={supplier !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-3xl">
+        {supplier ? (
+          <SupplierProductsBody
+            key={supplier.id}
+            supplier={supplier}
+            ingredients={ingredients}
+          />
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function SupplierProductsBody({
+  supplier,
+  ingredients,
+}: {
+  supplier: Supplier
+  ingredients: Ingredient[]
+}) {
   const [products, setProducts] = useState<SupplierProduct[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [rawName, setRawName] = useState("")
   const [ingredientId, setIngredientId] = useState("")
   const [quantity, setQuantity] = useState("1")
@@ -506,13 +543,7 @@ function SupplierProductsDialog({
   const [pending, startTransition] = useTransition()
 
   useEffect(() => {
-    if (!supplier) {
-      setProducts([])
-      return
-    }
-
     let cancelled = false
-    setLoading(true)
 
     void getSupplierProducts(supplier.id).then((result) => {
       if (cancelled) return
@@ -530,7 +561,7 @@ function SupplierProductsDialog({
     return () => {
       cancelled = true
     }
-  }, [supplier])
+  }, [supplier.id])
 
   function reload() {
     if (!supplier) return
@@ -601,10 +632,9 @@ function SupplierProductsDialog({
   }
 
   return (
-    <Dialog open={supplier !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Productos de {supplier?.name}</DialogTitle>
+    <>
+      <DialogHeader>
+        <DialogTitle>Productos de {supplier.name}</DialogTitle>
           <DialogDescription>
             Cada mapeo enseña cuánto insumo aporta una presentación del
             proveedor (por ejemplo, 1 caja = 12 L). La próxima vez el ticket se
@@ -800,7 +830,6 @@ function SupplierProductsDialog({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </DialogContent>
-    </Dialog>
+    </>
   )
 }

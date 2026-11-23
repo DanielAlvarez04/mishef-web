@@ -17,8 +17,10 @@ import {
   SparklesIcon,
   StoreIcon,
   Trash2Icon,
+  TrendingUpIcon,
   TruckIcon,
   UsersIcon,
+  WandSparklesIcon,
   type LucideIcon,
 } from "lucide-react"
 
@@ -112,6 +114,12 @@ export const APPLICATION_NAV: NavItem[] = [
     roles: CATALOG,
   },
   {
+    title: "Catálogo IA",
+    url: "/catalog/ai",
+    icon: WandSparklesIcon,
+    roles: CATALOG,
+  },
+  {
     title: "Inventario",
     url: "/inventory",
     icon: PackageIcon,
@@ -121,6 +129,12 @@ export const APPLICATION_NAV: NavItem[] = [
     title: "Compras",
     url: "/purchases",
     icon: ReceiptTextIcon,
+    roles: PURCHASES,
+  },
+  {
+    title: "Sugerencias",
+    url: "/purchases/suggestions",
+    icon: TrendingUpIcon,
     roles: PURCHASES,
   },
   {
