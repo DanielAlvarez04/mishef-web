@@ -10,12 +10,14 @@ import {
   NotebookTextIcon,
   PackageIcon,
   PercentIcon,
+  ReceiptTextIcon,
   Settings2Icon,
   ShieldAlertIcon,
   ShoppingBasketIcon,
   SparklesIcon,
   StoreIcon,
   Trash2Icon,
+  TruckIcon,
   UsersIcon,
   type LucideIcon,
 } from "lucide-react"
@@ -39,6 +41,8 @@ export interface NavItem {
 const CATALOG: string[] = ["ADMIN", "INVENTORY_MANAGER"]
 const MONEY: string[] = ["ADMIN", "CASHIER"]
 const SERVICE: string[] = ["ADMIN", "WAITER", "CASHIER"]
+const PURCHASES: string[] = ["ADMIN", "SUPERVISOR", "INVENTORY_MANAGER"]
+const INTEL: string[] = ["ADMIN", "SUPERVISOR", "INVENTORY_MANAGER"]
 
 /** Grupo «Servicio»: es el que aparece en la barra inferior. */
 export const SERVICE_NAV: NavItem[] = [
@@ -69,19 +73,37 @@ export const SERVICE_NAV: NavItem[] = [
   },
 ]
 
+/**
+ * Orden de «Servicio» en el sidebar de escritorio y en el riel horizontal.
+ *
+ * La barra inferior vertical conserva el orden de `SERVICE_NAV` (el POS va al
+ * centro de la barra).
+ */
+const SERVICE_DESKTOP_ORDER = new Map(
+  ["/dashboard", "/pos", "/kitchen", "/menus"].map((url, index) => [url, index])
+)
+
+export function sortServiceNav<T extends { url: string }>(items: T[]): T[] {
+  return [...items].sort(
+    (left, right) =>
+      (SERVICE_DESKTOP_ORDER.get(left.url) ?? Number.MAX_SAFE_INTEGER) -
+      (SERVICE_DESKTOP_ORDER.get(right.url) ?? Number.MAX_SAFE_INTEGER)
+  )
+}
+
 /** Grupo «Aplicación»: solo en el sidebar completo. */
 export const APPLICATION_NAV: NavItem[] = [
   {
     title: "Intel",
     url: "/intel",
     icon: SparklesIcon,
-    roles: ["ADMIN", "INVENTORY_MANAGER"],
+    roles: INTEL,
   },
   {
     title: "Bandeja",
     url: "/intel/notifications",
     icon: BellIcon,
-    roles: ["ADMIN", "INVENTORY_MANAGER"],
+    roles: INTEL,
   },
   {
     title: "Catálogo",
@@ -94,6 +116,18 @@ export const APPLICATION_NAV: NavItem[] = [
     url: "/inventory",
     icon: PackageIcon,
     roles: CATALOG,
+  },
+  {
+    title: "Compras",
+    url: "/purchases",
+    icon: ReceiptTextIcon,
+    roles: PURCHASES,
+  },
+  {
+    title: "Proveedores",
+    url: "/suppliers",
+    icon: TruckIcon,
+    roles: PURCHASES,
   },
   {
     title: "Reportes",

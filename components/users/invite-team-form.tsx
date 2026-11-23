@@ -53,6 +53,7 @@ export function InviteTeamForm() {
           <option value="KITCHEN">Cocina</option>
           <option value="CASHIER">Cajero</option>
           <option value="INVENTORY_MANAGER">Inventario</option>
+          <option value="SUPERVISOR">Supervisor</option>
           <option value="ADMIN">Administrador</option>
         </select>
         <Button type="submit" disabled={pending}>

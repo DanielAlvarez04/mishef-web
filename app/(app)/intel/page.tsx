@@ -8,7 +8,9 @@ import { requireUser } from "@/lib/session"
 export default async function IntelPage() {
   const user = await requireUser()
   const allowed =
-    user.roles.includes("ADMIN") || user.roles.includes("INVENTORY_MANAGER")
+    user.roles.includes("ADMIN") ||
+    user.roles.includes("SUPERVISOR") ||
+    user.roles.includes("INVENTORY_MANAGER")
 
   if (!allowed) {
     redirect("/dashboard")

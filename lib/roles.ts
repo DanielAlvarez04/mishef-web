@@ -4,6 +4,7 @@ export const ROLE_LABELS: Record<string, string> = {
   KITCHEN: "Cocina",
   CASHIER: "Cajero",
   INVENTORY_MANAGER: "Inventario",
+  SUPERVISOR: "Supervisor",
 }
 
 export function roleLabel(role: string | undefined): string | undefined {
