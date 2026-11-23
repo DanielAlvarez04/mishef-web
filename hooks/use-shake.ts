@@ -19,7 +19,7 @@ export function useShake(
     if (!node) return
 
     if (!active) {
-      node.style.animationDelay = ""
+      if (node.style.animationDelay) node.style.animationDelay = ""
       return
     }
 

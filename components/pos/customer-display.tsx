@@ -16,6 +16,7 @@ import { useCurrency } from "@/lib/currency"
 import { apiErrorMessage } from "@/lib/http-error"
 import type { PosDisplayPublic, PosDisplayState } from "@/lib/pos-display"
 import { cn } from "@/lib/utils"
+import { useWakeLock } from "@/hooks/use-wake-lock"
 
 const TIP_OPTIONS = [0, 10, 15, 20]
 
@@ -33,6 +34,7 @@ export function CustomerDisplay({
   /** Datos ya cargados en el servidor para pintar sin esperar al primer poll. */
   initialData?: PosDisplayPublic | null
 }) {
+  useWakeLock()
   const fallbackCurrency = useCurrency()
   const [data, setData] = React.useState<PosDisplayPublic | null>(initialData)
   // La moneda viaja en la respuesta pública: el poll la mantiene al día aunque

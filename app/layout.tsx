@@ -63,8 +63,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TooltipProvider>
               {children}
               <Toaster
-                position="bottom-right"
-                offset={{ bottom: 80, right: 12 }}
+                position="top-center"
+                offset={{ top: 16 }}
               />
             </TooltipProvider>
           </KeyboardShortcutsProvider>

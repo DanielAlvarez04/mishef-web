@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { OrderStatusIcon } from "@/components/order-status-icon"
 import { PageHeader } from "@/components/page-header"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
+import { useWakeLock } from "@/hooks/use-wake-lock"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { Branch } from "@/lib/branches"
 import { formatDateTime, formatTime } from "@/lib/catalog"
@@ -160,6 +161,7 @@ export function KitchenView({
   /** Hora del render del servidor, para que la hidratación coincida. */
   serverNow: string
 }) {
+  useWakeLock()
   const router = useRouter()
   const money = useMoney()
   const [pendingId, setPendingId] = React.useState<string | null>(null)
