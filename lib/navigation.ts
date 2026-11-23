@@ -11,6 +11,7 @@ import {
   PackageIcon,
   PercentIcon,
   ReceiptTextIcon,
+  ScanEyeIcon,
   Settings2Icon,
   ShieldAlertIcon,
   ShoppingBasketIcon,
@@ -106,6 +107,12 @@ export const APPLICATION_NAV: NavItem[] = [
     url: "/intel/notifications",
     icon: BellIcon,
     roles: INTEL,
+  },
+  {
+    title: "Anomalías",
+    url: "/intel/anomalies",
+    icon: ScanEyeIcon,
+    roles: ["ADMIN", "CASHIER", "SUPERVISOR", "INVENTORY_MANAGER"],
   },
   {
     title: "Catálogo",
