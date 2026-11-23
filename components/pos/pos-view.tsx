@@ -2,8 +2,6 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
-import gsap from "gsap"
-import { Flip } from "gsap/Flip"
 import {
   ArrowUpDownIcon,
   BanknoteIcon,
@@ -20,7 +18,6 @@ import {
   ReceiptTextIcon,
   SearchIcon,
   SlidersHorizontalIcon,
-  SoupIcon,
   SparklesIcon,
   Trash2Icon,
   Undo2Icon,
@@ -99,7 +96,6 @@ import {
   ArticlePriceFilter,
   type PriceRange,
 } from "@/components/catalog/article-price-filter"
-import { useShake } from "@/hooks/use-shake"
 import { usePersistentBoolean } from "@/hooks/use-persistent-boolean"
 import { usePersistentCardColumns } from "@/hooks/use-persistent-card-columns"
 import { usePersistentNumber } from "@/hooks/use-persistent-number"
@@ -111,7 +107,6 @@ import {
   type Category,
   type ItemListItem,
 } from "@/lib/catalog"
-import { groupColorValue } from "@/lib/group-colors"
 import { useMoney } from "@/lib/currency"
 
 import {
@@ -152,14 +147,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { PosCatalog } from "@/components/pos/pos-catalog"
 
 import { CashSessionActions } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
-
-if (typeof window !== "undefined") {
-  gsap.registerPlugin(Flip)
-}
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
 
@@ -424,105 +416,6 @@ function lineToInput(line: CartLine): RoundItemInput {
  * carrito o del buscador; sin esto se reconcilian cientos de tarjetas aunque
  * solo cambie una.
  */
-const PosCatalogCard = React.memo(function PosCatalogCard({
-  product,
-  selected,
-  visible,
-  textSize,
-  square,
-  groupColor,
-  groupLabel,
-  onOpen,
-}: {
-  product: ItemListItem
-  selected: boolean
-  visible: boolean
-  textSize: ArticleCardTextSize
-  square: boolean
-  groupColor: string | null
-  groupLabel: string | null
-  onOpen: (product: ItemListItem) => void
-}) {
-  const shakeRef = React.useRef<HTMLDivElement | null>(null)
-  const money = useMoney()
-  useShake(shakeRef, selected)
-
-  const promotion = product.promotions?.find((entry) => entry.isActive)
-  const hasBadges = Boolean(groupLabel || product.isCombo || promotion)
-
-  return (
-    <div
-      ref={shakeRef}
-      data-pos-item=""
-      hidden={!visible}
-      className={cn(selected && "np-menu-card-shake")}
-    >
-      <button
-        type="button"
-        onClick={() => onOpen(product)}
-        aria-label={`Abrir ${product.name}`}
-        className="group block w-full rounded-xl text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <ArticleCardVisual
-          name={product.name}
-          price={money(product.price)}
-          imageUrl={product.imageUrl}
-          imageVariants={product.imageVariants}
-          isActive={product.isActive}
-          selected={selected}
-          compact
-          textSize={textSize}
-          showImage
-          aspect={square ? "square" : "wide"}
-          isCombo={product.isCombo}
-          fallbackColor={groupColor ?? "var(--muted)"}
-          hideFallbackIcon
-          className="transition-shadow group-hover:ring-2 group-hover:ring-ring/60"
-          badge={
-            hasBadges ? (
-              <div className="flex min-w-0 flex-col items-start gap-1">
-                {groupLabel ? (
-                  <span
-                    aria-label={`Grupo: ${groupLabel}`}
-                    title={groupLabel}
-                    className="flex w-fit items-center rounded-full bg-neutral-50 p-1 dark:bg-neutral-950"
-                  >
-                    <span
-                      aria-hidden
-                      className="size-4 shrink-0 rounded-full border border-black/10 dark:border-white/20"
-                      style={{ backgroundColor: groupColor ?? "var(--muted)" }}
-                    />
-                  </span>
-                ) : null}
-                {product.isCombo ? (
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    title="Combo"
-                    aria-label="Combo"
-                    className="border-sky-400 bg-sky-400/10 text-sky-400 backdrop-blur-sm"
-                  >
-                    <GroupIcon />
-                  </Badge>
-                ) : null}
-                {promotion ? (
-                  <Badge
-                    variant="outline"
-                    size="sm"
-                    className="border-sky-300/50 bg-sky-500/25 text-[10px] text-white backdrop-blur-sm"
-                  >
-                    {PROMOTION_TYPE_LABELS[promotion.type]}
-                  </Badge>
-                ) : null}
-              </div>
-            ) : null
-          }
-        />
-      </button>
-    </div>
-  )
-})
-
 export function PosView({
   products,
   categories,
@@ -573,12 +466,6 @@ ull` = vista consolidada. */
   const [menuId, setMenuId] = React.useState(
     () => menus.find((menu) => menu.isGlobal)?.id ?? menus[0]?.id ?? ""
   )
-  /** Grupos seleccionados para filtrar; vacío = todos. */
-  const [selectedGroups, setSelectedGroups] = React.useState<
-    Array<string | null>
-  >([])
-  const gridRef = React.useRef<HTMLDivElement | null>(null)
-  const flipStateRef = React.useRef<Flip.FlipState | null>(null)
   const [cardColumns, setCardColumns] = usePersistentCardColumns(
     "pos-card-columns",
     4,
@@ -1106,20 +993,6 @@ ull` = vista consolidada. */
     [selectedMenu]
   )
 
-  const groupColorFor = (product: ItemListItem) => {
-    if (!selectedMenu) return null
-
-    const entry = menuEntryByItem.get(product.id)
-    if (!entry?.group) return null
-
-    return groupColorValue(selectedMenu.groupColors?.[entry.group])
-  }
-
-  const groupLabelFor = (product: ItemListItem) => {
-    const entry = menuEntryByItem.get(product.id)
-    return entry?.group ?? product.category?.name ?? null
-  }
-
   const baseFiltered = React.useMemo(() => {
     const needle = deferredSearch.trim().toLowerCase()
 
@@ -1225,53 +1098,6 @@ ull` = vista consolidada. */
     groupRank,
   ])
 
-  const filtered = React.useMemo(() => {
-    if (selectedGroups.length === 0) return baseFiltered
-
-    return baseFiltered.filter((product) => {
-      const entry = menuEntryByItem.get(product.id)
-      return selectedGroups.includes(entry?.group ?? null)
-    })
-  }, [baseFiltered, selectedGroups, menuEntryByItem])
-
-  const captureFlipState = React.useCallback(() => {
-    const grid = gridRef.current
-    if (!grid) return
-
-    flipStateRef.current = Flip.getState(
-      grid.querySelectorAll("[data-pos-item]")
-    )
-  }, [])
-
-  React.useLayoutEffect(() => {
-    const state = flipStateRef.current
-    if (!state) return
-
-    flipStateRef.current = null
-
-    const grid = gridRef.current
-    if (!grid) return
-
-    const targets = grid.querySelectorAll("[data-pos-item]")
-    if (targets.length === 0) return
-
-    Flip.from(state, {
-      duration: 0.7,
-      scale: true,
-      ease: "power1.inOut",
-      stagger: 0.08,
-      absolute: true,
-      onEnter: (elements) =>
-        gsap.fromTo(
-          elements,
-          { opacity: 0, scale: 0 },
-          { opacity: 1, scale: 1, duration: 1 }
-        ),
-      onLeave: (elements) =>
-        gsap.to(elements, { opacity: 0, scale: 0, duration: 1 }),
-    })
-  }, [selectedGroups])
-
   const groupFilters = React.useMemo(() => {
     if (!selectedMenu) return []
 
@@ -1312,10 +1138,10 @@ ull` = vista consolidada. */
   React.useEffect(() => {
     const query = deferredSearch.trim()
 
-    if (!query || filtered.length > 0) return
+    if (!query || baseFiltered.length > 0) return
 
     posCapture.noteEmptySearch(query)
-  }, [deferredSearch, filtered])
+  }, [deferredSearch, baseFiltered])
 
   const activeFilterCount =
     (categoryId ? 1 : 0) + (priceRange ? 1 : 0)
@@ -1330,7 +1156,7 @@ ull` = vista consolidada. */
     [cart, activeGuestKey]
   )
 
-  // Identidad estable para que `PosCatalogCard` memoizada no se re-renderice
+  // Identidad estable para que el catálogo memoizado no se re-renderice
   // con cada cambio del carrito.
   const handleOpenProduct = React.useCallback((product: ItemListItem) => {
     posCapture.noteItemOpened(product.id)
@@ -1339,28 +1165,6 @@ ull` = vista consolidada. */
     setPendingProductId(product.id)
     setSelectedProduct(product)
   }, [])
-
-  const renderProductCard = (product: ItemListItem) => {
-    const selected =
-      selectedItemIds.has(product.id) || pendingProductId === product.id
-    const group = menuEntryByItem.get(product.id)?.group ?? null
-    const visible =
-      selectedGroups.length === 0 || selectedGroups.includes(group)
-
-    return (
-      <PosCatalogCard
-        key={product.id}
-        product={product}
-        selected={selected}
-        visible={visible}
-        textSize={cardTextScale}
-        square={squareCards}
-        groupColor={groupColorFor(product)}
-        groupLabel={groupLabelFor(product)}
-        onOpen={handleOpenProduct}
-      />
-    )
-  }
 
   /**
    * Reemplaza las líneas del artículo para los clientes configurados en el
@@ -1408,7 +1212,7 @@ ull` = vista consolidada. */
     }
 
     for (const line of nextLines) {
-      const position = filtered.findIndex(
+      const position = baseFiltered.findIndex(
         (product) => product.id === line.itemId
       )
 
@@ -2708,7 +2512,6 @@ ull` = vista consolidada. */
                   if (!next) return
 
                   setMenuId(next)
-                  setSelectedGroups([])
                   posCapture.noteFilter()
                   trackEvent({
                     name: "pos.menu_filtered",
@@ -3003,66 +2806,26 @@ ull` = vista consolidada. */
             </div>
           </div>
 
-          {groupFilters.length > 0 ? (
-            <>
-              <Separator />
-              <div className="flex flex-wrap items-center gap-2">
-                {groupFilters.map((filter) => {
-                const selected = selectedGroups.includes(filter.group)
-
-                return (
-                  <Button
-                    key={filter.group ?? "__none__"}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    aria-pressed={selected}
-                    className={cn("max-w-[14rem]", jalapenoChipClass(selected))}
-                    onClick={() => {
-                      captureFlipState()
-                      setSelectedGroups((current) =>
-                        current.includes(filter.group)
-                          ? current.filter((group) => group !== filter.group)
-                          : [...current, filter.group]
-                      )
-                    }}
-                  >
-                    <span
-                      aria-hidden
-                      className="size-3 shrink-0 rounded-full border border-black/10 dark:border-white/20"
-                      style={{
-                        backgroundColor:
-                          groupColorValue(filter.color) ?? "var(--muted)",
-                      }}
-                    />
-                    <span className="truncate">{filter.label}</span>
-                  </Button>
-                )
-              })}
-              </div>
-            </>
-          ) : null}
-
-          {selectedMenu && !selectedMenu.isAvailableNow ? (
-            <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-              «{selectedMenu.name}» está fuera de horario. Puedes consultarlo,
-              pero revisa la disponibilidad antes de enviar la comanda.
-            </p>
-          ) : null}
-
-          {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed py-14 text-center text-sm text-muted-foreground">
-              <SoupIcon className="size-8" />
-              No hay artículos que coincidan con el filtro.
-            </div>
-          ) : (
-            <div
-              ref={gridRef}
-              className="grid grid-cols-2 gap-2 md:grid-cols-[repeat(var(--np-pos-card-columns,4),minmax(0,1fr))]"
-            >
-              {baseFiltered.map(renderProductCard)}
-            </div>
-          )}
+          <PosCatalog
+            key={menuId}
+            products={baseFiltered}
+            groupFilters={groupFilters}
+            menuEntryByItem={menuEntryByItem}
+            selectedItemIds={selectedItemIds}
+            pendingProductId={pendingProductId}
+            cardTextScale={cardTextScale}
+            squareCards={squareCards}
+            notice={
+              selectedMenu && !selectedMenu.isAvailableNow ? (
+                <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+                  «{selectedMenu.name}» está fuera de horario. Puedes
+                  consultarlo, pero revisa la disponibilidad antes de enviar la
+                  comanda.
+                </p>
+              ) : null
+            }
+            onOpenProduct={handleOpenProduct}
+          />
         </div>
 
                 {showComandaColumn ? (
