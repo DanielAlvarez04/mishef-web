@@ -1007,9 +1007,10 @@ export function ReceiptsEditor({
               </p>
             ) : null}
 
-            <div className="mx-auto w-[300px] rounded-md bg-white p-4 text-[12px] leading-snug text-black shadow-sm ring-1 ring-black/10">
+            <div className="mx-auto w-fit max-w-full rounded-md bg-white px-3 py-3 text-[11px] leading-snug text-black shadow-sm ring-1 ring-black/10">
               <div
                 style={{
+                  width: "32ch",
                   fontFamily:
                     "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
                   whiteSpace: "pre-wrap",
