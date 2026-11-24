@@ -39,7 +39,9 @@ export type ReceiptBlock =
     })
   | (ReceiptBlockBase & {
       type: "totals"
-      fields: Array<"subtotal" | "tax" | "delivery" | "tip" | "total">
+      fields: Array<
+        "subtotal" | "tax" | "discount" | "delivery" | "tip" | "total"
+      >
     })
   | (ReceiptBlockBase & {
       type: "payments"
@@ -56,7 +58,7 @@ export type ReceiptBlock =
   | (ReceiptBlockBase & { type: "divider" })
 
 export interface ReceiptTemplate {
-  version: 1
+  version: 1 | 2
   printLogo: boolean
   blocks: ReceiptBlock[]
 }

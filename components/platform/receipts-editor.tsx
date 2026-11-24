@@ -137,7 +137,7 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       return {
         id,
         type,
-        fields: ["subtotal", "tax", "delivery", "tip", "total"],
+        fields: ["subtotal", "tax", "discount", "delivery", "tip", "total"],
       }
     case "payments":
       return { id, type, showMethod: true, showAmount: true }
@@ -412,7 +412,8 @@ function BlockEditor({
           {(
             [
               ["subtotal", "Subtotal"],
-              ["tax", "IVA incluido"],
+              ["tax", "IVA"],
+              ["discount", "Descuento"],
               ["delivery", "Envío"],
               ["tip", "Propina"],
               ["total", "Total"],
