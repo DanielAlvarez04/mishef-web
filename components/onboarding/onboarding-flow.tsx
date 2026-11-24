@@ -143,6 +143,7 @@ export function OnboardingFlow({
   initialUsername,
   initialSlug,
   initialOnboarded,
+  initialBranchName,
   initialCurrency,
   currentUsername,
   tenantDomain,
@@ -153,6 +154,8 @@ export function OnboardingFlow({
   initialSlug: string
   /** `true` si el asistente ya se completó antes (se repite como ajustes). */
   initialOnboarded: boolean
+  /** Nombre de la sucursal existente; vacío en el primer alta. */
+  initialBranchName: string
   /** Moneda configurada; MXN si la organización aún no eligió otra. */
   initialCurrency: string
   currentUsername: string | null
@@ -180,7 +183,7 @@ export function OnboardingFlow({
     status: SlugStatus
   } | null>(null)
   const [hasBranches, setHasBranches] = useState(false)
-  const [branchName, setBranchName] = useState("")
+  const [branchName, setBranchName] = useState(initialBranchName)
 
   const accountName = splitDisplayName(initialName)
   const [firstName, setFirstName] = useState(accountName.first)
@@ -329,7 +332,7 @@ export function OnboardingFlow({
   }
 
   const handleFinishSubmit = () => {
-    return finishForm.run(() => finishOnboarding(slug))
+    return finishForm.run(() => finishOnboarding(slug, branchName))
   }
 
   const toggleServiceType = (value: string) => {

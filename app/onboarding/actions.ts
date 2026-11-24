@@ -62,10 +62,13 @@ export async function updateOnboardingBusiness(
   if (!updated.ok) return updated
 
   // La primera sucursal se crea una sola vez: si el usuario reintenta el paso,
-  // ya existe y no se duplica.
+  // ya existe y no se duplica. Si la lectura falla, se devuelve el error para
+  // no completar el paso sin sucursal.
   const branches = await readApi<Array<{ id: string }>>("/branches")
 
-  if (branches.ok && (branches.data ?? []).length === 0) {
+  if (!branches.ok) return branches
+
+  if ((branches.data ?? []).length === 0) {
     const created = await mutateApi(
       "/branches",
       "POST",
@@ -189,12 +192,16 @@ export async function updateOnboardingGoals(
 
 /** Paso final: fija el subdominio y marca el onboarding como completado. */
 export async function finishOnboarding(
-  requestedSlug?: string
+  requestedSlug?: string,
+  branchName?: string
 ): Promise<ActionResult<{ redirectTo: string }>> {
   const completed = await mutateApi(
     "/auth/onboarding/complete",
     "POST",
-    { slug: requestedSlug?.trim() || undefined },
+    {
+      slug: requestedSlug?.trim() || undefined,
+      branchName: branchName?.trim() || undefined,
+    },
     ["/onboarding", "/dashboard"]
   )
 

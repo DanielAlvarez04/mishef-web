@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 
 import { OnboardingFlow } from "@/components/onboarding/onboarding-flow"
+import { getBranches } from "@/lib/branch-server"
 import { isAdmin, requireUser } from "@/lib/session"
 
 export default async function OnboardingPage() {
@@ -12,6 +13,10 @@ export default async function OnboardingPage() {
     redirect("/dashboard")
   }
 
+  const branches = await getBranches()
+  const initialBranchName =
+    branches.find((branch) => branch.isActive)?.name ?? ""
+
   return (
     <OnboardingFlow
       initialBusinessName={user.organizationName ?? ""}
@@ -19,6 +24,7 @@ export default async function OnboardingPage() {
       initialUsername={user.username ?? ""}
       initialSlug={user.organizationSlug ?? ""}
       initialOnboarded={user.onboarded}
+      initialBranchName={initialBranchName}
       initialCurrency={user.organizationCurrency}
       currentUsername={user.username}
       tenantDomain={
