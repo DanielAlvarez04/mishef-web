@@ -43,6 +43,8 @@ export interface MercadoPagoPointConfig {
   enabled: boolean
   /** La cuenta está conectada y puede generar links de Checkout Pro. */
   linkEnabled: boolean
+  /** Monto mínimo (MXN) que acepta Mercado Pago Point. */
+  minAmount: number
   terminals: Array<{
     id: string
     name: string | null

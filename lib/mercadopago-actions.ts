@@ -126,6 +126,32 @@ export async function cancelPointCharge(
   )
 }
 
+export interface PointReceiptResult {
+  actionId: string
+  status: string
+  terminalId: string
+}
+
+/**
+ * Manda el ticket itemizado a la terminal Point.
+ *
+ * Funciona para cualquier método de pago: el recibo se arma en la API y se
+ * imprime en la terminal de la sucursal (Point Smart 1/2).
+ */
+export async function printOrderReceipt(
+  orderId: string
+): Promise<ActionResult<PointReceiptResult>> {
+  if (!orderId) {
+    return { ok: false, message: "Cuenta no encontrada." }
+  }
+
+  return mutateApi<PointReceiptResult>(
+    `/orders/${orderId}/receipt`,
+    "POST",
+    undefined
+  )
+}
+
 /** Pago con link de Checkout Pro. */
 export type LinkPayment = Payment & {
   providerCheckoutUrl?: string | null

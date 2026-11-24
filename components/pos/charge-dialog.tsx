@@ -80,6 +80,7 @@ import {
   cancelLinkPayment,
   chargeWithPoint,
   createPaymentLink,
+  printOrderReceipt,
   syncLinkPayment,
   syncPointPayment,
   type LinkPayment,
@@ -229,6 +230,7 @@ export function ChargeDialog({
   )
   const [cashInput, setCashInput] = React.useState("")
   const [pending, setPending] = React.useState<string | null>(null)
+  const [printing, setPrinting] = React.useState(false)
   const [splits, setSplits] = React.useState<OrderSplit[]>(
     initialSummary?.splits ?? []
   )
@@ -593,6 +595,11 @@ export function ChargeDialog({
   const cashReceived = Math.max(Number(cashInput) || 0, 0)
   const change = Math.round((cashReceived - chargeTotal) * 100) / 100
   const canClose = balance <= 0.004
+  const pointMinAmount = mercadoPago.minAmount ?? 5
+  const belowPointMinimum =
+    method === "MERCADO_PAGO_POINT" &&
+    saleAmount > 0 &&
+    saleAmount < pointMinAmount
 
   const submit = async (
     key: string,
@@ -892,6 +899,23 @@ export function ChargeDialog({
       toast.success("Pago anulado")
     } finally {
       setPending(null)
+    }
+  }
+
+  const handlePrintReceipt = async () => {
+    setPrinting(true)
+
+    try {
+      const result = await printOrderReceipt(order.id)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo imprimir el ticket")
+        return
+      }
+
+      toast.success("Ticket enviado a la terminal")
+    } finally {
+      setPrinting(false)
     }
   }
 
@@ -1253,6 +1277,15 @@ export function ChargeDialog({
   const handleSendToPoint = async () => {
     if (!Number.isFinite(saleAmount) || saleAmount <= 0) {
       toast.error("Escribe un importe válido")
+      return
+    }
+
+    if (saleAmount < pointMinAmount) {
+      toast.error(
+        `El monto mínimo para cobrar con terminal es ${money(
+          pointMinAmount
+        )}. Usa efectivo o transferencia.`
+      )
       return
     }
 
@@ -2361,10 +2394,18 @@ export function ChargeDialog({
                       ))}
                     </SelectContent>
                   </Select>
-                  <p className="text-xs text-muted-foreground">
-                    El cobro se envía a la terminal. El cliente paga y elige la
-                    propina en el dispositivo; aquí se registra automáticamente.
-                  </p>
+                  {belowPointMinimum ? (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Mercado Pago exige un mínimo de {money(pointMinAmount)}{" "}
+                      para cobrar con terminal. Usa efectivo o transferencia.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      El cobro se envía a la terminal. El cliente paga y elige la
+                      propina en el dispositivo; aquí se registra
+                      automáticamente.
+                    </p>
+                  )}
                 </div>
               ) : null}
 
@@ -2619,6 +2660,8 @@ export function ChargeDialog({
                 disabled={
                   pending !== null ||
                   remotePending ||
+                  saleAmount <= 0 ||
+                  belowPointMinimum ||
                   (method === "MERCADO_PAGO_POINT" && !terminalId)
                 }
               >
@@ -2642,6 +2685,7 @@ export function ChargeDialog({
                     pending !== null ||
                     !terminalId ||
                     saleAmount <= 0 ||
+                    belowPointMinimum ||
                     remotePending
                   }
                 >
@@ -2726,6 +2770,22 @@ export function ChargeDialog({
                   Registrar pago
                 </Button>
               )
+            ) : null}
+
+            {step === "close" && canClose ? (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => void handlePrintReceipt()}
+                disabled={pending !== null || printing}
+              >
+                {printing ? (
+                  <Loader2Icon className="animate-spin" />
+                ) : (
+                  <ReceiptTextIcon />
+                )}
+                Imprimir ticket
+              </Button>
             ) : null}
 
             {step === "close" && canConfirm ? (
