@@ -6,12 +6,14 @@ import { Loader2Icon, MapPinIcon, PaletteIcon, RotateCcwIcon, SearchIcon } from 
 import { toast } from "sonner"
 
 import {
+  removeOrganizationLogo,
   searchOrganizationLocation,
   updateOrganizationBranding,
   type LocationSearchResult,
 } from "@/app/(app)/settings/actions"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { ImageDropzone } from "@/components/catalog/image-dropzone"
 import {
   Card,
   CardContent,
@@ -28,6 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { sameText } from "@/lib/diff"
+import { uploadOrganizationLogo } from "@/lib/uploads"
 import { ORGANIZATION_THEMES } from "@/lib/themes"
 
 export interface OrganizationBrandingProps {
@@ -60,7 +63,8 @@ export function OrganizationBrandingCard({
 
   const [color, setColor] = useState(brandColor ?? "")
   const [theme, setTheme] = useState(initialTheme)
-  const [logo, setLogo] = useState(logoUrl ?? "")
+  const [logoPreview, setLogoPreview] = useState(logoUrl ?? null)
+  const [logoUploading, setLogoUploading] = useState(false)
   const [place, setPlace] = useState(address ?? "")
   const [lat, setLat] = useState(latitude ?? "")
   const [lng, setLng] = useState(longitude ?? "")
@@ -138,6 +142,52 @@ export function OrganizationBrandingCard({
     toast.success("Dirección seleccionada. Guarda para aplicarla.")
   }
 
+  async function handleLogoSelect(file: File) {
+    const previous = logoPreview
+    const localPreview = URL.createObjectURL(file)
+
+    setLogoPreview(localPreview)
+    setLogoUploading(true)
+
+    try {
+      const result = await uploadOrganizationLogo(file)
+
+      if (!result.ok || !result.data) {
+        setLogoPreview(previous)
+        toast.error(result.message ?? "No se pudo subir el logo.")
+        return
+      }
+
+      setLogoPreview(result.data.logoUrl)
+      toast.success("Logo actualizado")
+      router.refresh()
+    } finally {
+      URL.revokeObjectURL(localPreview)
+      setLogoUploading(false)
+    }
+  }
+
+  async function handleLogoRemove() {
+    if (!logoPreview) return
+
+    setLogoUploading(true)
+
+    try {
+      const result = await removeOrganizationLogo()
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo quitar el logo.")
+        return
+      }
+
+      setLogoPreview(null)
+      toast.success("Logo eliminado")
+      router.refresh()
+    } finally {
+      setLogoUploading(false)
+    }
+  }
+
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -148,9 +198,6 @@ export function OrganizationBrandingCard({
     }
     if (!sameText(initialTheme, theme)) {
       patch.theme = theme
-    }
-    if (!sameText(logoUrl ?? "", logo.trim())) {
-      patch.logoUrl = logo.trim() || null
     }
     if (!sameText(address ?? "", place.trim())) {
       patch.address = place.trim() || null
@@ -262,15 +309,30 @@ export function OrganizationBrandingCard({
           </Field>
 
           <Field>
-            <FieldLabel htmlFor="logoUrl">Logo (URL)</FieldLabel>
-            <Input
-              id="logoUrl"
-              value={logo}
-              placeholder="https://img.mishef.co/..."
-              onChange={(event) => setLogo(event.target.value)}
-            />
+            <FieldLabel>Logo del negocio</FieldLabel>
+            <div className="max-w-sm">
+              <ImageDropzone
+                url={logoPreview}
+                onSelect={(file) => void handleLogoSelect(file)}
+                onRemove={() => void handleLogoRemove()}
+                disabled={pending || logoUploading}
+                title="Arrastra el logo o haz clic"
+                description={
+                  "JPG, PNG o WebP · máx. 5 MB\nSe recomienda horizontal (2:1)"
+                }
+                hint="Se usa en el panel, los correos y el ticket de la terminal."
+                alt="Logo del negocio"
+                fit="contain"
+              />
+            </div>
+            {logoUploading ? (
+              <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2Icon className="size-3 animate-spin" />
+                Subiendo y procesando…
+              </p>
+            ) : null}
             <FieldDescription>
-              Súbelo al catálogo de imágenes y pega aquí su URL pública.
+              El logo se optimiza y se genera un JPEG especial para el ticket.
             </FieldDescription>
           </Field>
 
@@ -382,7 +444,7 @@ export function OrganizationBrandingCard({
           </div>
 
           <div className="flex justify-end">
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || logoUploading}>
               {pending ? "Guardando..." : "Guardar cambios"}
             </Button>
           </div>

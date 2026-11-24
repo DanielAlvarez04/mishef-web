@@ -136,6 +136,15 @@ export default async function PlatformPage() {
             variant="outline"
             size="sm"
             nativeButton={false}
+            render={<Link href="/platform/receipts" />}
+          >
+            <ReceiptTextIcon />
+            Tickets
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
             render={<Link href="/platform/features" />}
           >
             <SlidersHorizontalIcon />

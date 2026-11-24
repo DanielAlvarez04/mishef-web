@@ -127,9 +127,10 @@ export async function cancelPointCharge(
 }
 
 export interface PointReceiptResult {
-  actionId: string
-  status: string
   terminalId: string
+  logo: { printed: boolean; error?: string } | null
+  ticket: { actionId: string; status: string }
+  warnings: string[]
 }
 
 /**

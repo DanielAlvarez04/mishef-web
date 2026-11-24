@@ -10,6 +10,11 @@ import {
   presignVariantImage,
   type ImageJobStarted,
 } from "@/app/(app)/catalog/actions"
+import {
+  finalizeOrganizationLogo,
+  presignOrganizationLogo,
+  type OrganizationLogoResult,
+} from "@/app/(app)/settings/actions"
 
 /** Límite por archivo: 5 MB (la API y el bucket lo repiten). */
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -219,4 +224,65 @@ export function uploadRecipeImage(recipeId: string, file: File) {
     (input) => presignRecipeImage(recipeId, input),
     (key) => finalizeRecipeImage(recipeId, key)
   )
+}
+
+export interface UploadOrganizationLogoResult {
+  ok: boolean
+  message?: string
+  data?: OrganizationLogoResult
+}
+
+/**
+ * Sube el logo del negocio y devuelve la URL del panel y la del JPEG de recibo.
+ *
+ * El procesamiento es síncrono: un logo es una sola imagen y el usuario espera
+ * la vista previa. No pasa por la cola de trabajos del catálogo.
+ */
+export async function uploadOrganizationLogo(
+  file: File
+): Promise<UploadOrganizationLogoResult> {
+  const problem = validateImageFile(file)
+
+  if (problem) return { ok: false, message: problem }
+
+  const presigned = await presignOrganizationLogo({
+    contentType: file.type,
+    size: file.size,
+  })
+
+  if (!presigned.ok || !presigned.data) {
+    return {
+      ok: false,
+      message: presigned.message ?? "No se pudo preparar la subida del logo.",
+    }
+  }
+
+  const { key, uploadUrl, method, headers } = presigned.data
+
+  try {
+    const response = await fetch(uploadUrl, { method, headers, body: file })
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        message: "No se pudo subir el logo. Inténtalo de nuevo.",
+      }
+    }
+  } catch {
+    return {
+      ok: false,
+      message: "No se pudo subir el logo. Revisa tu conexión.",
+    }
+  }
+
+  const finalized = await finalizeOrganizationLogo(key)
+
+  if (!finalized.ok || !finalized.data) {
+    return {
+      ok: false,
+      message: finalized.message ?? "No se pudo procesar el logo.",
+    }
+  }
+
+  return { ok: true, data: finalized.data }
 }

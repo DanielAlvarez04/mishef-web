@@ -387,6 +387,57 @@ export async function updateOrganizationBranding(
   ])
 }
 
+export interface PresignOrganizationLogoResult {
+  key: string
+  uploadUrl: string
+  method: "PUT"
+  headers: Record<string, string>
+  expiresIn: number
+  maxBytes: number
+}
+
+export interface OrganizationLogoResult {
+  logoUrl: string
+  logoReceiptKey: string
+  logoReceiptUrl: string
+}
+
+/** Firma la subida directa del logo a R2. */
+export async function presignOrganizationLogo(input: {
+  contentType: string
+  size: number
+}): Promise<ActionResult<PresignOrganizationLogoResult>> {
+  return mutateApi<PresignOrganizationLogoResult>(
+    "/organizations/current/logo",
+    "POST",
+    input
+  )
+}
+
+/** Procesa el logo y genera el JPEG que usa el ticket. */
+export async function finalizeOrganizationLogo(
+  key: string
+): Promise<ActionResult<OrganizationLogoResult>> {
+  if (!key) {
+    return { ok: false, message: "No se recibió la imagen." }
+  }
+
+  return mutateApi<OrganizationLogoResult>(
+    "/organizations/current/logo/finalize",
+    "POST",
+    { key },
+    ["/settings", "/dashboard"]
+  )
+}
+
+/** Quita el logo del negocio. */
+export async function removeOrganizationLogo(): Promise<ActionResult> {
+  return mutateApi("/organizations/current/logo", "DELETE", undefined, [
+    "/settings",
+    "/dashboard",
+  ])
+}
+
 export interface CustomDomainInstructions {
   domain: string
   status: "pending" | "verified"

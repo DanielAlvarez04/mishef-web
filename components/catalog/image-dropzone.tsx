@@ -23,6 +23,11 @@ export function ImageDropzone({
   onSelect,
   onRemove,
   disabled = false,
+  title = "Arrastra una imagen o haz clic",
+  description = "JPG, PNG o WebP · máx. 5 MB\nSe recomienda 1:1 (cuadrada)",
+  hint = "Opcional. Es la imagen base si una presentación no tiene la suya.",
+  alt = "Imagen del artículo",
+  fit = "cover",
 }: {
   /** Vista previa: URL pública de la imagen guardada u objeto local. */
   url: string | null
@@ -31,6 +36,16 @@ export function ImageDropzone({
   onSelect: (file: File) => void
   onRemove: () => void
   disabled?: boolean
+  /** Texto del selector vacío. */
+  title?: string
+  /** Formatos y recomendación del selector vacío. */
+  description?: string
+  /** Ayuda adicional bajo el selector. */
+  hint?: string
+  /** Texto alternativo de la vista previa. */
+  alt?: string
+  /** `cover` recorta; `contain` muestra el logo completo. */
+  fit?: "cover" | "contain"
 }) {
   const inputRef = React.useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = React.useState(false)
@@ -86,9 +101,12 @@ export function ImageDropzone({
               <EntityImage
                 src={url}
                 assets={assets}
-                alt="Imagen del artículo"
+                alt={alt}
                 sizes="256px"
-                className="size-full rounded-[inherit] object-cover"
+                className={cn(
+                  "size-full rounded-[inherit]",
+                  fit === "contain" ? "object-contain" : "object-cover"
+                )}
               />
             </div>
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-center gap-1 rounded-b-[inherit] bg-background/85 p-1.5 backdrop-blur">
@@ -127,15 +145,18 @@ export function ImageDropzone({
               <ImageIcon className="size-4" />
             </span>
             <span className="text-xs font-medium">
-              Arrastra una imagen o haz clic
+              {title}
             </span>
             <span className="text-[11px] leading-tight text-muted-foreground">
-              JPG, PNG o WebP · máx. 5 MB
-              <br />
-              Se recomienda 1:1 (cuadrada)
+              {description.split("\n").map((line, index) => (
+                <span key={line + index}>
+                  {index > 0 ? <br /> : null}
+                  {line}
+                </span>
+              ))}
             </span>
             <span className="mt-1 text-[11px] leading-tight text-muted-foreground">
-              Opcional. Es la imagen base si una presentación no tiene la suya.
+              {hint}
             </span>
           </button>
         )}

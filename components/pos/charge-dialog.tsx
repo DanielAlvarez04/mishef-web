@@ -908,12 +908,24 @@ export function ChargeDialog({
     try {
       const result = await printOrderReceipt(order.id)
 
-      if (!result.ok) {
+      if (!result.ok || !result.data) {
         toast.error(result.message ?? "No se pudo imprimir el ticket")
         return
       }
 
-      toast.success("Ticket enviado a la terminal")
+      if (result.data.logo && !result.data.logo.printed) {
+        toast.warning(
+          `Ticket enviado. El logo no se imprimió: ${
+            result.data.logo.error ?? "error desconocido"
+          }`
+        )
+      } else {
+        toast.success(
+          result.data.logo?.printed
+            ? "Ticket y logo enviados a la terminal"
+            : "Ticket enviado a la terminal"
+        )
+      }
     } finally {
       setPrinting(false)
     }
