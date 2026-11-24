@@ -15,6 +15,7 @@ import {
   NotebookTextIcon,
   PencilLineIcon,
   PlusIcon,
+  PrinterIcon,
   SearchIcon,
   SparklesIcon,
   Trash2Icon,
@@ -112,10 +113,10 @@ import {
   updateOrderGuest,
   type RoundItemInput,
 } from "@/lib/order-actions"
-import type { Branch } from "@/lib/branches"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { CashSessionPayload } from "@/lib/cash"
 import type { Menu, MenuTrendingItem } from "@/lib/menus"
+import { printOrderReceipt } from "@/lib/mercadopago-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import type { PosDisplayInfo, PosDisplayState } from "@/lib/pos-display"
 import {
@@ -458,7 +459,6 @@ export function PosView({
   canSend,
   canRegister,
   canConfirm,
-  branch,
   mercadoPago,
   cash,
   canManageCash,
@@ -474,9 +474,6 @@ export function PosView({
   canSend: boolean
   canRegister: boolean
   canConfirm: boolean
-  /** Sucursal activa;
-ull` = vista consolidada. */
-  branch: Branch | null
   /** Terminales Point disponibles para cobrar. */
   mercadoPago: MercadoPagoPointConfig
   /** Turno de caja abierto de la sucursal. */
@@ -537,6 +534,7 @@ ull` = vista consolidada. */
     null
   )
   const [charging, setCharging] = React.useState(false)
+  const [printingAccount, setPrintingAccount] = React.useState(false)
 
   const [comboNotice, setComboNotice] = React.useState<{
     message: string
@@ -2600,6 +2598,33 @@ ull` = vista consolidada. */
     </>
   )
 
+  const handlePrintAccount = async () => {
+    if (!activeOrder) return
+
+    if (cart.length > 0) {
+      toast.info("Envía la comanda antes de imprimir la cuenta.", {
+        description:
+          "El ticket se genera con los artículos ya guardados en la cuenta.",
+      })
+      return
+    }
+
+    setPrintingAccount(true)
+
+    try {
+      const result = await printOrderReceipt(activeOrder.id)
+
+      if (!result.ok || !result.data) {
+        toast.error(result.message ?? "No se pudo imprimir la cuenta")
+        return
+      }
+
+      toast.success("Cuenta enviada a la terminal")
+    } finally {
+      setPrintingAccount(false)
+    }
+  }
+
   const comandaActions = (
     <>
       {canSend ? (
@@ -2666,6 +2691,23 @@ ull` = vista consolidada. */
                       {offline.isOnline
                         ? "Cobrar cuenta"
                         : "Cobrar sin conexión"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      disabled={printingAccount || !offline.isOnline}
+                      title={
+                        !offline.isOnline
+                          ? "Necesitas conexión para imprimir la cuenta"
+                          : undefined
+                      }
+                      onClick={() => void handlePrintAccount()}
+                    >
+                      {printingAccount ? (
+                        <Loader2Icon className="animate-spin" />
+                      ) : (
+                        <PrinterIcon />
+                      )}
+                      Imprimir cuenta
                     </Button>
                     {!cash.session ? (
                       <p className="text-xs text-muted-foreground">
@@ -3159,7 +3201,6 @@ ull` = vista consolidada. */
             chargeSnapshot.current.get(chargeSummaryCacheKey(activeOrder)) ??
             null
           }
-          defaultTipPercent={branch?.defaultTipPercent ?? 0}
           displayTipPercent={displayState?.tipPercent ?? null}
           onClose={() => {
             setCharging(false)

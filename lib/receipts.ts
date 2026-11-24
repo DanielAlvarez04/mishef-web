@@ -60,7 +60,7 @@ export type ReceiptBlock =
   | (ReceiptBlockBase & { type: "divider" })
 
 export interface ReceiptTemplate {
-  version: 1 | 2 | 3
+  version: 1 | 2 | 3 | 4
   printLogo: boolean
   blocks: ReceiptBlock[]
 }

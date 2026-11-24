@@ -154,7 +154,6 @@ export function ChargeDialog({
   order,
   canConfirm,
   mercadoPago,
-  defaultTipPercent = 0,
   displayTipPercent = null,
   initialSummary = null,
   onClose,
@@ -163,8 +162,6 @@ export function ChargeDialog({
   order: Order
   canConfirm: boolean
   mercadoPago: MercadoPagoPointConfig
-  /** Porcentaje de propina sugerido por la sucursal (0 = sin sugerencia). */
-  defaultTipPercent?: number
   /** Propina elegida por el cliente en la pantalla, si la hay. */
   displayTipPercent?: number | null
   /** Resumen precargado por el POS para abrir el diálogo sin esperar. */
@@ -208,7 +205,7 @@ export function ChargeDialog({
       ? initialSplit.remainingAmount.toFixed(2)
       : null
   )
-  const initialTipPercent = displayTipPercent ?? defaultTipPercent
+  const initialTipPercent = displayTipPercent ?? 0
   const [tipInput, setTipInput] = React.useState(() =>
     initialTipPercent > 0
       ? (
@@ -222,11 +219,7 @@ export function ChargeDialog({
     initialTipPercent > 0 ? initialTipPercent : null
   )
   const [tipSource, setTipSource] = React.useState<TipSource>(
-    displayTipPercent && displayTipPercent > 0
-      ? "CUSTOMER_DISPLAY"
-      : defaultTipPercent > 0
-        ? "SUGGESTED"
-        : "NONE"
+    displayTipPercent && displayTipPercent > 0 ? "CUSTOMER_DISPLAY" : "NONE"
   )
   const [cashInput, setCashInput] = React.useState("")
   const [pending, setPending] = React.useState<string | null>(null)
@@ -288,7 +281,7 @@ export function ChargeDialog({
 
     if (method === "MERCADO_PAGO_POINT") entries.push("terminal")
 
-    entries.push("tip", "close")
+    entries.push("close")
 
     return entries.map((id) => ({ id, ...STEP_META[id] }))
   }, [method])
@@ -683,7 +676,7 @@ export function ChargeDialog({
     )
 
     if (next) {
-      focusSplit(next, options.nextStep)
+      focusSplit(next)
     } else {
       setActiveSplitId(null)
       setStep(options.nextStep ?? "close")
@@ -962,11 +955,11 @@ export function ChargeDialog({
       toast.success("Pago confirmado en la terminal")
 
       // La propina la capturó la terminal; se muestra en el paso Propina.
-      applyConfirmedPayment(payment, { nextStep: "tip" })
+      applyConfirmedPayment(payment, { nextStep: "close" })
 
       if (!payment.splitId) {
         setAmountInput(null)
-        setStep("tip")
+        setStep("close")
       }
     }
   })
@@ -1243,7 +1236,7 @@ export function ChargeDialog({
     pointDeadline.current = null
     pointKey.current = null
 
-    if (step === "terminal" || step === "tip") {
+    if (step === "terminal") {
       setStep("payment")
     }
   }
@@ -1299,7 +1292,7 @@ export function ChargeDialog({
     // Un cobro anterior cancelado/rechazado no debe reutilizar su clave.
     if (pointPayment && pointPayment.status !== "PENDING") {
       if (pointPayment.status === "CONFIRMED") {
-        setStep("tip")
+        setStep("close")
         return
       }
 
@@ -1359,7 +1352,7 @@ export function ChargeDialog({
       setTipPercentValue(null)
       setTipSource("NONE")
 
-      if (step === "tip" || step === "close") {
+      if (step === "close") {
         setStep("payment")
       }
 
@@ -1405,18 +1398,6 @@ export function ChargeDialog({
     }
 
     applyMethod(value)
-  }
-
-  const stepIndex = steps.findIndex((entry) => entry.id === step)
-  const canEnterStep = (id: ChargeStep) => {
-    if (!steps.some((entry) => entry.id === id)) return false
-    if (remotePending) return id === step
-    if (id === "close") return canClose
-    if (id === "tip" && method === "MERCADO_PAGO_POINT") {
-      return pointPayment?.status === "CONFIRMED"
-    }
-
-    return true
   }
 
   const goBack = () => {
@@ -1506,11 +1487,11 @@ export function ChargeDialog({
   const splitStep =
     step === "payment" || step === "terminal"
       ? 2
-      : step === "tip" || step === "close"
+      : step === "close"
         ? 3
         : 1
   const splitStepLabel =
-    splitStep === 1 ? "Resumen" : splitStep === 2 ? "Pago" : "Propina"
+    splitStep === 1 ? "Resumen" : splitStep === 2 ? "Pago" : "Cierre"
 
   return (
     <>
@@ -1686,67 +1667,7 @@ export function ChargeDialog({
           ) : null}
         </div>
 
-        {viewMode === "COMBINED" ? (
-          <div className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-1">
-              {steps.map((entry, index) => {
-                const Icon = entry.icon
-                const active = entry.id === step
-                const done = index < stepIndex
-                const disabled = !canEnterStep(entry.id)
-
-                return (
-                  <button
-                    key={entry.id}
-                    type="button"
-                    disabled={disabled}
-                    aria-current={active ? "step" : undefined}
-                    onClick={() => setStep(entry.id)}
-                    className={cn(
-                      "flex flex-1 flex-col items-center gap-1 rounded-md px-1 py-1 text-[11px] transition-colors",
-                      active
-                        ? "font-medium text-primary"
-                        : done
-                          ? "text-primary/80"
-                          : "text-muted-foreground",
-                      disabled && "opacity-40"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "flex size-8 items-center justify-center rounded-full border transition-colors",
-                        active
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : done
-                            ? "border-primary/50 bg-primary/10 text-primary"
-                            : "border-border"
-                      )}
-                    >
-                      <Icon className="size-4" />
-                    </span>
-                    {entry.label}
-                  </button>
-                )
-              })}
-            </div>
-
-            <div
-              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
-              role="progressbar"
-              aria-label="Progreso del cobro"
-              aria-valuemin={1}
-              aria-valuemax={steps.length}
-              aria-valuenow={stepIndex + 1}
-            >
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{
-                  width: `${((stepIndex + 1) / steps.length) * 100}%`,
-                }}
-              />
-            </div>
-          </div>
-        ) : activeSplit ? (
+        {viewMode !== "COMBINED" && activeSplit ? (
           <div className="flex flex-col gap-1">
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
               <span>
@@ -2650,32 +2571,80 @@ export function ChargeDialog({
             ) : null}
 
             {step === "payment" ? (
-              <Button
-                type="button"
-                onClick={() =>
-                  setStep(
-                    method === "MERCADO_PAGO_POINT" ? "terminal" : "tip"
-                  )
-                }
-                disabled={
-                  pending !== null ||
-                  remotePending ||
-                  saleAmount <= 0 ||
-                  belowPointMinimum ||
-                  (method === "MERCADO_PAGO_POINT" && !terminalId)
-                }
-              >
-                {method === "MERCADO_PAGO_POINT"
-                  ? "Ir a la terminal"
-                  : "Continuar"}
-              </Button>
+              method === "MERCADO_PAGO_POINT" ? (
+                <Button
+                  type="button"
+                  onClick={() => setStep("terminal")}
+                  disabled={
+                    pending !== null ||
+                    remotePending ||
+                    saleAmount <= 0 ||
+                    belowPointMinimum ||
+                    !terminalId
+                  }
+                >
+                  Ir a la terminal
+                </Button>
+              ) : method === "MERCADO_PAGO_LINK" ? (
+                linkPayment ? (
+                  <Button type="button" onClick={() => setStep("close")}>
+                    Ver cierre
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    onClick={() => void handleSendLink()}
+                    disabled={pending !== null || saleAmount <= 0}
+                  >
+                    {pending === "link" ? (
+                      <Loader2Icon className="animate-spin" />
+                    ) : (
+                      <LinkIcon />
+                    )}
+                    Generar link de pago
+                  </Button>
+                )
+              ) : canConfirm ? (
+                <>
+                  <Button
+                    type="button"
+                    onClick={() => void handleRegister(true)}
+                    disabled={pending !== null || saleAmount <= 0}
+                  >
+                    {pending === "register" ? (
+                      <Loader2Icon className="animate-spin" />
+                    ) : null}
+                    Cobrar y confirmar
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => void handleRegister(false)}
+                    disabled={pending !== null || saleAmount <= 0}
+                  >
+                    Solo registrar
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => void handleRegister(false)}
+                  disabled={pending !== null || saleAmount <= 0}
+                >
+                  {pending === "register" ? (
+                    <Loader2Icon className="animate-spin" />
+                  ) : null}
+                  Registrar pago
+                </Button>
+              )
             ) : null}
 
             {step === "terminal" ? (
               pointPayment?.status === "PENDING" ? null : pointPayment?.status ===
                 "CONFIRMED" ? (
-                <Button type="button" onClick={() => setStep("tip")}>
-                  Ver propina
+                <Button type="button" onClick={() => setStep("close")}>
+                  Ver cierre
                 </Button>
               ) : (
                 <Button

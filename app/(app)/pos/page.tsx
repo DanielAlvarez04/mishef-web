@@ -169,7 +169,6 @@ export default async function PointOfSalePage() {
       canSend={canSendOrders(user.roles)}
       canRegister={canRegister}
       canConfirm={canConfirmPayments(user.roles)}
-      branch={branch}
       mercadoPago={pointConfig}
       cash={cash}
       canManageCash={canManageCash(user.roles)}
