@@ -368,6 +368,8 @@ export interface Order {
   deliveryFee?: string
   scheduledAt?: string | null
   ticketNumber?: number | null
+  /** Folio de reclamos: AAAAMMDD + consecutivo. */
+  ticketUid?: string | null
   status: OrderStatus
   subtotal: string
   taxTotal: string
@@ -420,6 +422,7 @@ export interface KitchenRound extends OrderRound {
     status: OrderStatus
     total: string
     createdAt: string
+    ticketNumber?: number | null
     branch?: { id: string; name: string } | null
   }
   /** Minutos estimados que se están usando (snapshot o respaldo actual). */
@@ -488,6 +491,13 @@ export function canReadMoney(roles: string[]): boolean {
 /** Abrir/cerrar la caja y registrar movimientos: ADMIN y CASHIER. */
 export function canManageCash(roles: string[]): boolean {
   return roles.some((role) => ["ADMIN", "CASHIER"].includes(role))
+}
+
+/** `42` → `#042`; sin número devuelve `null`. */
+export function ticketCode(value: number | null | undefined): string | null {
+  if (!value) return null
+
+  return `#${String(value).padStart(3, "0")}`
 }
 
 /** "Mesa 4", "Mostrador", "Teléfono" o "Domicilio". */

@@ -36,6 +36,7 @@ import {
   roundTimings,
   ROUND_ACTIONS,
   ROUND_STATUS_LABELS,
+  ticketCode,
   type KitchenRound,
   type PrepPriority,
   type RoundStatus,
@@ -579,6 +580,11 @@ export function KitchenView({
                               ) : null}
                               <p className="font-medium">
                                 {orderLabel(round.order)}
+                                {round.order.ticketNumber ? (
+                                  <span className="ml-1.5 text-xs font-normal tabular-nums text-muted-foreground">
+                                    {ticketCode(round.order.ticketNumber)}
+                                  </span>
+                                ) : null}
                               </p>
                               {branch ? null : round.order.branch ? (
                                 <Badge variant="outline">
@@ -632,7 +638,7 @@ export function KitchenView({
                               {item.variantName ? (
                                 <span className="text-muted-foreground">
                                   {" "}
-                                  · {item.variantName}
+                                  {item.variantName}
                                 </span>
                               ) : null}
                               {item.guestName ? (

@@ -125,6 +125,7 @@ import {
   GUEST_SEX_LABELS,
   ORDER_CHANNEL_LABELS,
   orderLabel,
+  ticketCode,
   type ChargeSummary,
   type GuestAgeRange,
   type GuestSex,
@@ -429,14 +430,16 @@ function orderSelectLabel(
 ): string {
   const channel = order.channel
   const isCounter = channel === "COUNTER" || (!channel && order.isTakeaway)
+  const ticket = ticketCode(order.ticketNumber)
+  let label: string
 
   if (isCounter) {
-    const name = order.customerName?.trim()
-    if (name) return name
-    return order.ticketNumber ? `Mostrador #${order.ticketNumber}` : "Mostrador"
+    label = order.customerName?.trim() || "Mostrador"
+  } else {
+    label = orderLabel(order)
   }
 
-  return orderLabel(order)
+  return ticket ? `${ticket} · ${label}` : label
 }
 
 /**
@@ -2053,6 +2056,11 @@ ull` = vista consolidada. */
                 <CardTitle className="flex items-center gap-2">
                   <PencilLineIcon className="size-4" />
                   Comanda
+                  {activeOrder?.ticketNumber ? (
+                    <span className="rounded border px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
+                      {ticketCode(activeOrder.ticketNumber)}
+                    </span>
+                  ) : null}
                 </CardTitle>
                 {showComandaColumn ? (
                   <Select
@@ -2416,12 +2424,10 @@ ull` = vista consolidada. */
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium">{line.itemName}</p>
-                          {line.variantName ? (
-                            <p className="text-sm font-medium text-muted-foreground">
-                              {line.variantName}
-                            </p>
-                          ) : null}
+                          <p className="text-sm font-medium">
+                            {line.itemName}
+                            {line.variantName ? ` ${line.variantName}` : ""}
+                          </p>
                           {line.extras.length > 0 ? (
                             <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                               <span className="font-medium">Extras:</span>

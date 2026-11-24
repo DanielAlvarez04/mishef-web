@@ -72,6 +72,7 @@ const BLOCK_LABELS: Record<ReceiptBlock["type"], string> = {
   items: "Productos",
   totals: "Totales",
   payments: "Pagos",
+  tipSuggestions: "Propina sugerida",
   text: "Texto libre",
   divider: "Separador",
 }
@@ -113,6 +114,7 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
         type,
         showName: true,
         showBranch: true,
+        showRfc: true,
         showAddress: true,
         align: "center",
       }
@@ -141,6 +143,8 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       }
     case "payments":
       return { id, type, showMethod: true, showAmount: true }
+    case "tipSuggestions":
+      return { id, type }
     case "text":
       return {
         id,
@@ -312,6 +316,11 @@ function BlockEditor({
             onChange={(checked) => onChange({ ...block, showBranch: checked })}
           />
           <ToggleRow
+            label="RFC del negocio"
+            checked={block.showRfc}
+            onChange={(checked) => onChange({ ...block, showRfc: checked })}
+          />
+          <ToggleRow
             label="Dirección"
             checked={block.showAddress}
             onChange={(checked) => onChange({ ...block, showAddress: checked })}
@@ -451,6 +460,14 @@ function BlockEditor({
             }
           />
         </div>
+      ) : null}
+
+      {block.type === "tipSuggestions" ? (
+        <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          Sugerencias de 10 %, 15 % y 20 % sobre el total. Solo se imprimen
+          cuando el pago es en efectivo o transferencia y aún no hay propina
+          registrada.
+        </p>
       ) : null}
 
       {block.type === "text" ? (

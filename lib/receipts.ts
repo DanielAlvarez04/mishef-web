@@ -17,6 +17,7 @@ export type ReceiptBlock =
       type: "business"
       showName: boolean
       showBranch: boolean
+      showRfc: boolean
       showAddress: boolean
       align: ReceiptAlign
     })
@@ -48,6 +49,7 @@ export type ReceiptBlock =
       showMethod: boolean
       showAmount: boolean
     })
+  | (ReceiptBlockBase & { type: "tipSuggestions" })
   | (ReceiptBlockBase & {
       type: "text"
       text: string
@@ -58,7 +60,7 @@ export type ReceiptBlock =
   | (ReceiptBlockBase & { type: "divider" })
 
 export interface ReceiptTemplate {
-  version: 1 | 2
+  version: 1 | 2 | 3
   printLogo: boolean
   blocks: ReceiptBlock[]
 }
