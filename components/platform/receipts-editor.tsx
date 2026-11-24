@@ -17,10 +17,17 @@ import {
 import { toast } from "sonner"
 
 import {
+  applyGlobalReceiptTemplate,
   previewReceiptTemplate,
+  saveGlobalReceiptTemplate,
   saveReceiptTemplate,
   testPrintReceipt,
 } from "@/app/(app)/platform/receipts/actions"
+import {
+  previewOrganizationReceiptTemplate,
+  saveOrganizationReceiptTemplate,
+  testPrintOrganizationReceipt,
+} from "@/app/(app)/settings/receipts-actions"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,6 +38,17 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { EntityImage } from "@/components/ui/entity-image"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import {
   Select,
   SelectContent,
@@ -474,7 +492,13 @@ function BlockEditor({
   )
 }
 
-export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
+export function ReceiptsEditor({
+  data,
+  canManageGlobal,
+}: {
+  data: PlatformReceiptsData
+  canManageGlobal: boolean
+}) {
   const router = useRouter()
   const organizations = data.organizations.filter(
     (item) => item.branches.length > 0
@@ -490,16 +514,29 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
   )
   const branch =
     organization?.branches.find((item) => item.id === branchId) ?? null
+  const [scope, setScope] = React.useState<"global" | "branch">(
+    canManageGlobal ? "global" : "branch"
+  )
   const [template, setTemplate] = React.useState<ReceiptTemplate>(() =>
-    clone(branch?.receiptTemplate ?? data.defaults)
+    clone(
+      canManageGlobal
+        ? data.globalTemplate
+        : branch?.receiptTemplate ?? data.globalTemplate
+    )
   )
   const [preview, setPreview] = React.useState<ReceiptPreviewResult | null>(null)
   const [previewError, setPreviewError] = React.useState<string | null>(null)
   const [previewing, setPreviewing] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [testing, setTesting] = React.useState(false)
+  const [confirmApply, setConfirmApply] = React.useState(false)
   const [addType, setAddType] =
     React.useState<ReceiptBlock["type"]>("text")
+  const overrideCount = organizations.reduce(
+    (total, item) =>
+      total + item.branches.filter((branch) => branch.receiptTemplate).length,
+    0
+  )
 
   React.useEffect(() => {
     if (!branchId) return
@@ -511,7 +548,11 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
 
       setPreviewing(true)
 
-      previewReceiptTemplate(branchId, template)
+      const request = canManageGlobal
+        ? previewReceiptTemplate(branchId, template)
+        : previewOrganizationReceiptTemplate(branchId, template)
+
+      request
         .then((result) => {
           if (cancelled) return
 
@@ -534,7 +575,7 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [branchId, template])
+  }, [branchId, template, canManageGlobal])
 
   function chooseOrganization(id: string | null) {
     const next = organizations.find((item) => item.id === id)
@@ -545,7 +586,11 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
 
     setOrganizationId(next.id)
     setBranchId(nextBranch?.id ?? "")
-    setTemplate(clone(nextBranch?.receiptTemplate ?? data.defaults))
+
+    if (scope === "branch") {
+      setTemplate(clone(nextBranch?.receiptTemplate ?? data.globalTemplate))
+    }
+
     setPreview(null)
     setPreviewError(null)
   }
@@ -556,7 +601,26 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
     if (!next) return
 
     setBranchId(next.id)
-    setTemplate(clone(next.receiptTemplate ?? data.defaults))
+
+    if (scope === "branch") {
+      setTemplate(clone(next.receiptTemplate ?? data.globalTemplate))
+    }
+
+    setPreview(null)
+    setPreviewError(null)
+  }
+
+  function switchScope(next: "global" | "branch") {
+    if (next === "global" && !canManageGlobal) return
+
+    setScope(next)
+    setTemplate(
+      clone(
+        next === "global"
+          ? data.globalTemplate
+          : branch?.receiptTemplate ?? data.globalTemplate
+      )
+    )
     setPreview(null)
     setPreviewError(null)
   }
@@ -602,7 +666,7 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
   }
 
   async function save(reset = false) {
-    if (!branchId) return
+    if (scope === "branch" && !branchId) return
 
     if (!reset && template.blocks.length === 0) {
       toast.error("Agrega al menos un bloque al ticket.")
@@ -612,10 +676,18 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
     setSaving(true)
 
     try {
-      const result = await saveReceiptTemplate(
-        branchId,
-        reset ? null : template
-      )
+      const result =
+        scope === "global"
+          ? await saveGlobalReceiptTemplate(reset ? null : template)
+          : canManageGlobal
+            ? await saveReceiptTemplate(
+                branchId,
+                reset ? null : template
+              )
+            : await saveOrganizationReceiptTemplate(
+                branchId,
+                reset ? null : template
+              )
 
       if (!result.ok || !result.data) {
         toast.error(result.message ?? "No se pudo guardar la plantilla.")
@@ -624,8 +696,34 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
 
       setTemplate(clone(result.data.template))
       toast.success(
-        reset ? "Plantilla restablecida" : "Plantilla guardada"
+        reset
+          ? scope === "global"
+            ? "Plantilla global restablecida"
+            : "Sucursal restablecida a la plantilla global"
+          : "Plantilla guardada"
       )
+      router.refresh()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function applyGlobal() {
+    setSaving(true)
+
+    try {
+      const result = await applyGlobalReceiptTemplate()
+
+      if (!result.ok || !result.data) {
+        toast.error(result.message ?? "No se pudo aplicar la plantilla global.")
+        return
+      }
+
+      toast.success(
+        `Plantilla global aplicada a ${result.data.cleared} sucursal(es)`
+      )
+      setConfirmApply(false)
+      switchScope("global")
       router.refresh()
     } finally {
       setSaving(false)
@@ -643,7 +741,9 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
     setTesting(true)
 
     try {
-      const result = await testPrintReceipt(branchId, template)
+      const result = canManageGlobal
+        ? await testPrintReceipt(branchId, template)
+        : await testPrintOrganizationReceipt(branchId, template)
 
       if (!result.ok || !result.data) {
         toast.error(result.message ?? "No se pudo imprimir la prueba.")
@@ -685,37 +785,79 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
           <CardHeader>
             <CardTitle>Configuración</CardTitle>
             <CardDescription>
-              Elige el negocio y la sucursal. La plantilla se guarda por
-              sucursal.
+              La plantilla global aplica a todas las sucursales que no tengan
+              un override. La información de cada sucursal se toma al imprimir.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-muted-foreground">Negocio</span>
-                <Select
-                  value={organizationId}
-                  onValueChange={chooseOrganization}
-                  items={organizations.map((item) => ({
-                    value: item.id,
-                    label: item.name,
-                  }))}
-                >
-                  <SelectTrigger aria-label="Negocio">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {organizations.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            {canManageGlobal ? (
+              <div className="flex flex-col gap-2 rounded-lg border p-3">
+                <span className="text-sm font-medium">Alcance</span>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={scope === "global" ? "default" : "outline"}
+                    onClick={() => switchScope("global")}
+                  >
+                    Global (todos los negocios)
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={scope === "branch" ? "default" : "outline"}
+                    onClick={() => switchScope("branch")}
+                  >
+                    Sucursal específica
+                  </Button>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                  {scope === "global"
+                    ? "Se guarda como default para todas las sucursales. Usa «Aplicar global» para borrar overrides existentes."
+                    : "Se guarda solo para la sucursal seleccionada y tiene prioridad sobre la global."}
+                </span>
+                {scope === "global" && overrideCount > 0 ? (
+                  <span className="flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-400">
+                    <AlertTriangleIcon className="mt-0.5 size-3.5 shrink-0" />
+                    {overrideCount} sucursal(es) tienen una plantilla propia.
+                    Mientras no apliques la global, seguirán usando su override.
+                  </span>
+                ) : null}
               </div>
+            ) : null}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {canManageGlobal ? (
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-xs text-muted-foreground">
+                    Negocio {scope === "global" ? "(vista previa)" : ""}
+                  </span>
+                  <Select
+                    value={organizationId}
+                    onValueChange={chooseOrganization}
+                    items={organizations.map((item) => ({
+                      value: item.id,
+                      label: item.name,
+                    }))}
+                  >
+                    <SelectTrigger aria-label="Negocio">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {organizations.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
 
               <div className="flex flex-col gap-1.5">
-                <span className="text-xs text-muted-foreground">Sucursal</span>
+                <span className="text-xs text-muted-foreground">
+                  Sucursal {scope === "global" ? "(datos de ejemplo)" : ""}
+                </span>
                 <Select
                   value={branchId}
                   onValueChange={chooseBranch}
@@ -744,8 +886,9 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
                   Imprimir logo como imagen
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  Envía el logo como una impresión aparte antes del ticket. Si
-                  no se ve bien en el papel, apágalo.
+                  {scope === "global"
+                    ? "Se aplica a todas las sucursales que usen la plantilla global. Cada negocio debe tener su logo de recibo subido."
+                    : "Solo para esta sucursal. Si se ve mal en el papel, apágalo."}
                 </span>
               </div>
               <Switch
@@ -770,7 +913,7 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
                 ) : (
                   <SaveIcon />
                 )}
-                Guardar
+                {scope === "global" ? "Guardar global" : "Guardar sucursal"}
               </Button>
               <Button
                 type="button"
@@ -779,8 +922,20 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
                 disabled={saving || testing}
               >
                 <RotateCcwIcon />
-                Restablecer
+                {scope === "global"
+                  ? "Restablecer global"
+                  : "Volver a la global"}
               </Button>
+              {canManageGlobal ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setConfirmApply(true)}
+                  disabled={saving || testing}
+                >
+                  Aplicar global a todas
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 variant="outline"
@@ -943,6 +1098,31 @@ export function ReceiptsEditor({ data }: { data: PlatformReceiptsData }) {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={confirmApply} onOpenChange={setConfirmApply}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <AlertTriangleIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Aplicar plantilla global</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se quitarán los overrides de todas las sucursales y todas usarán
+              la plantilla global. Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => void applyGlobal()}
+              disabled={saving}
+            >
+              Aplicar a todas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

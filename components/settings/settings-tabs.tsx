@@ -8,6 +8,7 @@ import {
   CreditCardIcon,
   PackageIcon,
   PaletteIcon,
+  ReceiptTextIcon,
   UserIcon,
 } from "lucide-react"
 
@@ -18,6 +19,7 @@ const SETTINGS_TABS = [
   "account",
   "business",
   "payments",
+  "ticket",
   "catalog",
   "kitchen",
   "inventory",
@@ -34,6 +36,7 @@ export function SettingsTabs({
   account,
   business,
   payments,
+  ticket,
   catalog,
   kitchen,
   inventory,
@@ -44,6 +47,7 @@ export function SettingsTabs({
   account: ReactNode
   business: ReactNode
   payments: ReactNode
+  ticket: ReactNode
   catalog: ReactNode
   kitchen: ReactNode
   inventory: ReactNode
@@ -91,6 +95,10 @@ export function SettingsTabs({
               <CreditCardIcon className="size-4" />
               Pagos
             </TabsTrigger>
+            <TabsTrigger value="ticket">
+              <ReceiptTextIcon className="size-4" />
+              Ticket
+            </TabsTrigger>
             <TabsTrigger value="catalog">
               <CookingPotIcon className="size-4" />
               Catálogo
@@ -119,6 +127,9 @@ export function SettingsTabs({
       </TabsContent>
       <TabsContent value="payments" className="flex min-w-0 flex-col gap-6">
         {payments}
+      </TabsContent>
+      <TabsContent value="ticket" className="flex min-w-0 flex-col gap-6">
+        {ticket}
       </TabsContent>
       <TabsContent
         value="catalog"

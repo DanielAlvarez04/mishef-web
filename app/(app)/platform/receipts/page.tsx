@@ -39,7 +39,7 @@ export default async function PlatformReceiptsPage() {
           </CardContent>
         </Card>
       ) : (
-        <ReceiptsEditor data={data} />
+        <ReceiptsEditor data={data} canManageGlobal />
       )}
     </div>
   )

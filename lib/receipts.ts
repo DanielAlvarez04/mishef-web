@@ -86,7 +86,20 @@ export interface PlatformReceiptOrganization {
 }
 
 export interface PlatformReceiptsData {
+  globalTemplate: ReceiptTemplate
+  /** Alias de compatibilidad; la plantilla global. */
   defaults: ReceiptTemplate
+  organizations: PlatformReceiptOrganization[]
+}
+
+export interface OrganizationReceiptsData {
+  globalTemplate: ReceiptTemplate
+  defaults: ReceiptTemplate
+  organization: PlatformReceiptOrganization
+}
+
+export interface ReceiptsEditorData {
+  globalTemplate: ReceiptTemplate
   organizations: PlatformReceiptOrganization[]
 }
 

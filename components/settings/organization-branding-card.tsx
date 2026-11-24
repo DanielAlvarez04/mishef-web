@@ -6,6 +6,7 @@ import { Loader2Icon, MapPinIcon, PaletteIcon, RotateCcwIcon, SearchIcon } from 
 import { toast } from "sonner"
 
 import {
+  generateOrganizationReceiptLogo,
   removeOrganizationLogo,
   searchOrganizationLocation,
   updateOrganizationBranding,
@@ -37,6 +38,7 @@ export interface OrganizationBrandingProps {
   brandColor: string | null
   theme: string
   logoUrl: string | null
+  logoReceiptUrl: string | null
   address: string | null
   latitude: string | null
   longitude: string | null
@@ -53,6 +55,7 @@ export function OrganizationBrandingCard({
   brandColor,
   theme: initialTheme,
   logoUrl,
+  logoReceiptUrl,
   address,
   latitude,
   longitude,
@@ -64,7 +67,11 @@ export function OrganizationBrandingCard({
   const [color, setColor] = useState(brandColor ?? "")
   const [theme, setTheme] = useState(initialTheme)
   const [logoPreview, setLogoPreview] = useState(logoUrl ?? null)
+  const [logoReceiptPreview, setLogoReceiptPreview] = useState(
+    logoReceiptUrl ?? null
+  )
   const [logoUploading, setLogoUploading] = useState(false)
+  const [generatingReceipt, setGeneratingReceipt] = useState(false)
   const [place, setPlace] = useState(address ?? "")
   const [lat, setLat] = useState(latitude ?? "")
   const [lng, setLng] = useState(longitude ?? "")
@@ -159,6 +166,7 @@ export function OrganizationBrandingCard({
       }
 
       setLogoPreview(result.data.logoUrl)
+      setLogoReceiptPreview(result.data.logoReceiptUrl)
       toast.success("Logo actualizado")
       router.refresh()
     } finally {
@@ -181,10 +189,32 @@ export function OrganizationBrandingCard({
       }
 
       setLogoPreview(null)
+      setLogoReceiptPreview(null)
       toast.success("Logo eliminado")
       router.refresh()
     } finally {
       setLogoUploading(false)
+    }
+  }
+
+  async function handleGenerateReceiptLogo() {
+    setGeneratingReceipt(true)
+
+    try {
+      const result = await generateOrganizationReceiptLogo()
+
+      if (!result.ok || !result.data) {
+        toast.error(
+          result.message ?? "No se pudo generar el logo para el ticket."
+        )
+        return
+      }
+
+      setLogoReceiptPreview(result.data.logoReceiptUrl)
+      toast.success("Logo del ticket generado")
+      router.refresh()
+    } finally {
+      setGeneratingReceipt(false)
     }
   }
 
@@ -334,6 +364,33 @@ export function OrganizationBrandingCard({
             <FieldDescription>
               El logo se optimiza y se genera un JPEG especial para el ticket.
             </FieldDescription>
+            {logoPreview ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                {logoReceiptPreview ? (
+                  <span className="text-emerald-600 dark:text-emerald-400">
+                    Logo del ticket listo.
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-amber-600 dark:text-amber-400">
+                      El logo actual no tiene versión para el ticket.
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleGenerateReceiptLogo()}
+                      disabled={generatingReceipt || logoUploading}
+                    >
+                      {generatingReceipt ? (
+                        <Loader2Icon className="animate-spin" />
+                      ) : null}
+                      Generar para el ticket
+                    </Button>
+                  </>
+                )}
+              </div>
+            ) : null}
           </Field>
 
           <div className="flex flex-col gap-3 border-t pt-4">

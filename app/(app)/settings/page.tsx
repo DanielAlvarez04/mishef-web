@@ -23,6 +23,7 @@ import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
 import { PosPinCard } from "@/components/settings/pos-pin-card"
 import { FiscalCard } from "@/components/settings/fiscal-card"
 import { MercadoPagoCard } from "@/components/settings/mercadopago-card"
+import { ReceiptsEditor } from "@/components/platform/receipts-editor"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
@@ -65,6 +66,7 @@ import { isAdmin, requireUser } from "@/lib/session"
 import type { FiscalProfile } from "@/lib/fiscal"
 import type { KitchenSettings } from "@/lib/kitchen"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
+import type { OrganizationReceiptsData } from "@/lib/receipts"
 import type { PosPairedDevice } from "@/lib/pos-device"
 import type { PosDisplayInfo } from "@/lib/pos-display"
 import type { StorageUsage } from "@/lib/storage"
@@ -233,6 +235,7 @@ export default async function SettingsPage({
         brandColor: string | null
         theme: string
         logoUrl: string | null
+        logoReceiptUrl: string | null
         address: string | null
         latitude: string | null
         longitude: string | null
@@ -253,6 +256,9 @@ export default async function SettingsPage({
   const branches: Branch[] = branchesResponse?.ok
     ? ((await branchesResponse.json()) as Branch[])
     : []
+
+  const receiptsResponse = admin ? await apiFetch("/receipts/settings") : null
+  const receipts = await readJson<OrganizationReceiptsData>(receiptsResponse)
 
   const posDevicesResponse = admin ? await apiFetch("/pos/devices") : null
   const posDevices: PosPairedDevice[] = posDevicesResponse?.ok
@@ -561,6 +567,7 @@ export default async function SettingsPage({
                   brandColor={organization?.brandColor ?? null}
                   theme={organization?.theme ?? "default"}
                   logoUrl={organization?.logoUrl ?? null}
+                  logoReceiptUrl={organization?.logoReceiptUrl ?? null}
                   address={organization?.address ?? null}
                   latitude={organization?.latitude ?? null}
                   longitude={organization?.longitude ?? null}
@@ -664,6 +671,33 @@ export default async function SettingsPage({
               </CardContent>
             </Card>
           </>
+        }
+        ticket={
+          receipts ? (
+            <ReceiptsEditor
+              data={{
+                globalTemplate: receipts.globalTemplate,
+                defaults: receipts.globalTemplate,
+                organizations: [receipts.organization],
+              }}
+              canManageGlobal={false}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ticket de la terminal</CardTitle>
+                <CardDescription>
+                  Estructura del ticket que se imprime en la terminal Point.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  No se pudo cargar la plantilla del ticket. Recarga la página
+                  e inténtalo de nuevo.
+                </p>
+              </CardContent>
+            </Card>
+          )
         }
         catalog={
           <>

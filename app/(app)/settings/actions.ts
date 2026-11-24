@@ -438,6 +438,18 @@ export async function removeOrganizationLogo(): Promise<ActionResult> {
   ])
 }
 
+/** Genera el JPEG de recibo desde el logo actual (solo si está en R2). */
+export async function generateOrganizationReceiptLogo(): Promise<
+  ActionResult<{ logoReceiptKey: string; logoReceiptUrl: string }>
+> {
+  return mutateApi<{ logoReceiptKey: string; logoReceiptUrl: string }>(
+    "/organizations/current/logo/receipt",
+    "POST",
+    undefined,
+    ["/settings", "/dashboard"]
+  )
+}
+
 export interface CustomDomainInstructions {
   domain: string
   status: "pending" | "verified"

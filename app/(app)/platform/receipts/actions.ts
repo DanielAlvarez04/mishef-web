@@ -9,6 +9,28 @@ import type {
 
 const PATHS = ["/platform/receipts"]
 
+export async function saveGlobalReceiptTemplate(
+  template: ReceiptTemplate | null
+): Promise<ActionResult<{ template: ReceiptTemplate }>> {
+  return mutateApi<{ template: ReceiptTemplate }>(
+    "/platform/receipts/global",
+    "PATCH",
+    { template },
+    PATHS
+  )
+}
+
+export async function applyGlobalReceiptTemplate(): Promise<
+  ActionResult<{ cleared: number }>
+> {
+  return mutateApi<{ cleared: number }>(
+    "/platform/receipts/apply-global",
+    "POST",
+    undefined,
+    PATHS
+  )
+}
+
 export async function saveReceiptTemplate(
   branchId: string,
   template: ReceiptTemplate | null
