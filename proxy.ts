@@ -184,6 +184,9 @@ const RESERVED_SUBDOMAINS = new Set([
   "www",
   "z",
 ]);
+// `demo` no está aquí a propósito: es el negocio de demostración controlado.
+// La API lo resuelve con `DEMO_TENANT_SLUGS`, pero sigue reservado para altas
+// normales.
 
 function tenantFromHost(host: string): string | null {
   if (host === BASE_DOMAIN || host === `www.${BASE_DOMAIN}`) return null;
