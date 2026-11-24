@@ -913,19 +913,7 @@ export function ChargeDialog({
         return
       }
 
-      if (result.data.logo && !result.data.logo.printed) {
-        toast.warning(
-          `Ticket enviado. El logo no se imprimió: ${
-            result.data.logo.error ?? "error desconocido"
-          }`
-        )
-      } else {
-        toast.success(
-          result.data.logo?.printed
-            ? "Ticket y logo enviados a la terminal"
-            : "Ticket enviado a la terminal"
-        )
-      }
+      toast.success("Ticket enviado a la terminal")
     } finally {
       setPrinting(false)
     }

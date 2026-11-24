@@ -567,7 +567,6 @@ export default async function SettingsPage({
                   brandColor={organization?.brandColor ?? null}
                   theme={organization?.theme ?? "default"}
                   logoUrl={organization?.logoUrl ?? null}
-                  logoReceiptUrl={organization?.logoReceiptUrl ?? null}
                   address={organization?.address ?? null}
                   latitude={organization?.latitude ?? null}
                   longitude={organization?.longitude ?? null}

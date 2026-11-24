@@ -6,7 +6,6 @@ import {
   AlertTriangleIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  ImageIcon,
   Loader2Icon,
   PlusIcon,
   PrinterIcon,
@@ -37,7 +36,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { EntityImage } from "@/components/ui/entity-image"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -485,7 +483,7 @@ function BlockEditor({
 
       {block.type === "divider" ? (
         <p className="text-xs text-muted-foreground">
-          Imprime una línea separadora de 42 columnas.
+          Imprime una línea separadora de 32 columnas.
         </p>
       ) : null}
     </div>
@@ -750,19 +748,7 @@ export function ReceiptsEditor({
         return
       }
 
-      if (result.data.logo && !result.data.logo.printed) {
-        toast.warning(
-          `Ticket enviado. El logo no se imprimió: ${
-            result.data.logo.error ?? "error desconocido"
-          }`
-        )
-      } else {
-        toast.success(
-          result.data.logo?.printed
-            ? "Prueba enviada con logo y ticket"
-            : "Prueba de ticket enviada"
-        )
-      }
+      toast.success("Prueba de ticket enviada")
     } finally {
       setTesting(false)
     }
@@ -878,28 +864,6 @@ export function ReceiptsEditor({
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="flex items-start justify-between gap-3 rounded-lg border p-3">
-              <div className="flex flex-col gap-1">
-                <span className="text-sm font-medium">
-                  Imprimir logo como imagen
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {scope === "global"
-                    ? "Se aplica a todas las sucursales que usen la plantilla global. Cada negocio debe tener su logo de recibo subido."
-                    : "Solo para esta sucursal. Si se ve mal en el papel, apágalo."}
-                </span>
-              </div>
-              <Switch
-                checked={template.printLogo}
-                onCheckedChange={(checked) =>
-                  setTemplate((current) => ({
-                    ...current,
-                    printLogo: checked,
-                  }))
-                }
-              />
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -1022,7 +986,7 @@ export function ReceiptsEditor({
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Vista previa
-              <Badge variant="outline">58 mm · 42 col</Badge>
+              <Badge variant="outline">58 mm · 32 col</Badge>
             </CardTitle>
             <CardDescription>
               La vista previa usa una orden de ejemplo.
@@ -1043,23 +1007,6 @@ export function ReceiptsEditor({
               </p>
             ) : null}
 
-            {template.printLogo ? (
-              preview?.logoUrl ? (
-                <EntityImage
-                  src={preview.logoUrl}
-                  alt="Logo del negocio"
-                  sizes="300px"
-                  className="mx-auto max-h-20 max-w-full object-contain"
-                />
-              ) : (
-                <p className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400">
-                  <ImageIcon className="mt-0.5 size-3.5 shrink-0" />
-                  Este negocio no tiene logo de recibo. Súbelo en Configuración
-                  → Marca.
-                </p>
-              )
-            ) : null}
-
             <div className="mx-auto w-[300px] rounded-md bg-white p-4 text-[12px] leading-snug text-black shadow-sm ring-1 ring-black/10">
               <div
                 style={{
@@ -1070,14 +1017,6 @@ export function ReceiptsEditor({
                 dangerouslySetInnerHTML={{ __html: preview?.html ?? "" }}
               />
             </div>
-
-            {template.printLogo ? (
-              <p className="text-[11px] text-muted-foreground">
-                El logo se manda como una acción de imagen antes del ticket de
-                texto. La prueba física confirma si la terminal los imprime
-                seguidos.
-              </p>
-            ) : null}
 
             {preview?.warnings.length ? (
               <div className="flex flex-col gap-1 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700 dark:text-amber-300">
