@@ -16,7 +16,6 @@ import {
   updateOnboardingGoals,
   updateOnboardingProfile,
   updateOnboardingServiceTypes,
-  updateOnboardingSlug,
 } from "@/app/onboarding/actions"
 import { AvailabilityLabel } from "@/components/availability-field"
 import {
@@ -143,6 +142,7 @@ export function OnboardingFlow({
   initialName,
   initialUsername,
   initialSlug,
+  initialOnboarded,
   initialCurrency,
   currentUsername,
   tenantDomain,
@@ -151,6 +151,8 @@ export function OnboardingFlow({
   initialName: string
   initialUsername: string
   initialSlug: string
+  /** `true` si el asistente ya se completó antes (se repite como ajustes). */
+  initialOnboarded: boolean
   /** Moneda configurada; MXN si la organización aún no eligió otra. */
   initialCurrency: string
   currentUsername: string | null
@@ -162,8 +164,17 @@ export function OnboardingFlow({
   // State
   const [businessType, setBusinessType] = useState("")
   const [businessName, setBusinessName] = useState(initialBusinessName)
-  const [slug, setSlug] = useState(initialSlug || slugify(initialBusinessName))
-  const [savedSlug, setSavedSlug] = useState(initialSlug)
+  // La dirección se sugiere con el nombre real del negocio. El slug aleatorio
+  // del registro (`pending-…` o `nombre-abcdef`) es solo un placeholder.
+  const generatedSlug =
+    !initialSlug ||
+    /^pending-[0-9a-f]{16}$/.test(initialSlug) ||
+    /-[0-9a-f]{6}$/.test(initialSlug)
+  const autoSlug = !initialOnboarded && generatedSlug
+  const [slugOverride, setSlugOverride] = useState<string | null>(null)
+  const slug =
+    slugOverride ?? (autoSlug ? slugify(businessName) : initialSlug)
+  const savedSlug = initialSlug
   const [remoteSlug, setRemoteSlug] = useState<{
     slug: string
     status: SlugStatus
@@ -278,15 +289,9 @@ export function OnboardingFlow({
   }
 
   const handleAddressSubmit = () => {
-    if (slug === savedSlug) {
-      return Promise.resolve(true)
-    }
-
-    return addressForm.run(async () => {
-      const result = await updateOnboardingSlug(slug)
-      if (result.ok) setSavedSlug(slug)
-      return result
-    })
+    // La dirección se guarda hasta el paso final, cuando el nombre del negocio
+    // ya está confirmado. Aquí solo se valida su disponibilidad.
+    return Promise.resolve(true)
   }
 
   const handleCurrencySubmit = () => {
@@ -324,7 +329,7 @@ export function OnboardingFlow({
   }
 
   const handleFinishSubmit = () => {
-    return finishForm.run(finishOnboarding)
+    return finishForm.run(() => finishOnboarding(slug))
   }
 
   const toggleServiceType = (value: string) => {
@@ -410,7 +415,9 @@ export function OnboardingFlow({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
-                <FieldLabel htmlFor="business-name">Nombre del negocio</FieldLabel>
+                <FieldLabel htmlFor="business-name">
+                  Nombre del negocio <span className="text-destructive">*</span>
+                </FieldLabel>
                 <Input
                   id="business-name"
                   name="name"
@@ -430,7 +437,8 @@ export function OnboardingFlow({
 
               <Field>
                 <FieldLabel htmlFor="branch-name">
-                  Nombre de tu primera sucursal
+                  Nombre de tu primera sucursal{" "}
+                  <span className="text-destructive">*</span>
                 </FieldLabel>
                 <Input
                   id="branch-name"
@@ -470,7 +478,15 @@ export function OnboardingFlow({
             <QuestionnaireError>{businessForm.error}</QuestionnaireError>
             <QuestionnaireActions>
               <QuestionnairePrevious />
-              <QuestionnaireNext onClick={handleBusinessSubmit}>Continuar</QuestionnaireNext>
+              <QuestionnaireNext
+                onClick={handleBusinessSubmit}
+                disabled={
+                  businessName.trim().length < 2 ||
+                  branchName.trim().length < 2
+                }
+              >
+                Continuar
+              </QuestionnaireNext>
             </QuestionnaireActions>
           </div>
         </QuestionnaireItem>
@@ -498,7 +514,7 @@ export function OnboardingFlow({
                   placeholder="mi-cafeteria"
                   value={slug}
                   onChange={(event) => {
-                    setSlug(
+                    setSlugOverride(
                       event.target.value
                         .toLowerCase()
                         .replace(/[^a-z0-9-]+/g, "-")
@@ -525,7 +541,7 @@ export function OnboardingFlow({
                   void (async () => {
                     const result = await suggestOnboardingSlug(businessName)
                     if (result.ok && result.data?.slug) {
-                      setSlug(result.data.slug)
+                      setSlugOverride(result.data.slug)
                       addressForm.setError(null)
                     } else {
                       addressForm.setError(

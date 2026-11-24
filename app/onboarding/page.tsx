@@ -18,6 +18,7 @@ export default async function OnboardingPage() {
       initialName={user.name ?? ""}
       initialUsername={user.username ?? ""}
       initialSlug={user.organizationSlug ?? ""}
+      initialOnboarded={user.onboarded}
       initialCurrency={user.organizationCurrency}
       currentUsername={user.username}
       tenantDomain={

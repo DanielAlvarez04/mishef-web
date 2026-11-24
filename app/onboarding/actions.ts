@@ -187,14 +187,14 @@ export async function updateOnboardingGoals(
   )
 }
 
-/** Paso final: marca el onboarding como completado y calcula el subdominio. */
-export async function finishOnboarding(): Promise<
-  ActionResult<{ redirectTo: string }>
-> {
+/** Paso final: fija el subdominio y marca el onboarding como completado. */
+export async function finishOnboarding(
+  requestedSlug?: string
+): Promise<ActionResult<{ redirectTo: string }>> {
   const completed = await mutateApi(
     "/auth/onboarding/complete",
     "POST",
-    undefined,
+    { slug: requestedSlug?.trim() || undefined },
     ["/onboarding", "/dashboard"]
   )
 

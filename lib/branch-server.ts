@@ -32,13 +32,16 @@ export const getActiveBranch = cache(async (): Promise<Branch | null> => {
   const branches = await getBranches()
 
   // Quien tiene sucursal fija opera siempre en ella: la API lo fuerza aunque
-  // no haya cookie, así que la UI debe reflejarlo igual.
+  // no haya cookie, así que la UI debe reflejarlo igual. Con una sola
+  // sucursal activa también se usa sin exigir cookie.
   const user = await getCurrentUser()
-  const id = user?.branchId ?? cookieId
+  const active = branches.filter((branch) => branch.isActive)
+  const id =
+    user?.branchId ?? cookieId ?? (active.length === 1 ? active[0].id : null)
 
   if (!id) {
     return null
   }
 
-  return branches.find((branch) => branch.id === id && branch.isActive) ?? null
+  return active.find((branch) => branch.id === id) ?? null
 })

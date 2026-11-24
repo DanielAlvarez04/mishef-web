@@ -1,8 +1,10 @@
 import { PosView } from "@/components/pos/pos-view"
 import { PosOfflineFallback } from "@/components/pos/pos-offline-fallback"
 import { OfflineSnapshot } from "@/components/offline/offline-snapshot"
+import { setActiveBranch } from "@/app/(app)/branch-actions"
+import { Button } from "@/components/ui/button"
 import { apiFetch } from "@/lib/api"
-import { getActiveBranch } from "@/lib/branch-server"
+import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import type { Category, ItemListItem } from "@/lib/catalog"
 import type { Menu, MenuTrendingPayload } from "@/lib/menus"
 import {
@@ -17,6 +19,19 @@ import type { CashSessionPayload } from "@/lib/cash"
 import type { PosDisplayInfo } from "@/lib/pos-display"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import { requireAnyRole } from "@/lib/session"
+import { redirect } from "next/navigation"
+
+/** Guarda la sucursal elegida y recarga el POS ya contextualizado. */
+async function chooseBranch(formData: FormData) {
+  "use server"
+
+  const branchId = String(formData.get("branchId") ?? "")
+  const result = await setActiveBranch(branchId || null)
+
+  if (!result.ok) return
+
+  redirect("/pos")
+}
 
 export default async function PointOfSalePage() {
   const user = await requireAnyRole(["ADMIN", "WAITER", "CASHIER"])
@@ -46,6 +61,8 @@ export default async function PointOfSalePage() {
     apiFetch("/catalog/menus/trending"),
   ])
 
+  // Primero el modo offline: si la red falló, no se puede saber si falta
+  // sucursal y el POS debe seguir funcionando con el snapshot local.
   if (
     !productsResponse.ok ||
     !categoriesResponse.ok ||
@@ -57,6 +74,46 @@ export default async function PointOfSalePage() {
         organizationId={user.organizationId ?? ""}
         branchId={branch?.id ?? null}
       />
+    )
+  }
+
+  // Vender sin sucursal deja la cuenta sin folio ni nombre de sucursal en el
+  // ticket. Si hay varias, se exige elegir una antes de abrir cuentas.
+  if (!branch) {
+    const branches = await getBranches()
+    const active = branches.filter((entry) => entry.isActive)
+
+    return (
+      <div className="flex min-h-svh items-center justify-center p-6">
+        <div className="w-full max-w-md rounded-xl border bg-card p-6 shadow-sm">
+          <h1 className="text-lg font-semibold">Selecciona una sucursal</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Para abrir cuentas necesitas elegir la sucursal donde estás
+            operando.
+          </p>
+
+          {active.length > 0 ? (
+            <div className="mt-4 flex flex-col gap-2">
+              {active.map((entry) => (
+                <form key={entry.id} action={chooseBranch}>
+                  <input type="hidden" name="branchId" value={entry.id} />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    className="w-full justify-start"
+                  >
+                    {entry.name}
+                  </Button>
+                </form>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-destructive">
+              No hay sucursales activas. Crea una en Configuración → Negocio.
+            </p>
+          )}
+        </div>
+      </div>
     )
   }
 
