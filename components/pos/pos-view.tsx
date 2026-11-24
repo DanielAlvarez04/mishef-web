@@ -2619,11 +2619,20 @@ export function PosView({
         return
       }
 
-      toast.success("Cuenta enviada a la terminal")
+      toast.success("Ticket enviado a la terminal")
     } finally {
       setPrintingAccount(false)
     }
   }
+
+  const hasConfirmedPayments = (activeOrder?.payments ?? []).some(
+    (payment) => payment.status === "CONFIRMED"
+  )
+  const isTableServiceOrder =
+    !activeOrder?.isTakeaway &&
+    (activeOrder?.channel ?? "DINE_IN") === "DINE_IN"
+  const canPrintAccount =
+    Boolean(activeOrder) && (hasConfirmedPayments || isTableServiceOrder)
 
   const comandaActions = (
     <>
@@ -2692,23 +2701,27 @@ export function PosView({
                         ? "Cobrar cuenta"
                         : "Cobrar sin conexión"}
                     </Button>
-                    <Button
-                      variant="ghost"
-                      disabled={printingAccount || !offline.isOnline}
-                      title={
-                        !offline.isOnline
-                          ? "Necesitas conexión para imprimir la cuenta"
-                          : undefined
-                      }
-                      onClick={() => void handlePrintAccount()}
-                    >
-                      {printingAccount ? (
-                        <Loader2Icon className="animate-spin" />
-                      ) : (
-                        <PrinterIcon />
-                      )}
-                      Imprimir cuenta
-                    </Button>
+                    {canPrintAccount ? (
+                      <Button
+                        variant="ghost"
+                        disabled={printingAccount || !offline.isOnline}
+                        title={
+                          !offline.isOnline
+                            ? "Necesitas conexión para imprimir la cuenta"
+                            : undefined
+                        }
+                        onClick={() => void handlePrintAccount()}
+                      >
+                        {printingAccount ? (
+                          <Loader2Icon className="animate-spin" />
+                        ) : (
+                          <PrinterIcon />
+                        )}
+                        {hasConfirmedPayments
+                          ? "Reimprimir ticket"
+                          : "Imprimir cuenta"}
+                      </Button>
+                    ) : null}
                     {!cash.session ? (
                       <p className="text-xs text-muted-foreground">
                         Caja cerrada: caja o administración debe abrirla para

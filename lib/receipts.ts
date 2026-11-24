@@ -46,6 +46,7 @@ export type ReceiptBlock =
     })
   | (ReceiptBlockBase & {
       type: "payments"
+      showTitle: boolean
       showMethod: boolean
       showAmount: boolean
     })
@@ -60,7 +61,7 @@ export type ReceiptBlock =
   | (ReceiptBlockBase & { type: "divider" })
 
 export interface ReceiptTemplate {
-  version: 1 | 2 | 3 | 4
+  version: 1 | 2 | 3 | 4 | 5
   printLogo: boolean
   blocks: ReceiptBlock[]
 }
@@ -114,6 +115,9 @@ export interface ReceiptPreviewResult {
   warnings: string[]
   logoUrl: string | null
 }
+
+/** Escenario de la vista previa: cuenta de mesa o ticket pagado. */
+export type ReceiptPreviewScenario = "table" | "paid"
 
 export interface ReceiptTestResult {
   terminalId: string

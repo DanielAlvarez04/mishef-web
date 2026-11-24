@@ -3,6 +3,7 @@
 import { mutateApi, type ActionResult } from "@/lib/server-api"
 import type {
   ReceiptPreviewResult,
+  ReceiptPreviewScenario,
   ReceiptTemplate,
   ReceiptTestResult,
 } from "@/lib/receipts"
@@ -27,7 +28,8 @@ export async function saveOrganizationReceiptTemplate(
 
 export async function previewOrganizationReceiptTemplate(
   branchId: string,
-  template: ReceiptTemplate
+  template: ReceiptTemplate,
+  scenario: ReceiptPreviewScenario = "table"
 ): Promise<ActionResult<ReceiptPreviewResult>> {
   if (!branchId) {
     return { ok: false, message: "Sucursal no encontrada." }
@@ -36,13 +38,14 @@ export async function previewOrganizationReceiptTemplate(
   return mutateApi<ReceiptPreviewResult>(
     `/receipts/branches/${branchId}/receipt-preview`,
     "POST",
-    { template }
+    { template, scenario }
   )
 }
 
 export async function testPrintOrganizationReceipt(
   branchId: string,
-  template: ReceiptTemplate
+  template: ReceiptTemplate,
+  scenario: ReceiptPreviewScenario = "table"
 ): Promise<ActionResult<ReceiptTestResult>> {
   if (!branchId) {
     return { ok: false, message: "Sucursal no encontrada." }
@@ -51,6 +54,6 @@ export async function testPrintOrganizationReceipt(
   return mutateApi<ReceiptTestResult>(
     `/receipts/branches/${branchId}/receipt-test`,
     "POST",
-    { template }
+    { template, scenario }
   )
 }

@@ -61,6 +61,7 @@ import type {
   ReceiptAlign,
   ReceiptBlock,
   ReceiptPreviewResult,
+  ReceiptPreviewScenario,
   ReceiptSize,
   ReceiptTemplate,
 } from "@/lib/receipts"
@@ -139,10 +140,16 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       return {
         id,
         type,
-        fields: ["subtotal", "tax", "discount", "delivery", "tip", "total"],
+        fields: ["subtotal", "tax", "discount", "tip", "delivery", "total"],
       }
     case "payments":
-      return { id, type, showMethod: true, showAmount: true }
+      return {
+        id,
+        type,
+        showTitle: true,
+        showMethod: true,
+        showAmount: true,
+      }
     case "tipSuggestions":
       return { id, type }
     case "text":
@@ -423,8 +430,8 @@ function BlockEditor({
               ["subtotal", "Subtotal"],
               ["tax", "IVA"],
               ["discount", "Descuento"],
-              ["delivery", "Envío"],
               ["tip", "Propina"],
+              ["delivery", "Envío"],
               ["total", "Total"],
             ] as const
           ).map(([field, label]) => (
@@ -446,6 +453,13 @@ function BlockEditor({
       {block.type === "payments" ? (
         <div className="grid gap-2">
           <ToggleRow
+            label="Título PAGOS"
+            checked={block.showTitle}
+            onChange={(checked) =>
+              onChange({ ...block, showTitle: checked })
+            }
+          />
+          <ToggleRow
             label="Método de pago"
             checked={block.showMethod}
             onChange={(checked) =>
@@ -464,9 +478,9 @@ function BlockEditor({
 
       {block.type === "tipSuggestions" ? (
         <p className="rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-          Sugerencias de 10 %, 15 % y 20 % sobre el total. Solo se imprimen
-          cuando el pago es en efectivo o transferencia y aún no hay propina
-          registrada.
+          Sugerencias de 10 %, 15 % y 20 % sobre el total. Solo se imprimen en
+          cuentas de mesa antes de cobrar; en ventanilla se imprime la sección
+          de Pagos.
         </p>
       ) : null}
 
@@ -542,6 +556,8 @@ export function ReceiptsEditor({
   )
   const [preview, setPreview] = React.useState<ReceiptPreviewResult | null>(null)
   const [previewError, setPreviewError] = React.useState<string | null>(null)
+  const [previewScenario, setPreviewScenario] =
+    React.useState<ReceiptPreviewScenario>("table")
   const [previewing, setPreviewing] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
   const [testing, setTesting] = React.useState(false)
@@ -565,8 +581,12 @@ export function ReceiptsEditor({
       setPreviewing(true)
 
       const request = canManageGlobal
-        ? previewReceiptTemplate(branchId, template)
-        : previewOrganizationReceiptTemplate(branchId, template)
+        ? previewReceiptTemplate(branchId, template, previewScenario)
+        : previewOrganizationReceiptTemplate(
+            branchId,
+            template,
+            previewScenario
+          )
 
       request
         .then((result) => {
@@ -591,7 +611,7 @@ export function ReceiptsEditor({
       cancelled = true
       clearTimeout(timer)
     }
-  }, [branchId, template, canManageGlobal])
+  }, [branchId, template, canManageGlobal, previewScenario])
 
   function chooseOrganization(id: string | null) {
     const next = organizations.find((item) => item.id === id)
@@ -758,8 +778,12 @@ export function ReceiptsEditor({
 
     try {
       const result = canManageGlobal
-        ? await testPrintReceipt(branchId, template)
-        : await testPrintOrganizationReceipt(branchId, template)
+        ? await testPrintReceipt(branchId, template, previewScenario)
+        : await testPrintOrganizationReceipt(
+            branchId,
+            template,
+            previewScenario
+          )
 
       if (!result.ok || !result.data) {
         toast.error(result.message ?? "No se pudo imprimir la prueba.")
@@ -1009,6 +1033,24 @@ export function ReceiptsEditor({
             <CardDescription>
               La vista previa usa una orden de ejemplo.
             </CardDescription>
+            <div className="flex flex-wrap gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant={previewScenario === "table" ? "secondary" : "ghost"}
+                onClick={() => setPreviewScenario("table")}
+              >
+                Cuenta en mesa
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={previewScenario === "paid" ? "secondary" : "ghost"}
+                onClick={() => setPreviewScenario("paid")}
+              >
+                Ticket pagado
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {previewing ? (
