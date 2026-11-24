@@ -1,3 +1,5 @@
+import type { FeatureKey } from "@/lib/features"
+import { isFeatureEnabled } from "@/lib/features"
 import {
   BarChart3Icon,
   BadgeDollarSignIcon,
@@ -12,6 +14,7 @@ import {
   Settings2Icon,
   ShieldAlertIcon,
   ShoppingBasketIcon,
+  SlidersHorizontalIcon,
   StoreIcon,
   Trash2Icon,
   UsersIcon,
@@ -32,6 +35,8 @@ export interface NavItem {
   icon: LucideIcon
   /** Roles que pueden ver el destino. Sin lista = todos los miembros. */
   roles?: string[]
+  /** Función que debe estar activa en la organización. */
+  feature?: FeatureKey
 }
 
 const CATALOG: string[] = ["ADMIN", "INVENTORY_MANAGER"]
@@ -45,12 +50,14 @@ export const SERVICE_NAV: NavItem[] = [
     mobileTitle: "Inicio",
     url: "/dashboard",
     icon: LayoutDashboardIcon,
+    feature: "dashboard",
   },
   {
     title: "Menús",
     url: "/menus",
     icon: NotebookTextIcon,
     roles: ["ADMIN", "WAITER", "INVENTORY_MANAGER"],
+    feature: "menus",
   },
   {
     title: "Punto de venta",
@@ -58,12 +65,14 @@ export const SERVICE_NAV: NavItem[] = [
     url: "/pos",
     icon: ShoppingBasketIcon,
     roles: SERVICE,
+    feature: "pos",
   },
   {
     title: "Cocina",
     url: "/kitchen",
     icon: ChefHatIcon,
     roles: ["ADMIN", "WAITER", "KITCHEN"],
+    feature: "kitchen",
   },
 ]
 
@@ -92,52 +101,61 @@ export const APPLICATION_NAV: NavItem[] = [
     url: "/catalog",
     icon: CookingPotIcon,
     roles: CATALOG,
+    feature: "catalog",
   },
   {
     title: "Inventario",
     url: "/inventory",
     icon: PackageIcon,
     roles: CATALOG,
+    feature: "inventory",
   },
   {
     title: "Reportes",
     url: "/reports",
     icon: ChartBarIcon,
+    feature: "reports",
   },
   {
     title: "Food cost",
     url: "/reports/food-cost",
     icon: PercentIcon,
     roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"],
+    feature: "reports.food-cost",
   },
   {
     title: "Fuga interna",
     url: "/reports/leakage",
     icon: ShieldAlertIcon,
     roles: MONEY,
+    feature: "reports.leakage",
   },
   {
     title: "Asistencia",
     url: "/attendance",
     icon: ClockIcon,
+    feature: "attendance",
   },
   {
     title: "Merma",
     url: "/waste",
     icon: Trash2Icon,
     roles: CATALOG,
+    feature: "waste",
   },
   {
     title: "Benchmark",
     url: "/reports/benchmark",
     icon: BarChart3Icon,
     roles: MONEY,
+    feature: "reports.benchmark",
   },
 ]
 
 /** Grupo «Plataforma» del superadmin. */
 export const PLATFORM_NAV: NavItem[] = [
   { title: "Resumen", url: "/platform", icon: LayoutDashboardIcon },
+  { title: "Funciones", url: "/platform/features", icon: SlidersHorizontalIcon },
   { title: "Planes", url: "/plans", icon: BadgeDollarSignIcon },
   { title: "Suscripciones", url: "/subscriptions", icon: StoreIcon },
   { title: "Usuarios", url: "/users", icon: UsersIcon },
@@ -148,13 +166,19 @@ export const SETTINGS_NAV: NavItem = {
   title: "Configuración",
   url: "/settings",
   icon: Settings2Icon,
+  feature: "settings",
 }
 
-/** `true` si el usuario puede ver el destino según sus roles. */
+/**
+ * `true` si el usuario puede ver el destino según sus roles y las funciones
+ * activas de la organización.
+ */
 export function canSeeNavItem(
   item: NavItem,
-  roles: readonly string[]
+  roles: readonly string[],
+  features: Record<string, boolean> = {}
 ): boolean {
+  if (item.feature && !isFeatureEnabled(features, item.feature)) return false
   if (!item.roles || item.roles.length === 0) return true
   return roles.some((role) => item.roles?.includes(role))
 }

@@ -30,9 +30,11 @@ import { cn } from "cn"
 export function MobileTabBar({
   isPlatformAdmin = false,
   roles = [],
+  features = {},
 }: {
   isPlatformAdmin?: boolean
   roles?: string[]
+  features?: Record<string, boolean>
 }) {
   const pathname = usePathname()
   const { setOpenMobile } = useSidebar()
@@ -40,8 +42,10 @@ export function MobileTabBar({
     () =>
       isPlatformAdmin
         ? PLATFORM_NAV
-        : SERVICE_NAV.filter((item) => canSeeNavItem(item, roles)),
-    [isPlatformAdmin, roles]
+        : SERVICE_NAV.filter((item) =>
+            canSeeNavItem(item, roles, features)
+          ),
+    [isPlatformAdmin, roles, features]
   )
   const centerIndex = items.findIndex((item) => item.url === "/pos")
   // El riel horizontal usa el mismo orden que el sidebar de escritorio; la

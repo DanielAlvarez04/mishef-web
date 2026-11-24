@@ -6,6 +6,7 @@ import {
   CalendarClockIcon,
   CircleDollarSignIcon,
   ReceiptTextIcon,
+  SlidersHorizontalIcon,
   SparklesIcon,
 } from "lucide-react"
 
@@ -131,6 +132,15 @@ export default async function PlatformPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<Link href="/platform/features" />}
+          >
+            <SlidersHorizontalIcon />
+            Funciones
+          </Button>
           <Button
             variant="outline"
             size="sm"

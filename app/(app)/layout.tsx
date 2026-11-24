@@ -3,6 +3,8 @@ import { cookies, headers } from "next/headers"
 
 import { AppSidebar } from "@/components/app-sidebar"
 import { BillingBanner } from "@/components/billing/billing-banner"
+import { FeatureRouteGate } from "@/components/feature-route-gate"
+import { FeaturesProvider } from "@/components/features-provider"
 import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
@@ -10,11 +12,16 @@ import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { apiFetch } from "@/lib/api"
 import { resendVerificationForm } from "@/app/(app)/settings/security-actions"
 import type { Branch } from "@/lib/branches"
 import { getActiveBranch, getBranches } from "@/lib/branch-server"
 import { CurrencyProvider } from "@/lib/currency"
 import { brandStyle } from "@/lib/brand"
+import {
+  DEFAULT_FEATURES,
+  normalizeFeatureOverrides,
+} from "@/lib/features"
 import { displayName, isAdmin, requireUser } from "@/lib/session"
 import { getTenant } from "@/lib/tenant"
 
@@ -112,6 +119,25 @@ export default async function AppLayout({
     ? ([[] as Branch[], null] as [Branch[], Branch | null])
     : await Promise.all([getBranches(), getActiveBranch()])
 
+  // Funciones activas de la organización. Si la API todavía no tiene el
+  // endpoint, se usan los defaults para no bloquear el panel.
+  let features = DEFAULT_FEATURES
+
+  if (!platformMode) {
+    try {
+      const response = await apiFetch("/features")
+
+      if (response.ok) {
+        features = {
+          ...DEFAULT_FEATURES,
+          ...normalizeFeatureOverrides(await response.json()),
+        }
+      }
+    } catch {
+      // Defaults: el panel sigue funcionando.
+    }
+  }
+
   // El `SidebarProvider` guarda el estado en la cookie `sidebar_state`: se lee
   // aquí para que el sidebar arranque colapsado si el usuario lo dejó así.
   const cookieStore = await cookies()
@@ -124,7 +150,8 @@ export default async function AppLayout({
           active={user.organizationPracticeMode}
           until={user.organizationPracticeUntil}
         />
-        <SidebarProvider
+        <FeaturesProvider features={features}>
+          <SidebarProvider
           defaultOpen={sidebarOpen}
           data-theme={user.organizationTheme}
           style={
@@ -141,6 +168,7 @@ export default async function AppLayout({
             isAdmin={isAdmin(user)}
             isPlatformAdmin={user.isPlatformAdmin}
             roles={user.roles}
+            features={features}
             branches={branches}
             activeBranchId={activeBranch?.id ?? user.branchId ?? null}
             lockedBranch={Boolean(user.branchId)}
@@ -182,14 +210,16 @@ export default async function AppLayout({
             ) : null}
             <BillingBanner enabled={isAdmin(user) && !user.isPlatformAdmin} />
             <div className="flex min-h-0 flex-1 flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] max-lg:landscape:pb-0 lg:pb-0">
-              {children}
+              <FeatureRouteGate>{children}</FeatureRouteGate>
             </div>
           </SidebarInset>
           <MobileTabBar
             isPlatformAdmin={user.isPlatformAdmin}
             roles={user.roles}
+            features={features}
           />
         </SidebarProvider>
+        </FeaturesProvider>
       </OfflineProvider>
     </CurrencyProvider>
   )

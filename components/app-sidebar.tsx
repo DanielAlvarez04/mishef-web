@@ -55,6 +55,7 @@ export function AppSidebar({
   isAdmin = false,
   isPlatformAdmin = false,
   roles = [],
+  features = {},
   branches = [],
   activeBranchId = null,
   lockedBranch = false,
@@ -65,6 +66,8 @@ export function AppSidebar({
   isAdmin?: boolean
   isPlatformAdmin?: boolean
   roles?: string[]
+  /** Funciones activas de la organización. El superadmin no las usa. */
+  features?: Record<string, boolean>
   branches?: Branch[]
   activeBranchId?: string | null
   lockedBranch?: boolean
@@ -75,15 +78,19 @@ export function AppSidebar({
     () =>
       withIcons(
         sortServiceNav(
-          SERVICE_NAV.filter((item) => canSeeNavItem(item, roles))
+          SERVICE_NAV.filter((item) => canSeeNavItem(item, roles, features))
         )
       ),
-    [roles]
+    [roles, features]
   )
   const applicationItems = React.useMemo(
     () =>
-      withIcons(APPLICATION_NAV.filter((item) => canSeeNavItem(item, roles))),
-    [roles]
+      withIcons(
+        APPLICATION_NAV.filter((item) =>
+          canSeeNavItem(item, roles, features)
+        )
+      ),
+    [roles, features]
   )
 
   // En móvil el sidebar es un Sheet: al elegir una página debe cerrarse para
@@ -102,16 +109,20 @@ export function AppSidebar({
               url: "/billing",
               icon: <ReceiptTextIcon />,
             },
-            {
-              title: "Usuarios",
-              url: "/users",
-              icon: <UsersIcon />,
-            },
+            ...(features.users !== false
+              ? [
+                  {
+                    title: "Usuarios",
+                    url: "/users",
+                    icon: <UsersIcon />,
+                  },
+                ]
+              : []),
           ]
         : []),
-      ...navSecondaryBase,
+      ...(features.settings !== false ? navSecondaryBase : []),
     ],
-    [isAdmin]
+    [isAdmin, features]
   )
 
   return (
@@ -162,22 +173,30 @@ export function AppSidebar({
                 <SidebarSeparator />
               </>
             ) : null}
-            <NavMain
-              items={serviceItems}
-              label="Servicio"
-              onNavigate={closeMobileSidebar}
-            />
-            <SidebarSeparator />
-            <NavMain
-              items={applicationItems}
-              label="Aplicación"
-              onNavigate={closeMobileSidebar}
-            />
-            <NavSecondary
-              items={navSecondary}
-              className="mt-auto"
-              onNavigate={closeMobileSidebar}
-            />
+            {serviceItems.length > 0 ? (
+              <NavMain
+                items={serviceItems}
+                label="Servicio"
+                onNavigate={closeMobileSidebar}
+              />
+            ) : null}
+            {serviceItems.length > 0 && applicationItems.length > 0 ? (
+              <SidebarSeparator />
+            ) : null}
+            {applicationItems.length > 0 ? (
+              <NavMain
+                items={applicationItems}
+                label="Aplicación"
+                onNavigate={closeMobileSidebar}
+              />
+            ) : null}
+            {navSecondary.length > 0 ? (
+              <NavSecondary
+                items={navSecondary}
+                className="mt-auto"
+                onNavigate={closeMobileSidebar}
+              />
+            ) : null}
           </>
         )}
       </SidebarContent>

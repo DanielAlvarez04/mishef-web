@@ -88,6 +88,7 @@ import { useShortcut } from "@/components/keyboard/keyboard-shortcuts-provider"
 import * as posCapture from "@/components/pos/pos-capture"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { useWakeLock } from "@/hooks/use-wake-lock"
+import { Can } from "@/components/features-provider"
 import { OrderDeck, adjacentOrderId } from "@/components/pos/order-deck"
 import { ArticleCardVisual, type ArticleCardTextSize } from "@/components/catalog/article-card-visual"
 import { usePersistentBoolean } from "@/hooks/use-persistent-boolean"
@@ -2620,63 +2621,66 @@ ull` = vista consolidada. */
                 </p>
               )}
 
-              {activeOrder && canRegister ? (
-                <>
-                  <Button
-                    variant="outline"
-                    disabled={
-                      !cash.session ||
-                      cashClosePending ||
-                      (!offline.isOnline && !canConfirm)
-                    }
-                    title={
-                      !cash.session
-                        ? "Abre la caja para cobrar"
-                        : cashClosePending
-                          ? "Cierre de caja pendiente de sincronizar"
-                          : !offline.isOnline && !canConfirm
-                            ? "Tu rol no puede confirmar pagos sin conexión"
-                            : undefined
-                    }
-                    onClick={() => {
-                      if (offlineCheckoutOrderIds.has(activeOrder.id)) {
-                        toast.info(
-                          "Ya hay un cobro guardado en este dispositivo para esta cuenta.",
-                          {
-                            description:
-                              "Espera a que se sincronice o resuélvelo antes de cobrar de nuevo.",
-                          }
-                        )
-                        return
+              <Can feature="pos.payments">
+                {activeOrder && canRegister ? (
+                  <>
+                    <Button
+                      variant="outline"
+                      disabled={
+                        !cash.session ||
+                        cashClosePending ||
+                        (!offline.isOnline && !canConfirm)
                       }
+                      title={
+                        !cash.session
+                          ? "Abre la caja para cobrar"
+                          : cashClosePending
+                            ? "Cierre de caja pendiente de sincronizar"
+                            : !offline.isOnline && !canConfirm
+                              ? "Tu rol no puede confirmar pagos sin conexión"
+                              : undefined
+                      }
+                      onClick={() => {
+                        if (offlineCheckoutOrderIds.has(activeOrder.id)) {
+                          toast.info(
+                            "Ya hay un cobro guardado en este dispositivo para esta cuenta.",
+                            {
+                              description:
+                                "Espera a que se sincronice o resuélvelo antes de cobrar de nuevo.",
+                            }
+                          )
+                          return
+                        }
 
-                      if (offline.isOnline) setCharging(true)
-                      else setOfflineCharging(true)
-                    }}
-                  >
-                    {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
-                    {offline.isOnline
-                      ? "Cobrar cuenta"
-                      : "Cobrar sin conexión"}
-                  </Button>
-                  {!cash.session ? (
-                    <p className="text-xs text-muted-foreground">
-                      Caja cerrada: caja o administración debe abrirla para cobrar.
-                    </p>
-                  ) : cashClosePending ? (
-                    <p className="text-xs text-muted-foreground">
-                      La caja se cerró en este dispositivo; espera a sincronizar
-                      antes de cobrar otra cuenta.
-                    </p>
-                  ) : !offline.isOnline ? (
-                    <p className="text-xs text-muted-foreground">
-                      {canConfirm
-                        ? "Solo efectivo: el cobro se guarda y se envía al reconectar."
-                        : "Sin conexión solo pueden cobrar roles autorizados a confirmar pagos."}
-                    </p>
-                  ) : null}
-                </>
-              ) : null}
+                        if (offline.isOnline) setCharging(true)
+                        else setOfflineCharging(true)
+                      }}
+                    >
+                      {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
+                      {offline.isOnline
+                        ? "Cobrar cuenta"
+                        : "Cobrar sin conexión"}
+                    </Button>
+                    {!cash.session ? (
+                      <p className="text-xs text-muted-foreground">
+                        Caja cerrada: caja o administración debe abrirla para
+                        cobrar.
+                      </p>
+                    ) : cashClosePending ? (
+                      <p className="text-xs text-muted-foreground">
+                        La caja se cerró en este dispositivo; espera a
+                        sincronizar antes de cobrar otra cuenta.
+                      </p>
+                    ) : !offline.isOnline ? (
+                      <p className="text-xs text-muted-foreground">
+                        {canConfirm
+                          ? "Solo efectivo: el cobro se guarda y se envía al reconectar."
+                          : "Sin conexión solo pueden cobrar roles autorizados a confirmar pagos."}
+                      </p>
+                    ) : null}
+                  </>
+                ) : null}
+              </Can>
 
               {!canDraft ? (
                 <p className="text-xs text-muted-foreground">
