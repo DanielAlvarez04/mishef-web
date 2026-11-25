@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
+  AlertTriangleIcon,
   ArrowUpDownIcon,
   BanknoteIcon,
   CakeIcon,
@@ -44,6 +45,13 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel"
 import {
   Dialog,
   DialogContent,
@@ -98,6 +106,7 @@ import { usePersistentNumber } from "@/hooks/use-persistent-number"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   PROMOTION_TYPE_LABELS,
+  formatTime,
   isItemOptionValueAvailable,
   itemOptionValueName,
   type ItemListItem,
@@ -640,6 +649,24 @@ export function PosView({
     [visibleOrders]
   )
 
+  /** Incluye la cuenta recién creada y las abiertas, de la más antigua a la más nueva. */
+  const carouselOrders = React.useMemo(() => {
+    const list = [...visibleOrders]
+
+    if (
+      pendingOrder &&
+      !list.some((order) => order.id === pendingOrder.id)
+    ) {
+      list.push(pendingOrder)
+    }
+
+    return list.sort(
+      (left, right) =>
+        new Date(left.createdAt).getTime() -
+        new Date(right.createdAt).getTime()
+    )
+  }, [pendingOrder, visibleOrders])
+
   const activeOrder =
     visibleOrders.find((order) => order.id === orderId) ?? null
   const cashClosePending = cash.session
@@ -693,6 +720,8 @@ export function PosView({
   // catálogo + panel (xl). En tablet horizontal y teléfono se usa el sheet.
   const showComandaColumn = useMediaQuery("(min-width: 1280px)", true)
   const [comandaOpen, setComandaOpen] = React.useState(false)
+  const [pendingOpen, setPendingOpen] = React.useState(false)
+  const [confirmNewComanda, setConfirmNewComanda] = React.useState(false)
 
   const comandaUnits =
     cart.reduce((count, line) => count + line.quantity, 0) +
@@ -1511,6 +1540,75 @@ export function PosView({
     }
   }
 
+  /** Deja limpia la comanda nueva (borrador `""`). */
+  function resetNewDraft() {
+    draftsRef.current.delete("")
+    posCapture.discard()
+    setOrderId("")
+    setCart([])
+    setGuests([
+      {
+        key: newGuestKey(),
+        name: "",
+        savedName: "",
+        sex: null,
+        ageRange: null,
+      },
+    ])
+    setPartySize(1)
+    setPartySizeDraft("1")
+    setActiveGuestKey(null)
+    setChannel("DINE_IN")
+    setTableNumber("1")
+    setCustomerName("")
+    setCustomerSex(null)
+    setCustomerAgeRange(null)
+    setCustomerPhone("")
+    setDeliveryAddress("")
+    setDeliveryFee("0")
+    setPendingProductId(null)
+    displaySession.current = null
+    dismissComboNotice()
+    setComboConflict(null)
+  }
+
+  /**
+   * “Nueva” del POS móvil: pasa a la comanda nueva y abre el Sheet.
+   *
+   * Si la cuenta actual ya está guardada, su borrador queda en `draftsRef` y
+   * se recupera al volver a seleccionarla desde Pendientes.
+   */
+  function startNewComanda() {
+    posCapture.noteComandaInteraction()
+
+    if (orderId) {
+      selectOrder("")
+    }
+
+    setComandaOpen(true)
+  }
+
+  function handleNewComanda() {
+    if (!orderId && comandaUnits > 0) {
+      setConfirmNewComanda(true)
+      return
+    }
+
+    startNewComanda()
+  }
+
+  function confirmStartNewComanda() {
+    resetNewDraft()
+    setConfirmNewComanda(false)
+    setComandaOpen(true)
+  }
+
+  function openPendingOrder(id: string) {
+    selectOrder(id)
+    setPendingOpen(false)
+    setComandaOpen(true)
+  }
+
   // Atajos para moverse por la pila sin depender del gesto.
   useShortcut("pos.nextOrder", () => {
     const next = adjacentOrderId(deckOrders, orderId, 1)
@@ -2048,6 +2146,10 @@ export function PosView({
       setGuestBusy(false)
     }
   }
+
+  const mobileGuestNames = guests
+    .map((guest) => guest.name.trim() || guest.savedName.trim())
+    .filter(Boolean)
 
   const comandaHeaderContent = (
     <>
@@ -3011,6 +3113,195 @@ export function PosView({
             </div>
           </div>
 
+          {!showComandaColumn ? (
+            <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
+              <div className="flex flex-wrap gap-1.5">
+                {CHANNELS.map((value) => {
+                  const disabled =
+                    value === "PHONE" ||
+                    value === "DELIVERY" ||
+                    Boolean(activeOrder)
+                  const active = displayChannel === value
+
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={jalapenoChipClass(active)}
+                      aria-pressed={active}
+                      disabled={disabled}
+                      title={
+                        value === "PHONE" || value === "DELIVERY"
+                          ? "Disponible próximamente"
+                          : undefined
+                      }
+                      onClick={() => {
+                        posCapture.noteComandaInteraction()
+                        setChannel(value)
+                      }}
+                    >
+                      {ORDER_CHANNEL_LABELS[value]}
+                    </Button>
+                  )
+                })}
+              </div>
+
+              {isDineIn ? (
+                <>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label
+                        htmlFor="mobile-pos-table"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Mesa
+                      </Label>
+                      <Select
+                        value={activeOrder?.tableNumber ?? tableNumber}
+                        onValueChange={(value) => {
+                          posCapture.noteComandaInteraction()
+                          setTableNumber(value ?? "1")
+                        }}
+                        disabled={Boolean(activeOrder)}
+                        items={TABLE_OPTIONS.map((value) => ({
+                          value,
+                          label: `Mesa ${value}`,
+                        }))}
+                      >
+                        <SelectTrigger
+                          id="mobile-pos-table"
+                          className="h-8 w-full"
+                          aria-label="Mesa"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TABLE_OPTIONS.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              Mesa {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Clientes
+                      </Label>
+                      <ButtonGroup
+                        aria-label="Número de clientes"
+                        className="w-full"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Quitar un cliente"
+                          disabled={partySize <= 1 || guestBusy}
+                          onClick={() => void changePartySize(partySize - 1)}
+                        >
+                          <MinusIcon />
+                        </Button>
+                        <Input
+                          aria-label="Número de clientes"
+                          inputMode="numeric"
+                          className="h-8 w-10 min-w-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                          value={partySizeDraft}
+                          onChange={(event) => {
+                            posCapture.noteComandaActivity()
+                            setPartySizeDraft(
+                              event.target.value.replace(/\D/g, "").slice(0, 2)
+                            )
+                          }}
+                          onBlur={() =>
+                            void changePartySize(Number(partySizeDraft) || 1)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Añadir un cliente"
+                          disabled={partySize >= 20 || guestBusy}
+                          onClick={() => void changePartySize(partySize + 1)}
+                        >
+                          <PlusIcon />
+                        </Button>
+                      </ButtonGroup>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
+                      {mobileGuestNames.length > 0
+                        ? mobileGuestNames.join(", ")
+                        : "Sin nombres"}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setComandaOpen(true)}
+                    >
+                      <PencilLineIcon />
+                      Nombres
+                    </Button>
+                  </div>
+                </>
+              ) : displayChannel === "COUNTER" ? (
+                activeOrder ? (
+                  <p className="text-xs text-muted-foreground">
+                    Cliente:{" "}
+                    {activeOrder.customerName?.trim() || "Sin nombre"}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="mobile-pos-customer"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Cliente (opcional)
+                    </Label>
+                    <Input
+                      id="mobile-pos-customer"
+                      value={customerName}
+                      onChange={(event) => {
+                        posCapture.noteComandaActivity()
+                        setCustomerName(event.target.value)
+                      }}
+                      maxLength={120}
+                      placeholder="Nombre"
+                      className="h-8"
+                    />
+                  </div>
+                )
+              ) : null}
+
+              {!isDineIn ? (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setComandaOpen(true)}
+                  >
+                    <PencilLineIcon />
+                    Ver comanda
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           <PosCatalog
             key={menuId}
             products={baseFiltered}
@@ -3042,21 +3333,120 @@ export function PosView({
 
       {!showComandaColumn ? (
         <>
-          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex justify-end px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
             <button
               type="button"
-              onClick={() => setComandaOpen(true)}
+              onClick={handleNewComanda}
               className="pointer-events-auto flex h-12 items-center gap-2 rounded-full border bg-card px-4 text-sm shadow-lg shadow-black/10 transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]"
             >
               <PencilLineIcon className="size-5 text-primary" aria-hidden />
-              <span className="font-medium">Nueva cuenta</span>
+              <span className="font-medium">Nueva</span>
               {comandaUnits > 0 ? (
                 <Badge variant="secondary" className="tabular-nums">
                   {comandaUnits}
                 </Badge>
               ) : null}
             </button>
+
+            <button
+              type="button"
+              onClick={() => setPendingOpen(true)}
+              aria-label="Comandas pendientes"
+              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full border bg-card px-4 text-sm shadow-lg shadow-black/10 transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]"
+            >
+              <NotebookTextIcon className="size-5 text-primary" aria-hidden />
+              <span className="font-medium">Pendientes</span>
+              {carouselOrders.length > 0 ? (
+                <Badge variant="secondary" className="tabular-nums">
+                  {carouselOrders.length}
+                </Badge>
+              ) : null}
+            </button>
           </div>
+
+          <Sheet open={pendingOpen} onOpenChange={setPendingOpen}>
+            <SheetContent
+              side="bottom"
+              className="max-h-[80dvh] gap-0 overflow-hidden rounded-t-xl border-t p-0"
+            >
+              <div className="flex flex-col gap-3 p-4">
+                <Carousel
+                  opts={{ align: "start", containScroll: "trimSnaps" }}
+                  className="w-full"
+                >
+                  <div className="pr-10">
+                    <SheetTitle>Pendientes</SheetTitle>
+                    <SheetDescription>
+                      {carouselOrders.length === 1
+                        ? "1 cuenta abierta"
+                        : `${carouselOrders.length} cuentas abiertas`}
+                    </SheetDescription>
+                  </div>
+
+                  {carouselOrders.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No hay comandas pendientes.
+                    </p>
+                  ) : (
+                    <>
+                      <CarouselContent className="-ml-2">
+                        {carouselOrders.map((order) => (
+                          <CarouselItem
+                            key={order.id}
+                            className="basis-[85%] pl-2"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openPendingOrder(order.id)}
+                              aria-current={
+                                order.id === orderId ? "true" : undefined
+                              }
+                              className={cn(
+                                "flex w-full flex-col gap-2 rounded-xl border bg-card p-3 text-left transition-colors",
+                                order.id === orderId
+                                  ? "border-primary bg-primary/5"
+                                  : "hover:bg-muted/50"
+                              )}
+                            >
+                              <span className="flex items-start justify-between gap-2">
+                                <span className="truncate text-sm font-medium">
+                                  {orderSelectLabel(order)}
+                                </span>
+                                <span className="shrink-0 text-[11px] text-muted-foreground">
+                                  {formatTime(order.createdAt)}
+                                </span>
+                              </span>
+                              <span className="flex items-end justify-between gap-2">
+                                <span className="min-w-0 truncate text-xs text-muted-foreground">
+                                  {order.customerName?.trim() ||
+                                    ORDER_CHANNEL_LABELS[
+                                      order.channel ?? "DINE_IN"
+                                    ]}
+                                  {order.partySize > 1
+                                    ? ` · ${order.partySize} clientes`
+                                    : ""}
+                                </span>
+                                <span className="shrink-0 text-sm font-semibold tabular-nums">
+                                  {money(Number(order.total))}
+                                </span>
+                              </span>
+                            </button>
+                          </CarouselItem>
+                        ))}
+                      </CarouselContent>
+
+                      {carouselOrders.length > 1 ? (
+                        <div className="mt-2 flex justify-end gap-1">
+                          <CarouselPrevious className="relative! inset-auto!" />
+                          <CarouselNext className="relative! inset-auto!" />
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </Carousel>
+              </div>
+            </SheetContent>
+          </Sheet>
 
           <Sheet open={comandaOpen} onOpenChange={setComandaOpen}>
             <SheetContent
@@ -3071,6 +3461,35 @@ export function PosView({
               {comandaPanel}
             </SheetContent>
           </Sheet>
+
+          <AlertDialog
+            open={confirmNewComanda}
+            onOpenChange={setConfirmNewComanda}
+          >
+            <AlertDialogContent size="sm">
+              <AlertDialogHeader>
+                <AlertDialogMedia className="bg-destructive/10 text-destructive">
+                  <AlertTriangleIcon />
+                </AlertDialogMedia>
+                <AlertDialogTitle>
+                  ¿Empezar una comanda nueva?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Tienes artículos sin guardar en esta comanda nueva. Se
+                  perderán al empezar otra.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  variant="destructive"
+                  onClick={confirmStartNewComanda}
+                >
+                  Empezar nueva
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </>
       ) : null}
 
