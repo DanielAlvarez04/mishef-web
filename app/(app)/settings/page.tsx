@@ -23,7 +23,7 @@ import { PosDisplaysCard } from "@/components/settings/pos-displays-card"
 import { PosPinCard } from "@/components/settings/pos-pin-card"
 import { FiscalCard } from "@/components/settings/fiscal-card"
 import { MercadoPagoCard } from "@/components/settings/mercadopago-card"
-import { ReceiptsEditor } from "@/components/platform/receipts-editor"
+import { ReceiptFieldsCard } from "@/components/settings/receipt-fields-card"
 import { CatalogCategoriesCard } from "@/components/settings/catalog-categories-card"
 import { CoreOptionGroupsCard } from "@/components/settings/core-option-groups-card"
 import { CoreProductsCard } from "@/components/settings/core-products-card"
@@ -673,13 +673,9 @@ export default async function SettingsPage({
         }
         ticket={
           receipts ? (
-            <ReceiptsEditor
-              data={{
-                globalTemplate: receipts.globalTemplate,
-                defaults: receipts.globalTemplate,
-                organizations: [receipts.organization],
-              }}
-              canManageGlobal={false}
+            <ReceiptFieldsCard
+              data={receipts}
+              activeBranchId={activeBranch?.id ?? null}
             />
           ) : (
             <Card>

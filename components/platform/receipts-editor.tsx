@@ -74,6 +74,7 @@ const BLOCK_LABELS: Record<ReceiptBlock["type"], string> = {
   totals: "Totales",
   payments: "Pagos",
   tipSuggestions: "Propina sugerida",
+  meta: "ID y atención",
   text: "Texto libre",
   divider: "Separador",
 }
@@ -113,6 +114,7 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       return {
         id,
         type,
+        enabled: true,
         showName: true,
         showBranch: true,
         showRfc: true,
@@ -120,11 +122,19 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
         align: "center",
       }
     case "ticket":
-      return { id, type, showTicket: true, showDate: true, align: "center" }
+      return {
+        id,
+        type,
+        enabled: true,
+        showTicket: true,
+        showDate: true,
+        align: "center",
+      }
     case "order":
       return {
         id,
         type,
+        enabled: true,
         fields: ["place", "partySize", "customer"],
         align: "left",
       }
@@ -132,6 +142,7 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       return {
         id,
         type,
+        enabled: true,
         showVariant: true,
         showQuantity: true,
         showLineTotal: true,
@@ -140,29 +151,40 @@ function newBlock(type: ReceiptBlock["type"]): ReceiptBlock {
       return {
         id,
         type,
+        enabled: true,
         fields: ["subtotal", "tax", "discount", "tip", "delivery", "total"],
       }
     case "payments":
       return {
         id,
         type,
+        enabled: true,
         showTitle: true,
         showMethod: true,
         showAmount: true,
       }
     case "tipSuggestions":
-      return { id, type }
+      return { id, type, enabled: true }
+    case "meta":
+      return {
+        id,
+        type,
+        enabled: true,
+        showTicketUid: true,
+        showServedBy: true,
+      }
     case "text":
       return {
         id,
         type,
+        enabled: true,
         text: "Texto del ticket",
         align: "left",
         size: "normal",
         bold: false,
       }
     case "divider":
-      return { id, type }
+      return { id, type, enabled: true }
   }
 }
 
@@ -309,6 +331,12 @@ function BlockEditor({
           </Button>
         </div>
       </div>
+
+      <ToggleRow
+        label="Incluir en el ticket"
+        checked={block.enabled}
+        onChange={(enabled) => onChange({ ...block, enabled })}
+      />
 
       {block.type === "business" ? (
         <div className="grid gap-2">
@@ -482,6 +510,25 @@ function BlockEditor({
           cuentas de mesa antes de cobrar; en ventanilla se imprime la sección
           de Pagos.
         </p>
+      ) : null}
+
+      {block.type === "meta" ? (
+        <div className="grid gap-2">
+          <ToggleRow
+            label="ID Ticket"
+            checked={block.showTicketUid}
+            onChange={(checked) =>
+              onChange({ ...block, showTicketUid: checked })
+            }
+          />
+          <ToggleRow
+            label="Atendido por"
+            checked={block.showServedBy}
+            onChange={(checked) =>
+              onChange({ ...block, showServedBy: checked })
+            }
+          />
+        </div>
       ) : null}
 
       {block.type === "text" ? (

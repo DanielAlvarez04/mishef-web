@@ -370,6 +370,8 @@ export interface Order {
   ticketNumber?: number | null
   /** Folio de reclamos: AAAAMMDD + consecutivo. */
   ticketUid?: string | null
+  /** Nombre histórico de quien tomó la orden. */
+  servedByName?: string | null
   status: OrderStatus
   subtotal: string
   taxTotal: string

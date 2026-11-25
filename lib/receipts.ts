@@ -10,6 +10,8 @@ export type ReceiptSize = "small" | "normal" | "large"
 
 export interface ReceiptBlockBase {
   id: string
+  /** El admin del negocio puede apagar el bloque completo. */
+  enabled: boolean
 }
 
 export type ReceiptBlock =
@@ -52,6 +54,11 @@ export type ReceiptBlock =
     })
   | (ReceiptBlockBase & { type: "tipSuggestions" })
   | (ReceiptBlockBase & {
+      type: "meta"
+      showTicketUid: boolean
+      showServedBy: boolean
+    })
+  | (ReceiptBlockBase & {
       type: "text"
       text: string
       align: ReceiptAlign
@@ -61,7 +68,7 @@ export type ReceiptBlock =
   | (ReceiptBlockBase & { type: "divider" })
 
 export interface ReceiptTemplate {
-  version: 1 | 2 | 3 | 4 | 5
+  version: 1 | 2 | 3 | 4 | 5 | 6
   printLogo: boolean
   blocks: ReceiptBlock[]
 }
