@@ -24,8 +24,8 @@ import { cn } from "cn"
  *   altura al contenido.
  * - Escritorio: manda el sidebar existente.
  *
- * El POS conserva el color primario, pero como un botón rectangular dentro de
- * la barra, sin sobresalir ni tapar contenido.
+ * La pestaña activa usa el color primario. El POS conserva ese color cuando
+ * no está activo para seguir siendo el acceso principal.
  */
 export function MobileTabBar({
   isPlatformAdmin = false,
@@ -47,7 +47,6 @@ export function MobileTabBar({
           ),
     [isPlatformAdmin, roles, features]
   )
-  const centerIndex = items.findIndex((item) => item.url === "/pos")
   // El riel horizontal usa el mismo orden que el sidebar de escritorio; la
   // barra inferior conserva el orden con el POS al centro.
   const railItems = React.useMemo(() => sortServiceNav(items), [items])
@@ -56,26 +55,18 @@ export function MobileTabBar({
     <>
       <nav
         aria-label="Navegación principal"
-        className="fixed inset-x-0 bottom-0 z-40 hidden border-t bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/85 max-lg:portrait:block"
+        className="fixed inset-x-0 bottom-0 z-40 hidden border-t bg-card max-lg:portrait:block"
       >
         <div className="mx-auto grid max-w-lg grid-cols-5 items-stretch px-1 pt-1 pb-[calc(0.25rem+env(safe-area-inset-bottom))]">
-          {items.map((item, index) =>
-            index === centerIndex ? (
-              <PosItem
-                key={item.url}
-                item={item}
-                active={isNavItemActive(pathname, item.url)}
-                variant="bottom"
-              />
-            ) : (
-              <TabItem
-                key={item.url}
-                item={item}
-                active={isNavItemActive(pathname, item.url)}
-                variant="bottom"
-              />
-            )
-          )}
+          {items.map((item) => (
+            <TabItem
+              key={item.url}
+              item={item}
+              active={isNavItemActive(pathname, item.url)}
+              highlight={item.url === "/pos" && !isPlatformAdmin}
+              variant="bottom"
+            />
+          ))}
 
           <MoreButton variant="bottom" onOpen={() => setOpenMobile(true)} />
         </div>
@@ -83,25 +74,17 @@ export function MobileTabBar({
 
       <nav
         aria-label="Navegación principal"
-        className="fixed inset-y-0 left-0 z-40 hidden w-[calc(4rem_+_env(safe-area-inset-left))] flex-col gap-1 border-r bg-card/95 px-1 pt-[calc(0.5rem_+_env(safe-area-inset-top))] pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] backdrop-blur supports-[backdrop-filter]:bg-card/85 max-lg:landscape:flex"
+        className="fixed inset-y-0 left-0 z-40 hidden w-[calc(4rem_+_env(safe-area-inset-left))] flex-col gap-1 border-r bg-card px-1 pt-[calc(0.5rem_+_env(safe-area-inset-top))] pb-[calc(0.5rem_+_env(safe-area-inset-bottom))] max-lg:landscape:flex"
       >
-        {railItems.map((item) =>
-          item.url === "/pos" && !isPlatformAdmin ? (
-            <PosItem
-              key={item.url}
-              item={item}
-              active={isNavItemActive(pathname, item.url)}
-              variant="rail"
-            />
-          ) : (
-            <TabItem
-              key={item.url}
-              item={item}
-              active={isNavItemActive(pathname, item.url)}
-              variant="rail"
-            />
-          )
-        )}
+        {railItems.map((item) => (
+          <TabItem
+            key={item.url}
+            item={item}
+            active={isNavItemActive(pathname, item.url)}
+            highlight={item.url === "/pos" && !isPlatformAdmin}
+            variant="rail"
+          />
+        ))}
 
         <div className="mt-auto">
           <MoreButton variant="rail" onOpen={() => setOpenMobile(true)} />
@@ -114,10 +97,13 @@ export function MobileTabBar({
 function TabItem({
   item,
   active,
+  highlight = false,
   variant,
 }: {
   item: NavItem
   active: boolean
+  /** Conserva el color primario cuando el POS no está activo. */
+  highlight?: boolean
   variant: "bottom" | "rail"
 }) {
   const Icon = item.icon
@@ -128,56 +114,23 @@ function TabItem({
       href={item.url}
       aria-current={active ? "page" : undefined}
       className={cn(
-        "flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 text-[10px] font-medium transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:bg-muted/60",
-        variant === "bottom" ? "min-h-14" : "min-h-12 text-[9px]",
+        "flex flex-col items-center justify-center gap-0.5 rounded-lg px-1 font-medium transition-[color,background-color,transform] focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+        variant === "bottom" ? "min-h-14 text-[10px]" : "min-h-12 text-[9px]",
         active
-          ? "text-primary"
-          : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+          ? "bg-primary font-semibold text-primary-foreground shadow-sm active:scale-[0.97]"
+          : highlight
+            ? "text-primary hover:bg-primary/10 active:bg-primary/15"
+            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground active:bg-muted/60"
       )}
     >
       <span
         className={cn(
           "flex items-center justify-center rounded-md transition-colors",
-          variant === "bottom" ? "h-7 w-10" : "h-6 w-9",
-          active && "bg-primary/10"
+          variant === "bottom" ? "h-7 w-10" : "h-6 w-9"
         )}
       >
         <Icon className="size-5" aria-hidden />
       </span>
-      <span className="max-w-full truncate">{label}</span>
-    </Link>
-  )
-}
-
-/**
- * POS con el color primario, integrado en la navegación.
- *
- * Es rectangular y del mismo alto que las demás tabs: no flota ni se sale del
- * contenedor. En vertical ocupa su celda; en horizontal, el ancho del riel.
- */
-function PosItem({
-  item,
-  active,
-  variant,
-}: {
-  item: NavItem
-  active: boolean
-  variant: "bottom" | "rail"
-}) {
-  const Icon = item.icon
-  const label = item.mobileTitle ?? item.title
-
-  return (
-    <Link
-      href={item.url}
-      aria-current={active ? "page" : undefined}
-      aria-label={item.title}
-      className={cn(
-        "flex flex-col items-center justify-center gap-0.5 rounded-lg bg-primary px-1 font-semibold text-primary-foreground shadow-sm transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.97]",
-        variant === "bottom" ? "min-h-14 text-[10px]" : "min-h-12 text-[9px]"
-      )}
-    >
-      <Icon className="size-5" aria-hidden />
       <span className="max-w-full truncate">{label}</span>
     </Link>
   )

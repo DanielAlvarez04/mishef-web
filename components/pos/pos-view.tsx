@@ -3114,7 +3114,7 @@ export function PosView({
           </div>
 
           {!showComandaColumn ? (
-            <div className="flex flex-col gap-2 rounded-lg border">
+            <div className="flex flex-col gap-2 rounded-lg">
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
                   const disabled =
@@ -3240,9 +3240,12 @@ export function PosView({
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5">
+                  <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto">
                     {guests.map((guest, index) => (
-                      <div key={guest.key} className="flex items-center">
+                      <div
+                        key={guest.key}
+                        className="flex shrink-0 items-center"
+                      >
                         <Button
                           type="button"
                           variant="outline"
@@ -3281,6 +3284,7 @@ export function PosView({
                       type="button"
                       variant="ghost"
                       size="icon-sm"
+                      className="shrink-0"
                       aria-label="Editar nombres"
                       onClick={() => setComandaOpen(true)}
                     >
