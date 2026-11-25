@@ -2147,10 +2147,6 @@ export function PosView({
     }
   }
 
-  const mobileGuestNames = guests
-    .map((guest) => guest.name.trim() || guest.savedName.trim())
-    .filter(Boolean)
-
   const comandaHeaderContent = (
     <>
                 <CardTitle className="flex items-center gap-2">
@@ -2888,8 +2884,8 @@ export function PosView({
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:flex-1">
-              <div className="relative w-full sm:w-56">
+            <div className="flex min-w-0 items-center gap-2 sm:flex-1">
+              <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
@@ -2927,7 +2923,7 @@ export function PosView({
                 }))}
               >
                 <SelectTrigger
-                  className="w-full sm:w-44 sm:flex-none"
+                  className="w-max max-w-[45%] shrink-0 sm:w-44 sm:max-w-none"
                   aria-label="Filtrar por menú"
                 >
                   <span className="flex min-w-0 items-center gap-1.5">
@@ -3105,16 +3101,20 @@ export function PosView({
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              <CashSessionActions
-                session={cash.session}
-                summary={cash.summary}
-                canManage={canManageCash}
-              />
+              {canManageCash ? (
+                <div className="flex min-w-0 flex-1 xl:flex-none max-xl:[&>button]:w-full max-xl:[&>[data-slot=button-group]]:w-full max-xl:[&>[data-slot=button-group]>button:first-child]:flex-1">
+                  <CashSessionActions
+                    session={cash.session}
+                    summary={cash.summary}
+                    canManage={canManageCash}
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
 
           {!showComandaColumn ? (
-            <div className="flex flex-col gap-2 rounded-lg border bg-card p-3">
+            <div className="flex flex-col gap-2 rounded-lg border">
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
                   const disabled =
@@ -3240,20 +3240,51 @@ export function PosView({
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="min-w-0 truncate text-xs text-muted-foreground">
-                      {mobileGuestNames.length > 0
-                        ? mobileGuestNames.join(", ")
-                        : "Sin nombres"}
-                    </span>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {guests.map((guest, index) => (
+                      <div key={guest.key} className="flex items-center">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            jalapenoChipClass(activeGuestKey === guest.key),
+                            "max-w-40 rounded-r-none"
+                          )}
+                          aria-pressed={activeGuestKey === guest.key}
+                          onClick={() => selectGuest(guest.key)}
+                        >
+                          {guestUnits.get(guest.key) ? (
+                            <span
+                              aria-hidden
+                              className="size-2 shrink-0 rounded-full bg-primary"
+                            />
+                          ) : null}
+                          <span className="truncate">
+                            {guestDisplayName(guest, index)}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
+                          aria-label={`Quitar ${guestDisplayName(guest, index)}`}
+                          disabled={partySize <= 1 || guestBusy}
+                          onClick={() => requestRemoveGuest(guest)}
+                        >
+                          <XIcon className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
+                      size="icon-sm"
+                      aria-label="Editar nombres"
                       onClick={() => setComandaOpen(true)}
                     >
                       <PencilLineIcon />
-                      Nombres
                     </Button>
                   </div>
                 </>

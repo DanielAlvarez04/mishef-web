@@ -45,7 +45,7 @@ test.describe("POS móvil", () => {
     await openRoute(page, "/pos")
 
     const width = viewportWidth(page)
-    const pill = page.getByRole("button", { name: /^Comanda/ }).first()
+    const pill = page.getByRole("button", { name: /^Nueva/ }).first()
 
     if (width < 1280) {
       await expect(pill).toBeVisible()
@@ -83,7 +83,8 @@ test.describe("POS móvil", () => {
     const searchBox = await search.boundingBox()
     const menuBox = await menu.boundingBox()
 
-    expect(searchBox?.width ?? 0).toBeGreaterThan(200)
-    expect(menuBox?.y ?? 0).toBeGreaterThan(searchBox?.y ?? 0)
+    expect(searchBox?.width ?? 0).toBeGreaterThan(160)
+    expect(Math.abs((menuBox?.y ?? 0) - (searchBox?.y ?? 0))).toBeLessThan(8)
+    expect(menuBox?.width ?? 0).toBeLessThan(searchBox?.width ?? 0)
   })
 })
