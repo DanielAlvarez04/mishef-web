@@ -13,6 +13,7 @@
 # testing
 /coverage
 /playwright-report
+/playwright-report-advanced
 /test-results
 /visual-audit
 /e2e/mobile/.auth/
