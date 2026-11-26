@@ -229,3 +229,43 @@ input[type=number] {
   line-height: 1;
   gap: 0.125rem;
 }
+
+/*
+ * Comanda térmica de cocina (modo Avanzado).
+ *
+ * `data-printing="ticket"` se pone en <body> solo mientras se imprime un
+ * ticket. Se oculta el resto de la app y se deja visible únicamente el área
+ * de la comanda, formateada para papel de 80 mm.
+ */
+@media print {
+  @page {
+    size: 80mm auto;
+    margin: 3mm;
+  }
+
+  body[data-printing="ticket"] * {
+    visibility: hidden;
+  }
+
+  body[data-printing="ticket"] .kitchen-print-area,
+  body[data-printing="ticket"] .kitchen-print-area * {
+    visibility: visible;
+  }
+
+  body[data-printing="ticket"] .kitchen-print-area {
+    position: absolute;
+    inset: 0 auto auto 0;
+    display: block !important;
+    width: 74mm;
+    background: #fff;
+    color: #000;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  body[data-printing="ticket"] .kitchen-print-area * {
+    color: #000 !important;
+    border-color: #000 !important;
+  }
+}

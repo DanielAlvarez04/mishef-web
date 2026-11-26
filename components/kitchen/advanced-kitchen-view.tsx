@@ -11,6 +11,7 @@ import {
   HandPlatterIcon,
   Maximize2Icon,
   Minimize2Icon,
+  PrinterIcon,
   RefreshCwIcon,
   RotateCcwIcon,
   TimerIcon,
@@ -118,6 +119,9 @@ export function AdvancedKitchenView({
     null
   )
   const [refirePending, setRefirePending] = React.useState(false)
+  const [printTicket, setPrintTicket] = React.useState<KitchenTicket | null>(
+    null
+  )
   const [view, setView] = React.useState<"stations" | "expo">("stations")
   const [expoPendingId, setExpoPendingId] = React.useState<string | null>(null)
   const [historyTicket, setHistoryTicket] = React.useState<KitchenTicket | null>(
@@ -163,6 +167,22 @@ export function AdvancedKitchenView({
 
     return () => source.close()
   }, [router])
+
+  React.useEffect(() => {
+    if (!printTicket) return
+
+    const clear = () => setPrintTicket(null)
+
+    document.body.dataset.printing = "ticket"
+    const frame = window.requestAnimationFrame(() => window.print())
+    window.addEventListener("afterprint", clear)
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.removeEventListener("afterprint", clear)
+      delete document.body.dataset.printing
+    }
+  }, [printTicket])
 
   async function transition(
     ticket: KitchenTicket,
@@ -436,6 +456,7 @@ export function AdvancedKitchenView({
                   onRequestRefire={setRefireTicket}
                   onValidateExpo={(entry) => void validateExpo(entry)}
                   onOpenHistory={(entry) => void openHistory(entry)}
+                  onPrint={setPrintTicket}
                 />
               ))}
             </ul>
@@ -531,6 +552,7 @@ export function AdvancedKitchenView({
                           onRequestRefire={setRefireTicket}
                           onValidateExpo={(entry) => void validateExpo(entry)}
                           onOpenHistory={(entry) => void openHistory(entry)}
+                          onPrint={setPrintTicket}
                         />
                       ))}
                     </ul>
@@ -675,6 +697,78 @@ export function AdvancedKitchenView({
           )}
         </DialogContent>
       </Dialog>
+
+      <KitchenTicketPrint ticket={printTicket} />
+    </div>
+  )
+}
+
+function KitchenTicketPrint({ ticket }: { ticket: KitchenTicket | null }) {
+  if (!ticket) return null
+
+  const sentAt = ticket.orderRound.sentAt ?? ticket.orderRound.createdAt
+
+  return (
+    <div className="kitchen-print-area hidden print:block">
+      <p className="text-center text-[15px] font-bold uppercase tracking-wide">
+        {ticket.station.name}
+      </p>
+      <p className="text-center text-[10px] uppercase tracking-[0.2em]">
+        Comanda de cocina
+      </p>
+
+      <div className="my-2 border-y border-dashed border-black py-1">
+        <p className="text-[12px] font-semibold">{kitchenOrderLabel(ticket)}</p>
+        <p className="text-[11px]">
+          Ronda {ticket.orderRound.id.slice(-4)} · {formatTime(sentAt)}
+        </p>
+        {ticket.orderRound.order.customerName ? (
+          <p className="text-[11px]">
+            Cliente: {ticket.orderRound.order.customerName}
+          </p>
+        ) : null}
+        {ticket.orderRound.order.isTakeaway ? (
+          <p className="text-[11px] font-semibold">Para llevar</p>
+        ) : null}
+      </div>
+
+      <ul className="flex flex-col gap-1.5">
+        {ticket.items.map((ticketItem) => {
+          const item = ticketItem.orderItem
+          const modifiers = [
+            ...item.options.map(
+              (option) => option.kitchenLabel ?? option.optionName
+            ),
+            ...item.extras.map((extra) => `+ ${extra.extraName}`),
+            ...item.exclusions.map(
+              (exclusion) => `sin ${exclusion.ingredient.name}`
+            ),
+          ]
+
+          return (
+            <li key={ticketItem.id} className="text-[12px]">
+              <span className="font-bold tabular-nums">{item.quantity}×</span>{" "}
+              {item.itemName}
+              {item.variantName ? ` (${item.variantName})` : ""}
+              {item.guestName ? ` · ${item.guestName}` : ""}
+              {modifiers.length > 0 ? (
+                <span className="block text-[11px]">
+                  {modifiers.join(" · ")}
+                </span>
+              ) : null}
+              {item.notes ? (
+                <span className="block text-[11px] font-bold">
+                  NOTA: {item.notes}
+                </span>
+              ) : null}
+            </li>
+          )
+        })}
+      </ul>
+
+      <p className="mt-2 border-t border-dashed border-black pt-1 text-[10px]">
+        Impreso {formatDateTime(new Date().toISOString())}
+      </p>
     </div>
   )
 }
@@ -693,6 +787,7 @@ function TicketCard({
   onRequestRefire,
   onValidateExpo,
   onOpenHistory,
+  onPrint,
 }: {
   ticket: KitchenTicket
   now: number
@@ -711,6 +806,7 @@ function TicketCard({
   onRequestRefire: (ticket: KitchenTicket) => void
   onValidateExpo: (ticket: KitchenTicket) => void
   onOpenHistory: (ticket: KitchenTicket) => void
+  onPrint: (ticket: KitchenTicket) => void
 }) {
   const sentAt = ticket.orderRound.sentAt ?? ticket.orderRound.createdAt
   const ageMinutes = sentAt
@@ -883,6 +979,16 @@ function TicketCard({
             Rehacer
           </Button>
         ) : null}
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => onPrint(ticket)}
+        >
+          <PrinterIcon />
+          Imprimir
+        </Button>
 
         <Button
           type="button"
