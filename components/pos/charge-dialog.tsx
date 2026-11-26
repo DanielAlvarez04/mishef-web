@@ -59,7 +59,6 @@ import {
   replaceOrderSplits,
 } from "@/lib/split-actions"
 import {
-  closeOrder,
   confirmPayment,
   registerPayment,
   voidPayment,
@@ -157,7 +156,7 @@ export function ChargeDialog({
   displayTipPercent = null,
   initialSummary = null,
   onClose,
-  onClosed,
+  onDone,
   onFullyPaid,
 }: {
   order: Order
@@ -168,7 +167,11 @@ export function ChargeDialog({
   /** Resumen precargado por el POS para abrir el diálogo sin esperar. */
   initialSummary?: ChargeSummary | null
   onClose: () => void
-  onClosed: () => void
+  /**
+   * El usuario terminó el cobro y cierra el diálogo. La cuenta ya se cerró
+   * automáticamente al quedar pagada.
+   */
+  onDone: () => void
   /** Se llama una vez cuando el saldo confirmado llega a cero. */
   onFullyPaid?: () => void
 }) {
@@ -924,21 +927,6 @@ export function ChargeDialog({
       setPrinting(false)
     }
   }
-
-  const handleClose = () =>
-    submit(
-      "close",
-      async () => {
-        const result = await closeOrder(order.id)
-
-        if (result.ok) {
-          onClosed()
-        }
-
-        return result
-      },
-      "Cuenta cerrada"
-    )
 
   const selectedTerminal =
     mercadoPago.terminals.find((terminal) => terminal.id === terminalId) ??
@@ -2521,7 +2509,7 @@ export function ChargeDialog({
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
                 {canClose
-                  ? "La cuenta está cubierta y lista para cerrarse."
+                  ? "La cuenta quedó pagada y se cerró automáticamente. Puedes imprimir el ticket antes de salir."
                   : pendingTotal > 0 && available <= 0.004
                     ? `Falta confirmar ${money(pendingTotal)} para cerrar la cuenta.`
                     : `Falta cobrar ${money(available)}${
@@ -2540,11 +2528,6 @@ export function ChargeDialog({
               {pendingPayments.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
                   {pendingPayments.length} cobro(s) pendiente(s) de confirmación.
-                </p>
-              ) : null}
-              {!canConfirm ? (
-                <p className="text-xs text-muted-foreground">
-                  Solo caja o administración puede cerrar la cuenta.
                 </p>
               ) : null}
             </div>
@@ -2755,40 +2738,29 @@ export function ChargeDialog({
             ) : null}
 
             {step === "close" && canClose ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void handlePrintReceipt()}
-                disabled={pending !== null || printing}
-              >
-                {printing ? (
-                  <Loader2Icon className="animate-spin" />
-                ) : (
-                  <ReceiptTextIcon />
-                )}
-                Imprimir ticket
-              </Button>
-            ) : null}
-
-            {step === "close" && canConfirm ? (
-              canClose ? (
+              <>
                 <Button
                   type="button"
-                  onClick={handleClose}
-                  disabled={pending !== null}
+                  variant="outline"
+                  onClick={() => void handlePrintReceipt()}
+                  disabled={pending !== null || printing}
                 >
-                  {pending === "close" ? (
+                  {printing ? (
                     <Loader2Icon className="animate-spin" />
                   ) : (
-                    <LockIcon />
+                    <ReceiptTextIcon />
                   )}
-                  Cerrar cuenta
+                  Imprimir ticket
                 </Button>
-              ) : (
-                <Button type="button" onClick={() => setStep("payment")}>
-                  Cobrar saldo
+                <Button type="button" onClick={onDone}>
+                  <CheckIcon />
+                  Cerrar
                 </Button>
-              )
+              </>
+            ) : step === "close" && canConfirm ? (
+              <Button type="button" onClick={() => setStep("payment")}>
+                Cobrar saldo
+              </Button>
             ) : null}
           </div>
         </DialogFooter>

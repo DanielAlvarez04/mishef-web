@@ -3080,16 +3080,12 @@ export function PosView({
           result.message ??
             "El pago se confirmó, pero no se pudo enviar a cocina. Usa Cobrar pendiente."
         )
-        setCharging(false)
-        setChargeOrder(null)
         router.refresh()
         return
       }
     }
 
     toast.success("Pago confirmado · pedido enviado a cocina")
-    setCharging(false)
-    setChargeOrder(null)
     setPayFirstRoundId(null)
     router.refresh()
   }
@@ -4449,7 +4445,7 @@ export function PosView({
             // cerrarlo se trae la lista de cuentas con los saldos reales.
             router.refresh()
           }}
-          onClosed={() => {
+          onDone={() => {
             setCharging(false)
             setChargeOrder(null)
             setPayFirstRoundId(null)
