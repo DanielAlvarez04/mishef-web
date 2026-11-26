@@ -67,10 +67,31 @@ export interface KitchenStationSummary {
   sortOrder: number
 }
 
+export interface HeldRound {
+  id: string
+  createdAt: string
+  sentAt: string | null
+  course: { id: string; name: string } | null
+  order: {
+    id: string
+    tableNumber: string | null
+    channel: string
+    customerName: string | null
+  }
+  items: Array<{
+    id: string
+    itemName: string
+    variantName: string | null
+    quantity: number
+    notes: string | null
+  }>
+}
+
 export interface KitchenBoard {
   mode: "GENERAL" | "ADVANCED"
   stations: KitchenStationSummary[]
   tickets: KitchenTicket[]
+  heldRounds: HeldRound[]
 }
 
 export const KITCHEN_TICKET_STATUS_LABELS: Record<

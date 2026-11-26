@@ -178,6 +178,28 @@ export interface KitchenReport {
   }
   byStatus: { status: RoundStatus; count: number }[]
   byDay: { date: string; count: number }[]
+  byStation: Array<{
+    stationId: string
+    stationName: string
+    tickets: number
+    averageWaitMinutes: number | null
+    averagePrepMinutes: number | null
+    averagePickupMinutes: number | null
+    averageDeliveryMinutes: number | null
+    averageTotalMinutes: number | null
+    lateTickets: number
+    lateRate: number | null
+  }>
+  byCourse: Array<{
+    course: string
+    tickets: number
+    averageTotalMinutes: number | null
+  }>
+  byPosition: Array<{
+    position: string
+    tickets: number
+    averageTotalMinutes: number | null
+  }>
 }
 
 /**

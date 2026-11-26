@@ -48,11 +48,13 @@ import {
   createKitchenPosition,
   createKitchenRouting,
   createKitchenStation,
+  createKitchenCourse,
   deactivateKitchenPosition,
   deleteKitchenRouting,
   saveKitchenAssignment,
   saveKitchenMode,
   seedKitchenPositions,
+  updateKitchenCourse,
   updateKitchenStation,
 } from "@/lib/kitchen-config-actions"
 import {
@@ -61,6 +63,7 @@ import {
   KITCHEN_STATION_TYPE_LABELS,
   KITCHEN_STATION_TYPES,
   type KitchenConfig,
+  type KitchenCourse,
   type KitchenMember,
   type KitchenMode,
   type KitchenPosition,
@@ -197,6 +200,12 @@ export function KitchenConfigCard({
             items={items}
             categories={categories}
             menus={menus}
+            canManage={canManage}
+            pending={pending}
+            run={run}
+          />
+          <CoursesCard
+            courses={config.courses}
             canManage={canManage}
             pending={pending}
             run={run}
@@ -693,6 +702,98 @@ function MemberRow({
         </Button>
       </div>
     </div>
+  )
+}
+
+function CoursesCard({
+  courses,
+  canManage,
+  pending,
+  run,
+}: {
+  courses: KitchenCourse[]
+  canManage: boolean
+  pending: boolean
+  run: (
+    action: () => Promise<ActionResult<unknown>>,
+    success: string
+  ) => void
+}) {
+  const [name, setName] = React.useState("")
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Cursos</CardTitle>
+        <CardDescription>
+          Tiempos del servicio (entradas, fuertes, postres). Una ronda puede
+          retenerse y dispararse cuando el salón indique el curso.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <Input
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Ej. Entradas"
+            maxLength={60}
+          />
+          <Button
+            type="button"
+            disabled={!canManage || pending || name.trim().length < 2}
+            onClick={() =>
+              run(async () => {
+                const result = await createKitchenCourse({
+                  name: name.trim(),
+                })
+                if (result.ok) setName("")
+                return result
+              }, "Curso creado")
+            }
+          >
+            <PlusIcon />
+            Agregar
+          </Button>
+        </div>
+
+        {courses.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Sin cursos. Si no los usas, las rondas se envían directo a cocina.
+          </p>
+        ) : (
+          <ul className="divide-y rounded-lg border">
+            {courses.map((course) => (
+              <li
+                key={course.id}
+                className="flex items-center gap-3 px-3 py-2.5"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {course.name}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {course.isActive ? "Activo" : "Inactivo"}
+                </span>
+                <Switch
+                  checked={course.isActive}
+                  disabled={!canManage || pending}
+                  onCheckedChange={(checked) =>
+                    run(
+                      () =>
+                        updateKitchenCourse(course.id, {
+                          name: course.name,
+                          isActive: checked,
+                        }),
+                      checked ? "Curso activado" : "Curso desactivado"
+                    )
+                  }
+                  aria-label={`Activar ${course.name}`}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

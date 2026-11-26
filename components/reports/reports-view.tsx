@@ -477,6 +477,149 @@ export function ReportsView({
               estimado» tolera un 10 % de más.
             </p>
 
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tiempos por estación</CardTitle>
+                  <CardDescription>
+                    Solo tickets del modo Avanzado. El pase mide listo →
+                    recogido; la entrega, recogido → mesa.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Estación</TableHead>
+                        <TableHead className="text-right">Tickets</TableHead>
+                        <TableHead className="text-right">Atrasados</TableHead>
+                        <TableHead className="text-right">Espera</TableHead>
+                        <TableHead className="text-right">Prep.</TableHead>
+                        <TableHead className="text-right">Pase</TableHead>
+                        <TableHead className="text-right">Entrega</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kitchen.byStation.length === 0 ? (
+                        <EmptyRow colSpan={8} text="Sin tickets de estación." />
+                      ) : (
+                        kitchen.byStation.map((row) => (
+                          <TableRow key={row.stationId}>
+                            <TableCell className="font-medium">
+                              {row.stationName}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.tickets}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.lateTickets}
+                              {row.lateRate !== null
+                                ? ` · ${Math.round(row.lateRate * 100)} %`
+                                : ""}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averageWaitMinutes)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averagePrepMinutes)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averagePickupMinutes)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averageDeliveryMinutes)}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averageTotalMinutes)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Cursos</CardTitle>
+                  <CardDescription>
+                    Tickets y tiempo total por curso.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="px-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Curso</TableHead>
+                        <TableHead className="text-right">Tickets</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {kitchen.byCourse.length === 0 ? (
+                        <EmptyRow colSpan={3} text="Sin cursos." />
+                      ) : (
+                        kitchen.byCourse.map((row) => (
+                          <TableRow key={row.course}>
+                            <TableCell className="font-medium">
+                              {row.course}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.tickets}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {formatMinutes(row.averageTotalMinutes)}
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Carga por posición</CardTitle>
+                <CardDescription>
+                  Tickets asignados al iniciar la preparación.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="px-0">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Posición</TableHead>
+                      <TableHead className="text-right">Tickets</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {kitchen.byPosition.length === 0 ? (
+                      <EmptyRow colSpan={3} text="Sin tickets asignados." />
+                    ) : (
+                      kitchen.byPosition.map((row) => (
+                        <TableRow key={row.position}>
+                          <TableCell className="font-medium">
+                            {row.position}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.tickets}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatMinutes(row.averageTotalMinutes)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+
             <div className="grid gap-4 lg:grid-cols-2">
               <Card>
                 <CardHeader>

@@ -53,6 +53,13 @@ export interface KitchenMember {
   stationIds: string[]
 }
 
+export interface KitchenCourse {
+  id: string
+  name: string
+  sortOrder: number
+  isActive: boolean
+}
+
 export interface KitchenRoutingRule {
   id: string
   stationId: string
@@ -73,6 +80,7 @@ export interface KitchenConfig {
   positions: KitchenPosition[]
   members: KitchenMember[]
   routing: KitchenRoutingRule[]
+  courses: KitchenCourse[]
 }
 
 export const KITCHEN_MODE_LABELS: Record<KitchenMode, string> = {

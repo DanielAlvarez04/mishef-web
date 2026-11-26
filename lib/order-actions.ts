@@ -31,6 +31,10 @@ export interface RoundItemInput {
 export interface SendRoundInput {
   items: RoundItemInput[]
   idempotencyKey?: string
+  /** Mantener la ronda en espera (modo Avanzado). */
+  hold?: boolean
+  /** Curso de la ronda (modo Avanzado). */
+  courseId?: string
 }
 
 export interface CreateOrderGuestInput {
@@ -140,6 +144,15 @@ export async function transitionKitchenTicket(
     { status, reason },
     ["/kitchen"]
   )
+}
+
+/** Dispara una ronda retenida (modo Avanzado). */
+export async function fireKitchenRound(
+  roundId: string
+): Promise<ActionResult<unknown>> {
+  return mutateApi(`/kitchen/rounds/${roundId}/fire`, "POST", undefined, [
+    "/kitchen",
+  ])
 }
 
 /** Añade una persona (comensal) a la cuenta. */

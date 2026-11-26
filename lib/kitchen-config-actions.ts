@@ -113,3 +113,28 @@ export function deleteKitchenRouting(
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/routing/${id}`, "DELETE", undefined, PATHS)
 }
+
+export interface KitchenCourseInput {
+  name: string
+  sortOrder?: number
+  isActive?: boolean
+}
+
+export function createKitchenCourse(
+  input: KitchenCourseInput
+): Promise<ActionResult<unknown>> {
+  return mutateApi("/kitchen/courses", "POST", input, PATHS)
+}
+
+export function updateKitchenCourse(
+  id: string,
+  input: KitchenCourseInput
+): Promise<ActionResult<unknown>> {
+  return mutateApi(`/kitchen/courses/${id}`, "PATCH", input, PATHS)
+}
+
+export function deactivateKitchenCourse(
+  id: string
+): Promise<ActionResult<unknown>> {
+  return mutateApi(`/kitchen/courses/${id}`, "DELETE", undefined, PATHS)
+}

@@ -92,6 +92,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import {
   Sheet,
   SheetClose,
@@ -482,6 +483,8 @@ export function PosView({
   canManageCash,
   displays,
   taxRate,
+  kitchenAdvanced = false,
+  kitchenCourses = [],
 }: {
   products: ItemListItem[]
   orders: Order[]
@@ -502,6 +505,10 @@ export function PosView({
   displays: PosDisplayInfo[]
   /** IVA del negocio; se usa cuando el artículo no define una tasa propia. */
   taxRate: string
+  /** La sucursal usa cocina Avanzada (cursos, estaciones). */
+  kitchenAdvanced?: boolean
+  /** Cursos activos para retener la ronda. */
+  kitchenCourses?: Array<{ id: string; name: string }>
 }) {
   const router = useRouter()
   useWakeLock()
@@ -625,6 +632,8 @@ export function PosView({
     React.useState<PosDisplayState | null>(null)
   const displaySession = React.useRef<string | null>(null)
   const [sending, setSending] = React.useState(false)
+  const [holdRound, setHoldRound] = React.useState(false)
+  const [courseId, setCourseId] = React.useState("")
 
   /** Borradores por cuenta: no se pierden al revisar otra mesa. */
   const draftsRef = React.useRef(new Map<string, OrderDraft>())
@@ -1890,6 +1899,8 @@ export function PosView({
       const result = await sendRound(targetId, {
         items: itemsWithGuests,
         idempotencyKey: roundKey,
+        hold: holdRound || undefined,
+        courseId: holdRound && courseId ? courseId : undefined,
       })
 
       if (!result.ok) {
@@ -1902,7 +1913,13 @@ export function PosView({
         return
       }
 
-      toast.success(`Ronda enviada · ${money(total)}`)
+      toast.success(
+        holdRound
+          ? "Ronda retenida · dispara el curso desde cocina"
+          : `Ronda enviada · ${money(total)}`
+      )
+      setHoldRound(false)
+      setCourseId("")
 
       const warnings = result.data?.warnings ?? []
       if (warnings.length > 0) {
@@ -2794,6 +2811,49 @@ export function PosView({
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                       Cocina no recibirá la comanda hasta que vuelva la conexión.
                     </p>
+                  ) : null}
+                  {kitchenAdvanced ? (
+                    <div className="flex flex-col gap-2">
+                      {kitchenCourses.length > 0 ? (
+                        <Select
+                          value={courseId || "none"}
+                          onValueChange={(value) =>
+                            setCourseId(value === "none" ? "" : (value ?? ""))
+                          }
+                          items={[
+                            { value: "none", label: "Sin curso" },
+                            ...kitchenCourses.map((course) => ({
+                              value: course.id,
+                              label: course.name,
+                            })),
+                          ]}
+                          disabled={!offline.isOnline || sending}
+                        >
+                          <SelectTrigger
+                            className="h-8 w-full"
+                            aria-label="Curso de la ronda"
+                          >
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Sin curso</SelectItem>
+                            {kitchenCourses.map((course) => (
+                              <SelectItem key={course.id} value={course.id}>
+                                {course.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : null}
+                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Switch
+                          checked={holdRound}
+                          onCheckedChange={setHoldRound}
+                          disabled={!offline.isOnline || sending}
+                        />
+                        Mantener para después
+                      </label>
+                    </div>
                   ) : null}
                 </>
               ) : (

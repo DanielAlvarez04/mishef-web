@@ -6,6 +6,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   CircleCheckIcon,
+  CircleXIcon,
   FlameIcon,
   HandPlatterIcon,
   Maximize2Icon,
@@ -17,6 +18,18 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { API_BASE_URL } from "@/lib/api-base"
 import {
   KITCHEN_TICKET_STATUS_LABELS,
@@ -25,7 +38,7 @@ import {
   type KitchenTicket,
   type KitchenTicketStatus,
 } from "@/lib/kitchen-tickets"
-import { transitionKitchenTicket } from "@/lib/order-actions"
+import { transitionKitchenTicket, fireKitchenRound } from "@/lib/order-actions"
 import { useWakeLock } from "@/hooks/use-wake-lock"
 import { formatTime } from "@/lib/catalog"
 import { cn } from "cn"
@@ -79,6 +92,13 @@ export function AdvancedKitchenView({
     board.stations[0]?.id ?? ""
   )
   const [pendingId, setPendingId] = React.useState<string | null>(null)
+  const [pendingRoundId, setPendingRoundId] = React.useState<string | null>(
+    null
+  )
+  const [cancelTicket, setCancelTicket] = React.useState<KitchenTicket | null>(
+    null
+  )
+  const [cancelReason, setCancelReason] = React.useState("")
   const [fullscreen, setFullscreen] = React.useState(false)
 
   const canWork = roles.some((role) => ["ADMIN", "KITCHEN"].includes(role))
@@ -116,12 +136,13 @@ export function AdvancedKitchenView({
 
   async function transition(
     ticket: KitchenTicket,
-    status: KitchenTicketStatus
+    status: KitchenTicketStatus,
+    reason?: string
   ) {
     setPendingId(ticket.id)
 
     try {
-      const result = await transitionKitchenTicket(ticket.id, status)
+      const result = await transitionKitchenTicket(ticket.id, status, reason)
 
       if (!result.ok) {
         toast.error(result.message ?? "No se pudo cambiar el ticket")
@@ -148,6 +169,24 @@ export function AdvancedKitchenView({
       router.refresh()
     } finally {
       setPendingId(null)
+    }
+  }
+
+  async function fireRound(roundId: string) {
+    setPendingRoundId(roundId)
+
+    try {
+      const result = await fireKitchenRound(roundId)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo disparar la ronda")
+        return
+      }
+
+      toast.success("Curso disparado a las estaciones")
+      router.refresh()
+    } finally {
+      setPendingRoundId(null)
     }
   }
 
@@ -206,6 +245,63 @@ export function AdvancedKitchenView({
           {fullscreen ? <Minimize2Icon /> : <Maximize2Icon />}
         </Button>
       </div>
+
+      {board.heldRounds?.length ? (
+        <section className="rounded-xl border border-dashed bg-amber-500/5 p-3">
+          <header className="flex items-center justify-between gap-2">
+            <h2 className="flex items-center gap-2 text-sm font-medium">
+              <TimerIcon className="size-4" />
+              Cursos en espera
+            </h2>
+            <Badge variant="outline">{board.heldRounds.length}</Badge>
+          </header>
+          <ul className="mt-2 flex flex-col gap-2">
+            {board.heldRounds.map((round) => {
+              const label = round.order.tableNumber
+                ? `Mesa ${round.order.tableNumber}`
+                : round.order.channel === "COUNTER"
+                  ? "Mostrador"
+                  : round.order.channel === "PHONE"
+                    ? "Teléfono"
+                    : "Domicilio"
+              const itemCount = round.items.reduce(
+                (sum, item) => sum + item.quantity,
+                0
+              )
+
+              return (
+                <li
+                  key={round.id}
+                  className="flex flex-wrap items-center gap-2 rounded-lg border bg-card p-2.5"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium">{label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {round.course?.name ?? "Sin curso"} · {itemCount}{" "}
+                      artículo{itemCount === 1 ? "" : "s"} ·{" "}
+                      {elapsedMinutes(
+                        round.sentAt ?? round.createdAt,
+                        now
+                      )}
+                    </span>
+                  </span>
+                  {canWork || canPickup ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={pendingRoundId === round.id}
+                      onClick={() => void fireRound(round.id)}
+                    >
+                      <FlameIcon />
+                      Disparar
+                    </Button>
+                  ) : null}
+                </li>
+              )
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {board.stations.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
@@ -290,6 +386,7 @@ export function AdvancedKitchenView({
                           canPickup={canPickup}
                           pending={pendingId === ticket.id}
                           onTransition={transition}
+                          onRequestCancel={setCancelTicket}
                         />
                       ))}
                     </ul>
@@ -300,6 +397,55 @@ export function AdvancedKitchenView({
           </div>
         </>
       )}
+
+      <AlertDialog
+        open={Boolean(cancelTicket)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCancelTicket(null)
+            setCancelReason("")
+          }
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <CircleXIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>¿Anular ticket?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se cancelará el ticket de la estación y la ronda recalculará su
+              estado. Indica el motivo para la auditoría.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={cancelReason}
+            onChange={(event) => setCancelReason(event.target.value)}
+            placeholder="Motivo (ej. error de captura)"
+            maxLength={200}
+            aria-label="Motivo de anulación"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel>Conservar</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              disabled={cancelReason.trim().length < 2}
+              onClick={() => {
+                if (!cancelTicket) return
+                void transition(
+                  cancelTicket,
+                  "CANCELLED",
+                  cancelReason.trim()
+                )
+                setCancelTicket(null)
+                setCancelReason("")
+              }}
+            >
+              Anular ticket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -311,6 +457,7 @@ function TicketCard({
   canPickup,
   pending,
   onTransition,
+  onRequestCancel,
 }: {
   ticket: KitchenTicket
   now: number
@@ -319,13 +466,26 @@ function TicketCard({
   pending: boolean
   onTransition: (
     ticket: KitchenTicket,
-    status: KitchenTicketStatus
+    status: KitchenTicketStatus,
+    reason?: string
   ) => Promise<void>
+  onRequestCancel: (ticket: KitchenTicket) => void
 }) {
   const sentAt = ticket.orderRound.sentAt ?? ticket.orderRound.createdAt
+  const ageMinutes = sentAt
+    ? Math.max(0, Math.floor((now - new Date(sentAt).getTime()) / 60_000))
+    : 0
+  const late =
+    ageMinutes > 15 &&
+    ["PENDING", "PREPARING", "READY"].includes(ticket.status)
 
   return (
-    <li className="rounded-lg border bg-card p-3 shadow-xs">
+    <li
+      className={cn(
+        "rounded-lg border bg-card p-3 shadow-xs",
+        late && "border-destructive/50"
+      )}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">
@@ -334,6 +494,11 @@ function TicketCard({
           <p className="text-[11px] text-muted-foreground">
             Ronda {ticket.orderRound.id.slice(-4)} ·{" "}
             {formatTime(sentAt)} · {elapsedMinutes(sentAt, now)}
+            {late ? (
+              <span className="ml-1 font-medium text-destructive">
+                · Atrasado
+              </span>
+            ) : null}
           </p>
         </div>
         <Badge
@@ -437,6 +602,20 @@ function TicketCard({
           <span className="text-xs text-muted-foreground">
             Esperando al mesero en el pase.
           </span>
+        ) : null}
+
+        {canWork &&
+        ["PENDING", "PREPARING", "READY"].includes(ticket.status) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="ml-auto text-destructive hover:text-destructive"
+            disabled={pending}
+            onClick={() => onRequestCancel(ticket)}
+          >
+            Anular
+          </Button>
         ) : null}
       </div>
     </li>
