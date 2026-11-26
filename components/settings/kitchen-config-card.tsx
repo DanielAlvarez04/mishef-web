@@ -476,7 +476,7 @@ function PositionsCard({
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Ej. Saucier"
+              placeholder="Ej. Jefe de partida"
               maxLength={60}
             />
             <Select
@@ -537,7 +537,6 @@ function PositionsCard({
                     {position.name}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    {position.code} ·{" "}
                     {KITCHEN_POSITION_LEVEL_LABELS[position.level]}
                   </span>
                 </span>

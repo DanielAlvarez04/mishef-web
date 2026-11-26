@@ -82,7 +82,7 @@ export const KITCHEN_POSITION_LEVEL_LABELS: Record<
   string
 > = {
   MANAGEMENT: "Dirección",
-  CHEF_DE_PARTIE: "Chef de partie",
+  CHEF_DE_PARTIE: "Jefe de partida",
   COOK: "Cocina",
   ASSISTANT: "Asistente",
   EXPO: "Pase",
