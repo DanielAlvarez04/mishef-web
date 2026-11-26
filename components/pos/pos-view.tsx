@@ -3158,7 +3158,25 @@ export function PosView({
                       <div className="flex gap-2">
                         <Button
                           type="button"
-                          className="min-w-0 flex-1 justify-between gap-3"
+                          variant="outline"
+                          disabled={
+                            sending ||
+                            savingDraft ||
+                            !offline.isOnline ||
+                            cart.length === 0
+                          }
+                          onClick={() => void handleSaveDraft()}
+                        >
+                          {savingDraft ? (
+                            <Loader2Icon className="animate-spin" />
+                          ) : (
+                            <SaveIcon />
+                          )}
+                          Guardar
+                        </Button>
+                        <Button
+                          type="button"
+                          className="min-w-0 flex-1 justify-center gap-3"
                           onClick={handlePayAndSend}
                           disabled={
                             sending ||
@@ -3187,24 +3205,6 @@ export function PosView({
                             {money(payFirstAmount)}
                           </span>
                         </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={
-                            sending ||
-                            savingDraft ||
-                            !offline.isOnline ||
-                            cart.length === 0
-                          }
-                          onClick={() => void handleSaveDraft()}
-                        >
-                          {savingDraft ? (
-                            <Loader2Icon className="animate-spin" />
-                          ) : (
-                            <SaveIcon />
-                          )}
-                          Guardar
-                        </Button>
                       </div>
                       {!cash.session ? (
                         <p className="text-xs text-amber-700 dark:text-amber-300">
@@ -3220,20 +3220,6 @@ export function PosView({
                   ) : (
                     <>
                       <div className="flex gap-2">
-                        <Button
-                          className="min-w-0 flex-1"
-                          onClick={() => void handleSend(false)}
-                          disabled={sending || cart.length === 0}
-                        >
-                          {sending ? (
-                            <Loader2Icon className="animate-spin" />
-                          ) : null}
-                          {offline.isOnline
-                            ? orderId
-                              ? "Enviar ronda"
-                              : "Abrir cuenta y enviar"
-                            : "Guardar comanda sin conexión"}
-                        </Button>
                         {offline.isOnline ? (
                           <Button
                             type="button"
@@ -3251,6 +3237,20 @@ export function PosView({
                             Guardar
                           </Button>
                         ) : null}
+                        <Button
+                          className="min-w-0 flex-1"
+                          onClick={() => void handleSend(false)}
+                          disabled={sending || cart.length === 0}
+                        >
+                          {sending ? (
+                            <Loader2Icon className="animate-spin" />
+                          ) : null}
+                          {offline.isOnline
+                            ? orderId
+                              ? "Enviar ronda"
+                              : "Abrir cuenta y enviar"
+                            : "Guardar comanda sin conexión"}
+                        </Button>
                       </div>
                       {!offline.isOnline ? (
                         <p className="text-xs text-amber-700 dark:text-amber-300">
