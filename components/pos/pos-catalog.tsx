@@ -425,7 +425,7 @@ export const PosCatalog = React.memo(function PosCatalog({
 
   return (
     <>
-      <div className="filtros-acciones-mobile sticky top-0 z-30 -mx-4 flex min-w-0 flex-col gap-1.5 bg-neutral-50 px-4 py-2 lg:-mx-6 lg:px-6 dark:bg-neutral-950 xl:static xl:z-auto xl:mx-0 xl:gap-3 xl:bg-transparent xl:px-0 xl:py-0">
+      <div className="filtros-acciones-mobile sticky top-0 z-30 -mx-4 flex min-w-0 flex-col gap-2 bg-neutral-50 px-4 py-2 lg:-mx-6 lg:px-6 dark:bg-neutral-950 xl:static xl:z-auto xl:mx-0 xl:gap-3 xl:bg-transparent xl:px-0 xl:py-0">
         {toolbar}
         {hasChips ? (
           <div className="grupos-chips no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
