@@ -22,7 +22,7 @@ export default function manifest(): MetadataRoute.Manifest {
     display_override: ["fullscreen", "standalone"],
     orientation: "any",
     background_color: "#ffffff",
-    theme_color: "#e2703a",
+    theme_color: "#2563eb",
     categories: ["business", "food", "productivity"],
     icons: [
       {
