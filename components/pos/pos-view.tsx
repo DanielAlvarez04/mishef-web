@@ -3160,8 +3160,7 @@ export function PosView({
               </div>
 
               {isDineIn ? (
-                <>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
                     <div className="flex flex-col gap-1">
                       <Label
                         htmlFor="mobile-pos-table"
@@ -3250,59 +3249,6 @@ export function PosView({
                       </ButtonGroup>
                     </div>
                   </div>
-
-                  <div className="no-scrollbar -mx-4 -my-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-1 lg:-mx-6 lg:px-6">
-                    {guests.map((guest, index) => (
-                      <div
-                        key={guest.key}
-                        className="flex shrink-0 items-center"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            jalapenoChipClass(activeGuestKey === guest.key),
-                            "max-w-40 rounded-r-none"
-                          )}
-                          aria-pressed={activeGuestKey === guest.key}
-                          onClick={() => selectGuest(guest.key)}
-                        >
-                          {guestUnits.get(guest.key) ? (
-                            <span
-                              aria-hidden
-                              className="size-2 shrink-0 rounded-full bg-primary"
-                            />
-                          ) : null}
-                          <span className="truncate">
-                            {guestDisplayName(guest, index)}
-                          </span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
-                          aria-label={`Quitar ${guestDisplayName(guest, index)}`}
-                          disabled={partySize <= 1 || guestBusy}
-                          onClick={() => requestRemoveGuest(guest)}
-                        >
-                          <XIcon className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0"
-                      aria-label="Editar nombres"
-                      onClick={() => setComandaOpen(true)}
-                    >
-                      <PencilLineIcon />
-                    </Button>
-                  </div>
-                </>
               ) : displayChannel === "COUNTER" ? (
                 activeOrder ? (
                   <p className="text-xs text-muted-foreground">
@@ -3332,19 +3278,17 @@ export function PosView({
                 )
               ) : null}
 
-              {!isDineIn ? (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setComandaOpen(true)}
-                  >
-                    <PencilLineIcon />
-                    Ver comanda
-                  </Button>
-                </div>
-              ) : null}
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setComandaOpen(true)}
+                >
+                  <PencilLineIcon />
+                  Ver comanda
+                </Button>
+              </div>
                 </div>
               </Card>
           ) : null}
