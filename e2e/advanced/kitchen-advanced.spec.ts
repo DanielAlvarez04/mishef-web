@@ -19,65 +19,111 @@ const STATION_NAME = "A E2E Parrilla"
 const PRODUCT_NAME = "E2E Hamburguesa"
 const PRODUCT_SKU = "E2E-KITCHEN"
 const API_URL = process.env.E2E_API_URL ?? "http://localhost:3001/v1"
+const BASE_URL = process.env.E2E_BASE_URL ?? "http://localhost:3000"
+
+async function ensureCashSession(page: Page) {
+  const current = await page.request.get(`${API_URL}/cash/sessions/current`, {
+    headers: { Origin: BASE_URL },
+  })
+
+  if (current.ok()) {
+    const data = (await current.json()) as { session?: { id: string } | null }
+    if (data.session) return
+  }
+
+  const opened = await page.request.post(`${API_URL}/cash/sessions`, {
+    headers: { Origin: BASE_URL },
+    data: { openingFloat: 0 },
+  })
+
+  if (!opened.ok() && opened.status() !== 409) {
+    throw new Error(
+      `No se pudo abrir la caja para el E2E (${opened.status()}): ${await opened.text()}`
+    )
+  }
+}
 
 let restoreMode: "GENERAL" | "ADVANCED" | null = null
 
-async function chooseOption(page: Page, triggerSelector: string, label: string) {
-  await page.locator(triggerSelector).click()
-  await page
-    .locator('[data-slot="select-item"]')
-    .filter({ hasText: label })
-    .first()
-    .click()
-}
-
 async function ensureBranch(page: Page) {
-  await page.getByRole("tab", { name: "Negocio", exact: true }).click()
-  await expect(page.getByText("Sucursales", { exact: true })).toBeVisible()
+  const response = await page.request.get(`${API_URL}/branches`, {
+    headers: { Origin: BASE_URL },
+  })
+  const branches = response.ok()
+    ? ((await response.json()) as Array<{ id: string; isActive: boolean }>)
+    : []
 
-  const empty = page.getByText("Aún no hay sucursales.")
-  if (!(await empty.isVisible().catch(() => false))) return
+  if (branches.some((branch) => branch.isActive)) return
 
-  const name = "E2E Sucursal"
-  await page.locator("#branch-name").fill(name)
-  await page.getByRole("button", { name: "Crear sucursal", exact: true }).click()
-  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  const created = await page.request.post(`${API_URL}/branches`, {
+    headers: { Origin: BASE_URL },
+    data: { name: "E2E Sucursal" },
+  })
+
+  if (!created.ok() && created.status() !== 409) {
+    throw new Error(
+      `No se pudo crear la sucursal E2E (${created.status()}): ${await created.text()}`
+    )
+  }
 }
 
-async function openKitchenSettings(page: Page, createBranch = false) {
-  await openRoute(page, "/settings")
-  if (createBranch) await ensureBranch(page)
-  await page.getByRole("tab", { name: "Cocina", exact: true }).click()
-  await expect(page.locator("#kitchen-mode")).toBeVisible()
+async function readKitchenMode(page: Page) {
+  const response = await page.request.get(`${API_URL}/kitchen/mode`, {
+    headers: { Origin: BASE_URL },
+  })
+
+  if (!response.ok()) {
+    throw new Error(`No se pudo leer el modo de cocina (${response.status()})`)
+  }
+
+  return ((await response.json()) as { mode: "GENERAL" | "ADVANCED" }).mode
 }
 
-async function setKitchenMode(page: Page, mode: "General" | "Avanzado") {
-  const trigger = page.locator("#kitchen-mode")
+async function writeKitchenMode(page: Page, mode: "GENERAL" | "ADVANCED") {
+  const response = await page.request.patch(`${API_URL}/kitchen/mode`, {
+    headers: { Origin: BASE_URL },
+    data: { mode },
+  })
 
-  if (((await trigger.textContent()) ?? "").includes(mode)) return
-
-  await chooseOption(page, "#kitchen-mode", mode)
-  await expect(trigger).toContainText(mode)
+  if (!response.ok()) {
+    throw new Error(
+      `No se pudo cambiar el modo de cocina (${response.status()}): ${await response.text()}`
+    )
+  }
 }
 
 async function ensureStation(page: Page) {
-  const existing = page.getByText(STATION_NAME, { exact: true })
+  const configResponse = await page.request.get(`${API_URL}/kitchen/config`, {
+    headers: { Origin: BASE_URL },
+  })
 
-  if ((await existing.count()) > 0) return
+  if (!configResponse.ok()) {
+    throw new Error(
+      `No se pudo leer la configuración de cocina (${configResponse.status()})`
+    )
+  }
 
-  const input = page.getByPlaceholder("Ej. Parrilla")
-  await input.fill(STATION_NAME)
-  await input
-    .locator("..")
-    .getByRole("button", { name: "Agregar", exact: true })
-    .click()
+  const config = (await configResponse.json()) as {
+    stations: Array<{ name: string }>
+  }
 
-  await expect(page.getByText(STATION_NAME, { exact: true }).first()).toBeVisible()
+  if (config.stations.some((station) => station.name === STATION_NAME)) return
+
+  const created = await page.request.post(`${API_URL}/kitchen/stations`, {
+    headers: { Origin: BASE_URL },
+    data: { name: STATION_NAME, slaMinutes: null },
+  })
+
+  if (!created.ok()) {
+    throw new Error(
+      `No se pudo crear la estación E2E (${created.status()}): ${await created.text()}`
+    )
+  }
 }
 
 async function ensureProduct(page: Page) {
   const response = await page.request.post(`${API_URL}/catalog/items`, {
-    headers: { Origin: new URL(page.url()).origin },
+    headers: { Origin: BASE_URL },
     data: {
       name: PRODUCT_NAME,
       sku: PRODUCT_SKU,
@@ -98,14 +144,8 @@ test.describe("cocina avanzada", () => {
   test.afterEach(async ({ page }) => {
     if (restoreMode !== "GENERAL") return
 
-    await openKitchenSettings(page)
-    const trigger = page.locator("#kitchen-mode")
-
-    if (!(await trigger.isVisible().catch(() => false))) return
-
-    if (((await trigger.textContent()) ?? "").includes("Avanzado")) {
-      await setKitchenMode(page, "General")
-    }
+    await writeKitchenMode(page, "GENERAL")
+    restoreMode = null
   })
 
   test("configura, opera y rehace una comanda por estación", async ({
@@ -127,22 +167,16 @@ test.describe("cocina avanzada", () => {
 
     const customerName = `E2E ${Date.now()}`
 
-    // 1. Configuración de la sucursal.
-    await openKitchenSettings(page, true)
-
-    const initialMode = ((await page.locator("#kitchen-mode").textContent()) ??
-      "").includes("Avanzado")
-      ? "ADVANCED"
-      : "GENERAL"
-
-    restoreMode = initialMode
-
-    await setKitchenMode(page, "Avanzado")
-    await expect(page.getByPlaceholder("Ej. Parrilla")).toBeVisible()
+    // 1. Configuración de la sucursal (API, para no mezclar la navegación de
+    // Server Actions de /settings con el flujo del POS).
+    await ensureBranch(page)
+    restoreMode = await readKitchenMode(page)
+    await writeKitchenMode(page, "ADVANCED")
     await ensureStation(page)
     await ensureProduct(page)
 
     // 2. Comanda desde el POS (mostrador para identificar por cliente).
+    await ensureCashSession(page)
     await openRoute(page, "/pos")
     await page.getByRole("button", { name: "Mostrador", exact: true }).click()
     await page.locator("#pos-customer").fill(customerName)
@@ -172,10 +206,21 @@ test.describe("cocina avanzada", () => {
     ).toBeHidden()
 
     await page
-      .getByRole("button", { name: "Abrir cuenta y enviar", exact: true })
+      .getByRole("button", { name: /Cobrar y enviar/ })
       .click()
 
-    await expect(page.getByText(/^Ronda enviada/)).toBeVisible()
+    const chargeDialog = page.getByRole("dialog")
+    await expect(chargeDialog).toBeVisible()
+    await chargeDialog
+      .getByRole("button", { name: "Continuar", exact: true })
+      .click()
+    await chargeDialog
+      .getByRole("button", { name: "Cobrar y confirmar", exact: true })
+      .click()
+
+    await expect(
+      page.getByText("Pago confirmado · pedido enviado a cocina")
+    ).toBeVisible()
 
     // 3. Tablero avanzado: el ticket cae en la estación creada.
     await openRoute(page, "/kitchen")
@@ -222,6 +267,20 @@ test.describe("cocina avanzada", () => {
 
     await ticket.getByRole("button", { name: "Recoger" }).click()
     await ticket.getByRole("button", { name: "Entregar" }).click()
+
+    // La cuenta de mostrador se cierra automáticamente al entregar.
+    await expect
+      .poll(async () => {
+        const response = await page.request.get(
+          `${API_URL}/orders?status=OPEN`,
+          { headers: { Origin: BASE_URL } }
+        )
+        const orders = response.ok()
+          ? ((await response.json()) as Array<{ customerName?: string | null }>)
+          : []
+        return orders.some((order) => order.customerName === customerName)
+      })
+      .toBe(false)
 
     // 6. El ticket entregado pasa a Recientes; el historial queda completo.
     await page.getByRole("button", { name: /^Recientes/ }).click()
