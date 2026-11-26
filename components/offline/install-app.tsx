@@ -4,30 +4,13 @@ import * as React from "react"
 import { DownloadIcon, SmartphoneIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-
-interface InstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>
-}
-
-/** Valores del navegador que no cambian durante la vida de la página. */
-function subscribeToNothing() {
-  return () => {}
-}
-
-function readStandalone(): boolean {
-  return (
-    window.matchMedia("(display-mode: standalone)").matches ||
-    // Safari iOS
-    (window.navigator as Navigator & { standalone?: boolean }).standalone === true
-  )
-}
-
-function readIos(): boolean {
-  return /iPad|iPhone|iPod/.test(window.navigator.userAgent)
-}
-
-const readFalse = () => false
+import {
+  readFalse,
+  readIos,
+  readStandalone,
+  subscribeToNothing,
+  type BeforeInstallPromptEvent,
+} from "@/lib/pwa"
 
 /**
  * Instalación de la PWA (plan.md §7).
@@ -44,13 +27,14 @@ export function InstallApp() {
   const isIos = React.useSyncExternalStore(subscribeToNothing, readIos, readFalse)
 
   const [promptEvent, setPromptEvent] =
-    React.useState<InstallPromptEvent | null>(null)
+    React.useState<BeforeInstallPromptEvent | null>(null)
   const [installed, setInstalled] = React.useState(false)
 
   React.useEffect(() => {
     const handlePrompt = (event: Event) => {
       event.preventDefault()
-      setPromptEvent(event as InstallPromptEvent)
+      window.__pwaInstallPrompt = event as BeforeInstallPromptEvent
+      setPromptEvent(event as BeforeInstallPromptEvent)
     }
     const handleInstalled = () => {
       setInstalled(true)
@@ -60,9 +44,16 @@ export function InstallApp() {
     window.addEventListener("beforeinstallprompt", handlePrompt)
     window.addEventListener("appinstalled", handleInstalled)
 
+    // El prompt pudo emitirse antes de montar esta pantalla.
+    const stored = window.__pwaInstallPrompt
+    const timer = stored
+      ? window.setTimeout(() => setPromptEvent(stored), 0)
+      : null
+
     return () => {
       window.removeEventListener("beforeinstallprompt", handlePrompt)
       window.removeEventListener("appinstalled", handleInstalled)
+      if (timer) window.clearTimeout(timer)
     }
   }, [])
 
@@ -75,6 +66,7 @@ export function InstallApp() {
       setInstalled(true)
     }
     setPromptEvent(null)
+    window.__pwaInstallPrompt = undefined
   }
 
   if (isStandalone || installed) {

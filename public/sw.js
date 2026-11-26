@@ -10,7 +10,7 @@
  *   estática; las copias del POS y la cocina se eliminan al iniciar o cerrar
  *   sesión.
  */
-const CACHE = "np-static-v1";
+const CACHE = "np-static-v2";
 const POS_CACHE = "np-pos-v1";
 const KITCHEN_CACHE = "np-kitchen-v1";
 const POS_PATH = "/pos";
@@ -22,10 +22,10 @@ const SHELLS = {
 const OFFLINE_URL = "/offline.html";
 const PRECACHE = [
   OFFLINE_URL,
-  "/icons/icon-180.png",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png",
-  "/icons/icon-maskable-512.png",
+  "/icons/icon-180-v2.png",
+  "/icons/icon-192-v2.png",
+  "/icons/icon-512-v2.png",
+  "/icons/icon-maskable-512-v2.png",
 ];
 
 self.addEventListener("install", (event) => {

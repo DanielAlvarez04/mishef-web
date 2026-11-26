@@ -8,6 +8,7 @@ import { FeaturesProvider } from "@/components/features-provider"
 import { ImpersonationBanner } from "@/components/impersonation-banner"
 import { MobileTabBar } from "@/components/mobile-tab-bar"
 import { OfflineProvider } from "@/components/offline/offline-provider"
+import { InstallAppDialog } from "@/components/offline/install-app-dialog"
 import { PracticeModeWatcher } from "@/components/practice-mode-watcher"
 import { SiteHeader } from "@/components/site-header"
 import { Button } from "@/components/ui/button"
@@ -218,6 +219,7 @@ export default async function AppLayout({
             roles={user.roles}
             features={features}
           />
+          <InstallAppDialog />
         </SidebarProvider>
         </FeaturesProvider>
       </OfflineProvider>

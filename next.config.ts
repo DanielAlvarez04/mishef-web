@@ -63,6 +63,17 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // El manifest también se revalida para que Chrome detecte antes los
+        // cambios de identidad (icono, nombre y modo de pantalla).
+        source: "/manifest.webmanifest",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-cache, max-age=0, must-revalidate",
+          },
+        ],
+      },
     ];
   },
 };
