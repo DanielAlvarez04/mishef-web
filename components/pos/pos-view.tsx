@@ -3123,7 +3123,236 @@ export function PosView({
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          {!showComandaColumn ? (
+            <>
+              <Card className="flex flex-col gap-3 border p-4 ring-0">
+                <div className="comanda-rapida-mobile flex flex-col gap-2 rounded-lg">
+              <div className="flex flex-wrap gap-1.5">
+                {CHANNELS.map((value) => {
+                  const disabled =
+                    value === "PHONE" ||
+                    value === "DELIVERY" ||
+                    Boolean(activeOrder)
+                  const active = displayChannel === value
+
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={jalapenoChipClass(active)}
+                      aria-pressed={active}
+                      disabled={disabled}
+                      title={
+                        value === "PHONE" || value === "DELIVERY"
+                          ? "Disponible próximamente"
+                          : undefined
+                      }
+                      onClick={() => {
+                        posCapture.noteComandaInteraction()
+                        selectChannel(value)
+                      }}
+                    >
+                      {ORDER_CHANNEL_LABELS[value]}
+                    </Button>
+                  )
+                })}
+              </div>
+
+              {isDineIn ? (
+                <>
+                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label
+                        htmlFor="mobile-pos-table"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Mesa
+                      </Label>
+                      <Select
+                        value={activeOrder?.tableNumber ?? tableNumber}
+                        onValueChange={(value) => {
+                          posCapture.noteComandaInteraction()
+                          setTableNumber(value ?? "1")
+                        }}
+                        disabled={Boolean(activeOrder)}
+                        items={TABLE_OPTIONS.map((value) => ({
+                          value,
+                          label: `Mesa ${value}`,
+                        }))}
+                      >
+                        <SelectTrigger
+                          id="mobile-pos-table"
+                          className="h-8 w-full"
+                          aria-label="Mesa"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TABLE_OPTIONS.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              Mesa {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Clientes
+                      </Label>
+                      <ButtonGroup
+                        aria-label="Número de clientes"
+                        className="w-full"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Quitar un cliente"
+                          disabled={partySize <= 1 || guestBusy}
+                          onClick={() => void changePartySize(partySize - 1)}
+                        >
+                          <MinusIcon />
+                        </Button>
+                        <Input
+                          aria-label="Número de clientes"
+                          inputMode="numeric"
+                          className="h-8 w-10 min-w-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                          value={partySizeDraft}
+                          onChange={(event) => {
+                            posCapture.noteComandaActivity()
+                            setPartySizeDraft(
+                              event.target.value.replace(/\D/g, "").slice(0, 2)
+                            )
+                          }}
+                          onBlur={() =>
+                            void changePartySize(Number(partySizeDraft) || 1)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Añadir un cliente"
+                          disabled={partySize >= 20 || guestBusy}
+                          onClick={() => void changePartySize(partySize + 1)}
+                        >
+                          <PlusIcon />
+                        </Button>
+                      </ButtonGroup>
+                    </div>
+                  </div>
+
+                  <div className="no-scrollbar -mx-4 -my-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-1 lg:-mx-6 lg:px-6">
+                    {guests.map((guest, index) => (
+                      <div
+                        key={guest.key}
+                        className="flex shrink-0 items-center"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            jalapenoChipClass(activeGuestKey === guest.key),
+                            "max-w-40 rounded-r-none"
+                          )}
+                          aria-pressed={activeGuestKey === guest.key}
+                          onClick={() => selectGuest(guest.key)}
+                        >
+                          {guestUnits.get(guest.key) ? (
+                            <span
+                              aria-hidden
+                              className="size-2 shrink-0 rounded-full bg-primary"
+                            />
+                          ) : null}
+                          <span className="truncate">
+                            {guestDisplayName(guest, index)}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
+                          aria-label={`Quitar ${guestDisplayName(guest, index)}`}
+                          disabled={partySize <= 1 || guestBusy}
+                          onClick={() => requestRemoveGuest(guest)}
+                        >
+                          <XIcon className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label="Editar nombres"
+                      onClick={() => setComandaOpen(true)}
+                    >
+                      <PencilLineIcon />
+                    </Button>
+                  </div>
+                </>
+              ) : displayChannel === "COUNTER" ? (
+                activeOrder ? (
+                  <p className="text-xs text-muted-foreground">
+                    Cliente:{" "}
+                    {activeOrder.customerName?.trim() || "Sin nombre"}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="mobile-pos-customer"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Cliente (opcional)
+                    </Label>
+                    <Input
+                      id="mobile-pos-customer"
+                      value={customerName}
+                      onChange={(event) => {
+                        posCapture.noteComandaActivity()
+                        setCustomerName(event.target.value)
+                      }}
+                      maxLength={120}
+                      placeholder="Nombre"
+                      className="h-8"
+                    />
+                  </div>
+                )
+              ) : null}
+
+              {!isDineIn ? (
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setComandaOpen(true)}
+                  >
+                    <PencilLineIcon />
+                    Ver comanda
+                  </Button>
+                </div>
+              ) : null}
+                </div>
+              </Card>
+              <Separator />
+            </>
+          ) : null}
+
+          <div className="filtros-mobile flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="flex min-w-0 items-center gap-2 sm:flex-1">
               <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -3356,233 +3585,6 @@ export function PosView({
               ) : null}
             </div>
           </div>
-
-          {!showComandaColumn ? (
-            <>
-              <Separator />
-              <div className="flex flex-col gap-2 rounded-lg">
-              <div className="flex flex-wrap gap-1.5">
-                {CHANNELS.map((value) => {
-                  const disabled =
-                    value === "PHONE" ||
-                    value === "DELIVERY" ||
-                    Boolean(activeOrder)
-                  const active = displayChannel === value
-
-                  return (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={jalapenoChipClass(active)}
-                      aria-pressed={active}
-                      disabled={disabled}
-                      title={
-                        value === "PHONE" || value === "DELIVERY"
-                          ? "Disponible próximamente"
-                          : undefined
-                      }
-                      onClick={() => {
-                        posCapture.noteComandaInteraction()
-                        selectChannel(value)
-                      }}
-                    >
-                      {ORDER_CHANNEL_LABELS[value]}
-                    </Button>
-                  )
-                })}
-              </div>
-
-              {isDineIn ? (
-                <>
-                  <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-                    <div className="flex flex-col gap-1">
-                      <Label
-                        htmlFor="mobile-pos-table"
-                        className="text-xs text-muted-foreground"
-                      >
-                        Mesa
-                      </Label>
-                      <Select
-                        value={activeOrder?.tableNumber ?? tableNumber}
-                        onValueChange={(value) => {
-                          posCapture.noteComandaInteraction()
-                          setTableNumber(value ?? "1")
-                        }}
-                        disabled={Boolean(activeOrder)}
-                        items={TABLE_OPTIONS.map((value) => ({
-                          value,
-                          label: `Mesa ${value}`,
-                        }))}
-                      >
-                        <SelectTrigger
-                          id="mobile-pos-table"
-                          className="h-8 w-full"
-                          aria-label="Mesa"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TABLE_OPTIONS.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              Mesa {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Clientes
-                      </Label>
-                      <ButtonGroup
-                        aria-label="Número de clientes"
-                        className="w-full"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Quitar un cliente"
-                          disabled={partySize <= 1 || guestBusy}
-                          onClick={() => void changePartySize(partySize - 1)}
-                        >
-                          <MinusIcon />
-                        </Button>
-                        <Input
-                          aria-label="Número de clientes"
-                          inputMode="numeric"
-                          className="h-8 w-10 min-w-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                          value={partySizeDraft}
-                          onChange={(event) => {
-                            posCapture.noteComandaActivity()
-                            setPartySizeDraft(
-                              event.target.value.replace(/\D/g, "").slice(0, 2)
-                            )
-                          }}
-                          onBlur={() =>
-                            void changePartySize(Number(partySizeDraft) || 1)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault()
-                              event.currentTarget.blur()
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Añadir un cliente"
-                          disabled={partySize >= 20 || guestBusy}
-                          onClick={() => void changePartySize(partySize + 1)}
-                        >
-                          <PlusIcon />
-                        </Button>
-                      </ButtonGroup>
-                    </div>
-                  </div>
-
-                  <div className="no-scrollbar -mx-4 -my-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-1 lg:-mx-6 lg:px-6">
-                    {guests.map((guest, index) => (
-                      <div
-                        key={guest.key}
-                        className="flex shrink-0 items-center"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className={cn(
-                            jalapenoChipClass(activeGuestKey === guest.key),
-                            "max-w-40 rounded-r-none"
-                          )}
-                          aria-pressed={activeGuestKey === guest.key}
-                          onClick={() => selectGuest(guest.key)}
-                        >
-                          {guestUnits.get(guest.key) ? (
-                            <span
-                              aria-hidden
-                              className="size-2 shrink-0 rounded-full bg-primary"
-                            />
-                          ) : null}
-                          <span className="truncate">
-                            {guestDisplayName(guest, index)}
-                          </span>
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          className="h-7 rounded-l-none rounded-r-full border border-destructive/40 px-2"
-                          aria-label={`Quitar ${guestDisplayName(guest, index)}`}
-                          disabled={partySize <= 1 || guestBusy}
-                          onClick={() => requestRemoveGuest(guest)}
-                        >
-                          <XIcon className="size-3.5" />
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="shrink-0"
-                      aria-label="Editar nombres"
-                      onClick={() => setComandaOpen(true)}
-                    >
-                      <PencilLineIcon />
-                    </Button>
-                  </div>
-                </>
-              ) : displayChannel === "COUNTER" ? (
-                activeOrder ? (
-                  <p className="text-xs text-muted-foreground">
-                    Cliente:{" "}
-                    {activeOrder.customerName?.trim() || "Sin nombre"}
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <Label
-                      htmlFor="mobile-pos-customer"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Cliente (opcional)
-                    </Label>
-                    <Input
-                      id="mobile-pos-customer"
-                      value={customerName}
-                      onChange={(event) => {
-                        posCapture.noteComandaActivity()
-                        setCustomerName(event.target.value)
-                      }}
-                      maxLength={120}
-                      placeholder="Nombre"
-                      className="h-8"
-                    />
-                  </div>
-                )
-              ) : null}
-
-              {!isDineIn ? (
-                <div className="flex justify-end">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setComandaOpen(true)}
-                  >
-                    <PencilLineIcon />
-                    Ver comanda
-                  </Button>
-                </div>
-              ) : null}
-              </div>
-            </>
-          ) : null}
 
           <PosCatalog
             key={menuId}

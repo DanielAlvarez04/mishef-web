@@ -426,7 +426,7 @@ export const PosCatalog = React.memo(function PosCatalog({
       {hasChips ? (
         <>
           <Separator />
-          <div className="no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
+          <div className="grupos-chips no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
             <div className="flex flex-wrap items-center gap-2 max-lg:w-[125%]">
               <Button
                 type="button"
