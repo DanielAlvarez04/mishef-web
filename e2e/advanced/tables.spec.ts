@@ -22,5 +22,9 @@ test.describe("mesas del salón", () => {
 
     await expect(dialog).toBeHidden()
     await expect(page.locator("#pos-table")).toContainText("Mesa")
+
+    await openRoute(page, "/settings")
+    await page.getByRole("tab", { name: "Negocio", exact: true }).click()
+    await expect(page.getByText("Mesas", { exact: true }).first()).toBeVisible()
   })
 })

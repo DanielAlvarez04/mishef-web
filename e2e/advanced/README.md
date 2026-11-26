@@ -1,8 +1,9 @@
 # Flujo avanzado de cocina (Playwright)
 
 Suite dedicada al modo **Avanzado**: configuración, estación, comanda desde el
-POS, impresión simulada, transiciones, pase, historial, bandeja de recientes,
-refire y el caso de una cuenta **KITCHEN sin estación**.
+POS con **cobro anticipado en mostrador**, impresión simulada, transiciones,
+pase, historial, bandeja de recientes, refire, selector de **mesas** y el caso
+de una cuenta **KITCHEN sin estación**.
 
 ## Ejecutar
 
@@ -32,7 +33,9 @@ sucursal y crea datos de prueba.
 - Sucursal `E2E Sucursal` si la organización no tiene ninguna.
 - Estación `A E2E Parrilla` (se reutiliza si ya existe).
 - Producto `E2E Hamburguesa` con SKU `E2E-KITCHEN` (se reutiliza si ya existe).
-- Comanda de mostrador con un cliente único por corrida.
+- Comanda de mostrador con un cliente único por corrida y pago en caja antes de
+  enviarla a cocina.
+- Verificación del selector de mesas por zona y disponibilidad.
 - Usuario `e2e-kitchen` con rol KITCHEN, sin posición de brigada ni estaciones.
   El spec lo crea o resetea con la sesión ADMIN, cambia su contraseña inicial y
   comprueba que no ve configuración ni tickets de estación.
