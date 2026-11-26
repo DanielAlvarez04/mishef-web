@@ -30,6 +30,8 @@ export interface KitchenStation {
   type: KitchenStationType
   color: string | null
   sortOrder: number
+  /** Minutos objetivo de preparación; `null` = usa el estimado de la ronda. */
+  slaMinutes: number | null
   isActive: boolean
 }
 

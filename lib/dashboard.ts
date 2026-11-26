@@ -182,6 +182,8 @@ export interface KitchenReport {
     stationId: string
     stationName: string
     tickets: number
+    /** SLA configurado en la estación; `null` usa el estimado de la ronda. */
+    slaMinutes: number | null
     averageWaitMinutes: number | null
     averagePrepMinutes: number | null
     averagePickupMinutes: number | null

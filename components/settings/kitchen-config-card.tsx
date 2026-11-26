@@ -232,6 +232,16 @@ function StationsCard({
 }) {
   const [name, setName] = React.useState("")
   const [type, setType] = React.useState<KitchenStationType>("CUSTOM")
+  const [slaMinutes, setSlaMinutes] = React.useState("")
+
+  function parseSla(value: string): number | null {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const parsed = Number(trimmed)
+    return Number.isInteger(parsed) && parsed >= 1 && parsed <= 240
+      ? parsed
+      : NaN
+  }
 
   return (
     <Card>
@@ -244,7 +254,7 @@ function StationsCard({
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 rounded-lg border p-3">
           <span className="text-sm font-medium">Nueva estación</span>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
@@ -272,19 +282,41 @@ function StationsCard({
                 ))}
               </SelectContent>
             </Select>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={1}
+              max={240}
+              value={slaMinutes}
+              onChange={(event) => setSlaMinutes(event.target.value)}
+              placeholder="SLA min"
+              aria-label="SLA de la estación en minutos"
+              className="w-28 tabular-nums"
+            />
             <Button
               type="button"
               disabled={!canManage || pending || name.trim().length < 2}
-              onClick={() =>
+              onClick={() => {
+                const parsedSla = parseSla(slaMinutes)
+
+                if (Number.isNaN(parsedSla)) {
+                  toast.error("El SLA debe ser un entero entre 1 y 240 minutos")
+                  return
+                }
+
                 run(async () => {
                   const result = await createKitchenStation({
                     name: name.trim(),
                     type,
+                    slaMinutes: parsedSla,
                   })
-                  if (result.ok) setName("")
+                  if (result.ok) {
+                    setName("")
+                    setSlaMinutes("")
+                  }
                   return result
                 }, "Estación creada")
-              }
+              }}
             >
               {pending ? (
                 <Loader2Icon className="animate-spin" />
@@ -321,6 +353,13 @@ function StationsCard({
                     {KITCHEN_STATION_TYPE_LABELS[station.type]}
                   </span>
                 </span>
+                <StationSlaField
+                  key={`${station.id}-${station.slaMinutes ?? "none"}`}
+                  station={station}
+                  canManage={canManage}
+                  pending={pending}
+                  run={run}
+                />
                 <span className="text-xs text-muted-foreground">
                   {station.isActive ? "Activa" : "Inactiva"}
                 </span>
@@ -331,7 +370,6 @@ function StationsCard({
                     run(
                       () =>
                         updateKitchenStation(station.id, {
-                          name: station.name,
                           isActive: checked,
                         }),
                       checked ? "Estación activada" : "Estación desactivada"
@@ -345,6 +383,71 @@ function StationsCard({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+function StationSlaField({
+  station,
+  canManage,
+  pending,
+  run,
+}: {
+  station: KitchenStation
+  canManage: boolean
+  pending: boolean
+  run: (
+    action: () => Promise<ActionResult<unknown>>,
+    success: string
+  ) => void
+}) {
+  const [value, setValue] = React.useState(
+    station.slaMinutes !== null ? String(station.slaMinutes) : ""
+  )
+
+  function commit() {
+    const trimmed = value.trim()
+    const parsed = trimmed === "" ? null : Number(trimmed)
+
+    if (
+      parsed !== null &&
+      (!Number.isInteger(parsed) || parsed < 1 || parsed > 240)
+    ) {
+      toast.error("El SLA debe ser un entero entre 1 y 240 minutos")
+      setValue(station.slaMinutes !== null ? String(station.slaMinutes) : "")
+      return
+    }
+
+    if ((station.slaMinutes ?? null) === parsed) return
+
+    run(
+      () => updateKitchenStation(station.id, { slaMinutes: parsed }),
+      parsed === null
+        ? "SLA de la estación eliminado"
+        : "SLA de la estación actualizado"
+    )
+  }
+
+  return (
+    <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      SLA
+      <Input
+        type="number"
+        inputMode="numeric"
+        min={1}
+        max={240}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur()
+        }}
+        placeholder="Ronda"
+        disabled={!canManage || pending}
+        aria-label={`SLA de ${station.name} en minutos`}
+        className="h-8 w-20 text-right tabular-nums"
+      />
+      min
+    </label>
   )
 }
 

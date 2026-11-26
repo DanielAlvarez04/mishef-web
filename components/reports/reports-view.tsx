@@ -491,6 +491,7 @@ export function ReportsView({
                     <TableHeader>
                       <TableRow>
                         <TableHead>Estación</TableHead>
+                        <TableHead className="text-right">SLA</TableHead>
                         <TableHead className="text-right">Tickets</TableHead>
                         <TableHead className="text-right">Atrasados</TableHead>
                         <TableHead className="text-right">Espera</TableHead>
@@ -502,12 +503,17 @@ export function ReportsView({
                     </TableHeader>
                     <TableBody>
                       {kitchen.byStation.length === 0 ? (
-                        <EmptyRow colSpan={8} text="Sin tickets de estación." />
+                        <EmptyRow colSpan={9} text="Sin tickets de estación." />
                       ) : (
                         kitchen.byStation.map((row) => (
                           <TableRow key={row.stationId}>
                             <TableCell className="font-medium">
                               {row.stationName}
+                            </TableCell>
+                            <TableCell className="text-right tabular-nums">
+                              {row.slaMinutes === null
+                                ? "Ronda"
+                                : `${row.slaMinutes} min`}
                             </TableCell>
                             <TableCell className="text-right tabular-nums">
                               {row.tickets}

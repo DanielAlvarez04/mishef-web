@@ -651,8 +651,10 @@ function TicketCard({
   const ageMinutes = sentAt
     ? Math.max(0, Math.floor((now - new Date(sentAt).getTime()) / 60_000))
     : 0
+  const targetMinutes =
+    ticket.station.slaMinutes ?? ticket.orderRound.estimatedMinutes ?? 15
   const late =
-    ageMinutes > 15 &&
+    ageMinutes > targetMinutes &&
     ["PENDING", "PREPARING", "READY"].includes(ticket.status)
 
   return (

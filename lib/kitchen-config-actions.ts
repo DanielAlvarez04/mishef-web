@@ -21,16 +21,18 @@ export function seedKitchenPositions(): Promise<ActionResult<unknown>> {
 }
 
 export interface KitchenStationInput {
-  name: string
+  name?: string
   code?: string
   type?: KitchenStationType
   color?: string | null
   sortOrder?: number
+  /** Minutos objetivo de preparación; `null` = usa el estimado de la ronda. */
+  slaMinutes?: number | null
   isActive?: boolean
 }
 
 export function createKitchenStation(
-  input: KitchenStationInput
+  input: KitchenStationInput & { name: string }
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/stations", "POST", input, PATHS)
 }
