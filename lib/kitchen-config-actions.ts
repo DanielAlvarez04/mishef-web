@@ -10,13 +10,13 @@ import type {
 
 const PATHS = ["/settings"]
 
-export function saveKitchenMode(
+export async function saveKitchenMode(
   mode: KitchenMode
 ): Promise<ActionResult<{ mode: KitchenMode; branchId: string }>> {
   return mutateApi("/kitchen/mode", "PATCH", { mode }, PATHS)
 }
 
-export function seedKitchenPositions(): Promise<ActionResult<unknown>> {
+export async function seedKitchenPositions(): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/positions/presets", "POST", undefined, PATHS)
 }
 
@@ -31,20 +31,20 @@ export interface KitchenStationInput {
   isActive?: boolean
 }
 
-export function createKitchenStation(
+export async function createKitchenStation(
   input: KitchenStationInput & { name: string }
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/stations", "POST", input, PATHS)
 }
 
-export function updateKitchenStation(
+export async function updateKitchenStation(
   id: string,
   input: KitchenStationInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/stations/${id}`, "PATCH", input, PATHS)
 }
 
-export function deactivateKitchenStation(
+export async function deactivateKitchenStation(
   id: string
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/stations/${id}`, "DELETE", undefined, PATHS)
@@ -58,20 +58,20 @@ export interface KitchenPositionInput {
   isActive?: boolean
 }
 
-export function createKitchenPosition(
+export async function createKitchenPosition(
   input: KitchenPositionInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/positions", "POST", input, PATHS)
 }
 
-export function updateKitchenPosition(
+export async function updateKitchenPosition(
   id: string,
   input: KitchenPositionInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/positions/${id}`, "PATCH", input, PATHS)
 }
 
-export function deactivateKitchenPosition(
+export async function deactivateKitchenPosition(
   id: string
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/positions/${id}`, "DELETE", undefined, PATHS)
@@ -82,7 +82,7 @@ export interface KitchenAssignmentInput {
   stationIds: string[]
 }
 
-export function saveKitchenAssignment(
+export async function saveKitchenAssignment(
   membershipId: string,
   input: KitchenAssignmentInput
 ): Promise<ActionResult<KitchenConfig>> {
@@ -97,20 +97,20 @@ export interface KitchenRoutingInput {
   priority?: number
 }
 
-export function createKitchenRouting(
+export async function createKitchenRouting(
   input: KitchenRoutingInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/routing", "POST", input, PATHS)
 }
 
-export function updateKitchenRouting(
+export async function updateKitchenRouting(
   id: string,
   input: KitchenRoutingInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/routing/${id}`, "PATCH", input, PATHS)
 }
 
-export function deleteKitchenRouting(
+export async function deleteKitchenRouting(
   id: string
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/routing/${id}`, "DELETE", undefined, PATHS)
@@ -122,20 +122,20 @@ export interface KitchenCourseInput {
   isActive?: boolean
 }
 
-export function createKitchenCourse(
+export async function createKitchenCourse(
   input: KitchenCourseInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/courses", "POST", input, PATHS)
 }
 
-export function updateKitchenCourse(
+export async function updateKitchenCourse(
   id: string,
   input: KitchenCourseInput
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/courses/${id}`, "PATCH", input, PATHS)
 }
 
-export function deactivateKitchenCourse(
+export async function deactivateKitchenCourse(
   id: string
 ): Promise<ActionResult<unknown>> {
   return mutateApi(`/kitchen/courses/${id}`, "DELETE", undefined, PATHS)
