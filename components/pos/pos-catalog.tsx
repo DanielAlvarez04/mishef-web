@@ -168,6 +168,8 @@ interface PosCatalogProps {
   /** Nombre del menú fuera de horario; `null` cuando no hay aviso. */
   outOfScheduleMenuName: string | null
   onOpenProduct: (product: ItemListItem) => void
+  /** Fila superior (filtros) que se mantiene sticky junto a los chips. */
+  toolbar?: React.ReactNode
 }
 
 /**
@@ -192,6 +194,7 @@ export const PosCatalog = React.memo(function PosCatalog({
   squareCards,
   outOfScheduleMenuName,
   onOpenProduct,
+  toolbar,
 }: PosCatalogProps) {
   const [filters, setFilters] = React.useState<PosCatalogFilters>({
     groups: [],
@@ -422,8 +425,10 @@ export const PosCatalog = React.memo(function PosCatalog({
 
   return (
     <>
-      {hasChips ? (
-        <div className="grupos-chips no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
+      <div className="filtros-acciones-mobile sticky top-0 z-30 -mx-4 flex min-w-0 flex-col gap-1.5 bg-neutral-50 px-4 py-2 lg:-mx-6 lg:px-6 dark:bg-neutral-950 xl:static xl:z-auto xl:mx-0 xl:gap-3 xl:bg-transparent xl:px-0 xl:py-0">
+        {toolbar}
+        {hasChips ? (
+          <div className="grupos-chips no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
             <div className="flex flex-wrap items-center gap-2 max-lg:w-[125%]">
               <Button
                 type="button"
@@ -503,7 +508,8 @@ export const PosCatalog = React.memo(function PosCatalog({
               })}
             </div>
           </div>
-      ) : null}
+        ) : null}
+      </div>
 
       {outOfScheduleMenuName ? (
         <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">

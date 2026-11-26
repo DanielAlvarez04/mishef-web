@@ -2924,7 +2924,8 @@ export function PosView({
 
   // Menú móvil de tres puntos: reúne los controles que en escritorio viven en
   // la fila superior (menú, orden, vista y caja) para no saturar la pantalla.
-  const mobileToolsMenu = (
+  const mobileToolsMenu = React.useMemo(
+    () => (
     <DropdownMenu>
       <DropdownMenuTrigger
         render={
@@ -3117,182 +3118,28 @@ export function PosView({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
+    ),
+    [
+      selectedMenu,
+      menus,
+      menuId,
+      setMenuId,
+      sortOrder,
+      setSortOrder,
+      cardColumns,
+      setCardColumns,
+      cardTextSize,
+      setCardTextSize,
+      squareCards,
+      setSquareCards,
+      cash.session,
+      canManageCash,
+      cashClosePending,
+    ]
   )
 
-  return (
-    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="flex min-w-0 flex-col gap-3">
-          {!showComandaColumn ? (
-            <Card className="flex w-full min-w-0 flex-col gap-3 overflow-hidden border p-4 ring-0">
-              <div className="comanda-rapida-mobile flex min-w-0 flex-col gap-2 rounded-lg">
-              <div className="flex flex-wrap gap-1.5">
-                {CHANNELS.map((value) => {
-                  const disabled =
-                    value === "PHONE" ||
-                    value === "DELIVERY" ||
-                    Boolean(activeOrder)
-                  const active = displayChannel === value
-
-                  return (
-                    <Button
-                      key={value}
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className={jalapenoChipClass(active)}
-                      aria-pressed={active}
-                      disabled={disabled}
-                      title={
-                        value === "PHONE" || value === "DELIVERY"
-                          ? "Disponible próximamente"
-                          : undefined
-                      }
-                      onClick={() => {
-                        posCapture.noteComandaInteraction()
-                        selectChannel(value)
-                      }}
-                    >
-                      {ORDER_CHANNEL_LABELS[value]}
-                    </Button>
-                  )
-                })}
-              </div>
-
-              {isDineIn ? (
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
-                    <div className="flex flex-col gap-1">
-                      <Label
-                        htmlFor="mobile-pos-table"
-                        className="text-xs text-muted-foreground"
-                      >
-                        Mesa
-                      </Label>
-                      <Select
-                        value={activeOrder?.tableNumber ?? tableNumber}
-                        onValueChange={(value) => {
-                          posCapture.noteComandaInteraction()
-                          setTableNumber(value ?? "1")
-                        }}
-                        disabled={Boolean(activeOrder)}
-                        items={TABLE_OPTIONS.map((value) => ({
-                          value,
-                          label: `Mesa ${value}`,
-                        }))}
-                      >
-                        <SelectTrigger
-                          id="mobile-pos-table"
-                          className="h-8 w-full"
-                          aria-label="Mesa"
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TABLE_OPTIONS.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              Mesa {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs text-muted-foreground">
-                        Clientes
-                      </Label>
-                      <ButtonGroup
-                        aria-label="Número de clientes"
-                        className="w-full"
-                      >
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Quitar un cliente"
-                          disabled={partySize <= 1 || guestBusy}
-                          onClick={() => void changePartySize(partySize - 1)}
-                        >
-                          <MinusIcon />
-                        </Button>
-                        <Input
-                          aria-label="Número de clientes"
-                          inputMode="numeric"
-                          className="h-8 w-10 min-w-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
-                          value={partySizeDraft}
-                          onChange={(event) => {
-                            posCapture.noteComandaActivity()
-                            setPartySizeDraft(
-                              event.target.value.replace(/\D/g, "").slice(0, 2)
-                            )
-                          }}
-                          onBlur={() =>
-                            void changePartySize(Number(partySizeDraft) || 1)
-                          }
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault()
-                              event.currentTarget.blur()
-                            }
-                          }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Añadir un cliente"
-                          disabled={partySize >= 20 || guestBusy}
-                          onClick={() => void changePartySize(partySize + 1)}
-                        >
-                          <PlusIcon />
-                        </Button>
-                      </ButtonGroup>
-                    </div>
-                  </div>
-              ) : displayChannel === "COUNTER" ? (
-                activeOrder ? (
-                  <p className="text-xs text-muted-foreground">
-                    Cliente:{" "}
-                    {activeOrder.customerName?.trim() || "Sin nombre"}
-                  </p>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    <Label
-                      htmlFor="mobile-pos-customer"
-                      className="text-xs text-muted-foreground"
-                    >
-                      Cliente (opcional)
-                    </Label>
-                    <Input
-                      id="mobile-pos-customer"
-                      value={customerName}
-                      onChange={(event) => {
-                        posCapture.noteComandaActivity()
-                        setCustomerName(event.target.value)
-                      }}
-                      maxLength={120}
-                      placeholder="Nombre"
-                      className="h-8"
-                    />
-                  </div>
-                )
-              ) : null}
-
-              <div className="flex justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setComandaOpen(true)}
-                >
-                  <PencilLineIcon />
-                  Ver comanda
-                </Button>
-              </div>
-                </div>
-              </Card>
-          ) : null}
-
+  const filtersToolbar = React.useMemo(
+    () => (
           <div className="filtros-mobile flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="flex min-w-0 items-center gap-2 sm:flex-1">
               <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
@@ -3526,9 +3373,192 @@ export function PosView({
               ) : null}
             </div>
           </div>
+    ),
+    [
+      search,
+      menuId,
+      menus,
+      setMenuId,
+      mobileToolsMenu,
+      sortOrder,
+      setSortOrder,
+      cardColumns,
+      setCardColumns,
+      cardTextSize,
+      setCardTextSize,
+      squareCards,
+      setSquareCards,
+      cash.session,
+      cash.summary,
+      canManageCash,
+    ]
+  )
+
+  return (
+    <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <div className="flex min-w-0 flex-col gap-3">
+          {!showComandaColumn ? (
+            <Card className="flex w-full min-w-0 flex-col gap-3 overflow-hidden border p-4 ring-0">
+              <div className="comanda-rapida-mobile flex min-w-0 flex-col gap-2 rounded-lg">
+              <div className="flex flex-wrap gap-1.5">
+                {CHANNELS.map((value) => {
+                  const disabled =
+                    value === "PHONE" ||
+                    value === "DELIVERY" ||
+                    Boolean(activeOrder)
+                  const active = displayChannel === value
+
+                  return (
+                    <Button
+                      key={value}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={jalapenoChipClass(active)}
+                      aria-pressed={active}
+                      disabled={disabled}
+                      title={
+                        value === "PHONE" || value === "DELIVERY"
+                          ? "Disponible próximamente"
+                          : undefined
+                      }
+                      onClick={() => {
+                        posCapture.noteComandaInteraction()
+                        selectChannel(value)
+                      }}
+                    >
+                      {ORDER_CHANNEL_LABELS[value]}
+                    </Button>
+                  )
+                })}
+              </div>
+
+              {isDineIn ? (
+                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-2">
+                    <div className="flex flex-col gap-1">
+                      <Label
+                        htmlFor="mobile-pos-table"
+                        className="text-xs text-muted-foreground"
+                      >
+                        Mesa
+                      </Label>
+                      <Select
+                        value={activeOrder?.tableNumber ?? tableNumber}
+                        onValueChange={(value) => {
+                          posCapture.noteComandaInteraction()
+                          setTableNumber(value ?? "1")
+                        }}
+                        disabled={Boolean(activeOrder)}
+                        items={TABLE_OPTIONS.map((value) => ({
+                          value,
+                          label: `Mesa ${value}`,
+                        }))}
+                      >
+                        <SelectTrigger
+                          id="mobile-pos-table"
+                          className="h-8 w-full"
+                          aria-label="Mesa"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {TABLE_OPTIONS.map((value) => (
+                            <SelectItem key={value} value={value}>
+                              Mesa {value}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <Label className="text-xs text-muted-foreground">
+                        Clientes
+                      </Label>
+                      <ButtonGroup
+                        aria-label="Número de clientes"
+                        className="w-full"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Quitar un cliente"
+                          disabled={partySize <= 1 || guestBusy}
+                          onClick={() => void changePartySize(partySize - 1)}
+                        >
+                          <MinusIcon />
+                        </Button>
+                        <Input
+                          aria-label="Número de clientes"
+                          inputMode="numeric"
+                          className="h-8 w-10 min-w-0 text-center tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                          value={partySizeDraft}
+                          onChange={(event) => {
+                            posCapture.noteComandaActivity()
+                            setPartySizeDraft(
+                              event.target.value.replace(/\D/g, "").slice(0, 2)
+                            )
+                          }}
+                          onBlur={() =>
+                            void changePartySize(Number(partySizeDraft) || 1)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault()
+                              event.currentTarget.blur()
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon-sm"
+                          aria-label="Añadir un cliente"
+                          disabled={partySize >= 20 || guestBusy}
+                          onClick={() => void changePartySize(partySize + 1)}
+                        >
+                          <PlusIcon />
+                        </Button>
+                      </ButtonGroup>
+                    </div>
+                  </div>
+              ) : displayChannel === "COUNTER" ? (
+                activeOrder ? (
+                  <p className="text-xs text-muted-foreground">
+                    Cliente:{" "}
+                    {activeOrder.customerName?.trim() || "Sin nombre"}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <Label
+                      htmlFor="mobile-pos-customer"
+                      className="text-xs text-muted-foreground"
+                    >
+                      Cliente (opcional)
+                    </Label>
+                    <Input
+                      id="mobile-pos-customer"
+                      value={customerName}
+                      onChange={(event) => {
+                        posCapture.noteComandaActivity()
+                        setCustomerName(event.target.value)
+                      }}
+                      maxLength={120}
+                      placeholder="Nombre"
+                      className="h-8"
+                    />
+                  </div>
+                )
+              ) : null}
+                </div>
+              </Card>
+          ) : null}
 
           <PosCatalog
             key={menuId}
+            toolbar={filtersToolbar}
             products={baseFiltered}
             groupFilters={groupFilters}
             menuEntryByItem={menuEntryByItem}
