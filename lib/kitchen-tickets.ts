@@ -114,6 +114,8 @@ export interface KitchenBoard {
   stations: KitchenStationSummary[]
   tickets: KitchenTicket[]
   heldRounds: HeldRound[]
+  /** Tickets entregados o anulados en las últimas 4 horas. */
+  recentTickets: KitchenTicket[]
 }
 
 export const KITCHEN_TICKET_STATUS_LABELS: Record<

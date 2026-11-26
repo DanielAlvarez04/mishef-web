@@ -122,7 +122,9 @@ export function AdvancedKitchenView({
   const [printTicket, setPrintTicket] = React.useState<KitchenTicket | null>(
     null
   )
-  const [view, setView] = React.useState<"stations" | "expo">("stations")
+  const [view, setView] = React.useState<"stations" | "expo" | "recent">(
+    "stations"
+  )
   const [expoPendingId, setExpoPendingId] = React.useState<string | null>(null)
   const [historyTicket, setHistoryTicket] = React.useState<KitchenTicket | null>(
     null
@@ -137,6 +139,7 @@ export function AdvancedKitchenView({
   const expoTickets = board.tickets.filter(
     (ticket) => ticket.status === "READY" || ticket.status === "PICKED_UP"
   )
+  const recentTickets = board.recentTickets ?? []
   const activeStationId = activeStation || board.stations[0]?.id || ""
 
   React.useEffect(() => {
@@ -344,6 +347,15 @@ export function AdvancedKitchenView({
             Pase
             <Badge variant="outline">{expoTickets.length}</Badge>
           </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "recent" ? "default" : "ghost"}
+            onClick={() => setView("recent")}
+          >
+            Recientes
+            <Badge variant="outline">{recentTickets.length}</Badge>
+          </Button>
         </div>
         <Button
           type="button"
@@ -441,6 +453,40 @@ export function AdvancedKitchenView({
           ) : (
             <ul className="grid gap-3 lg:grid-cols-3">
               {expoTickets.map((ticket) => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  now={now}
+                  canWork={canWork}
+                  canPickup={canPickup}
+                  canExpo={canExpo}
+                  expoPending={expoPendingId === ticket.id}
+                  pending={pendingId === ticket.id}
+                  refirePending={refirePending}
+                  onTransition={transition}
+                  onRequestCancel={setCancelTicket}
+                  onRequestRefire={setRefireTicket}
+                  onValidateExpo={(entry) => void validateExpo(entry)}
+                  onOpenHistory={(entry) => void openHistory(entry)}
+                  onPrint={setPrintTicket}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : view === "recent" ? (
+        <section className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Tickets entregados o anulados en las últimas 4 horas. Puedes
+            consultar su historial, reimprimirlos o rehacerlos.
+          </p>
+          {recentTickets.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No hay tickets cerrados en las últimas 4 horas.
+            </p>
+          ) : (
+            <ul className="grid gap-3 lg:grid-cols-3">
+              {recentTickets.map((ticket) => (
                 <TicketCard
                   key={ticket.id}
                   ticket={ticket}
