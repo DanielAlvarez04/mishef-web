@@ -16,6 +16,7 @@ import {
   KitchenOrderCard,
   KitchenPrepCard,
 } from "@/components/settings/kitchen-settings-card"
+import { KitchenConfigCard } from "@/components/settings/kitchen-config-card"
 import { PracticeModeCard } from "@/components/settings/practice-mode-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
@@ -65,6 +66,7 @@ import { roleLabel } from "@/lib/roles"
 import { isAdmin, requireUser } from "@/lib/session"
 import type { FiscalProfile } from "@/lib/fiscal"
 import type { KitchenSettings } from "@/lib/kitchen"
+import type { KitchenConfig } from "@/lib/kitchen-config"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { OrganizationReceiptsData } from "@/lib/receipts"
 import type { PosPairedDevice } from "@/lib/pos-device"
@@ -290,6 +292,30 @@ export default async function SettingsPage({
   const kitchenSettings: KitchenSettings | null = kitchenSettingsResponse.ok
     ? ((await kitchenSettingsResponse.json()) as KitchenSettings)
     : null
+
+  // Configuración avanzada de cocina (solo ADMIN).
+  const kitchenConfigResponse = admin ? await apiFetch("/kitchen/config") : null
+  const kitchenConfig = await readJson<KitchenConfig>(kitchenConfigResponse)
+
+  const kitchenItemsResponse = admin
+    ? await apiFetch("/catalog/items?includeInactive=false")
+    : null
+  const kitchenItems: Array<{ id: string; name: string }> =
+    kitchenItemsResponse?.ok
+      ? ((await kitchenItemsResponse.json()) as Array<{
+          id: string
+          name: string
+        }>)
+      : []
+
+  const kitchenMenusResponse = admin ? await apiFetch("/catalog/menus") : null
+  const kitchenMenus: Array<{ id: string; name: string }> =
+    kitchenMenusResponse?.ok
+      ? ((await kitchenMenusResponse.json()) as Array<{
+          id: string
+          name: string
+        }>)
+      : []
 
   // Inventario actual: sirve para marcar los insumos core que ya existen y
   // bloquear los que están en recetas.
@@ -712,6 +738,19 @@ export default async function SettingsPage({
         }
         kitchen={
           <>
+            {kitchenConfig ? (
+              <KitchenConfigCard
+                config={kitchenConfig}
+                items={kitchenItems}
+                categories={articleCategories.map((category) => ({
+                  id: category.id,
+                  name: category.name,
+                }))}
+                menus={kitchenMenus}
+                canManage={admin}
+              />
+            ) : null}
+
             {kitchenSettings ? (
               <>
                 <KitchenPrepCard
