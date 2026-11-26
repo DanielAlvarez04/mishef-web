@@ -512,8 +512,13 @@ export function PosView({
   // El filtrado se hace con el valor diferido: escribir en el buscador no
   // bloquea el pintado de la grilla.
   const deferredSearch = React.useDeferredValue(search)
-  const [menuId, setMenuId] = React.useState(
-    () => menus.find((menu) => menu.isGlobal)?.id ?? menus[0]?.id ?? ""
+  const menuIds = React.useMemo(() => menus.map((menu) => menu.id), [menus])
+  // El menú elegido se recuerda por dispositivo. Si el guardado ya no existe
+  // (otra sucursal u otra organización), se usa el menú global.
+  const [menuId, setMenuId] = usePersistentTab<string>(
+    "pos-menu-id",
+    menuIds,
+    menus.find((menu) => menu.isGlobal)?.id ?? menus[0]?.id ?? ""
   )
   const [cardColumns, setCardColumns] = usePersistentCardColumns(
     "pos-card-columns",
@@ -572,7 +577,33 @@ export function PosView({
   /** Cuenta recién creada que el refresh aún no incluye en `orders`. */
   const [pendingOrder, setPendingOrder] = React.useState<Order | null>(null)
   const [offlineCharging, setOfflineCharging] = React.useState(false)
-  const [channel, setChannel] = React.useState<OrderChannel>("DINE_IN")
+  // Canal preferido del dispositivo: se recuerda entre sesiones y se usa como
+  // punto de partida de cada comanda nueva. El borrador abierto puede diferir
+  // mientras se consulta una cuenta existente (`channelOverride`).
+  const [preferredChannel, setPreferredChannel] =
+    usePersistentTab<OrderChannel>("pos-channel", CHANNELS, "DINE_IN")
+  const [channelOverride, setChannelOverride] =
+    React.useState<OrderChannel | null>(null)
+  const channel = channelOverride ?? preferredChannel
+
+  /** Ajusta el canal de la comanda sin cambiar la preferencia guardada. */
+  const setChannel = React.useCallback((next: OrderChannel) => {
+    setChannelOverride(next)
+  }, [])
+
+  /** Vuelve a la preferencia del dispositivo (p. ej. al cerrar una cuenta). */
+  const resetChannel = React.useCallback(() => {
+    setChannelOverride(null)
+  }, [])
+
+  /** El usuario eligió un canal: además de la comanda, se guarda la preferencia. */
+  const selectChannel = React.useCallback(
+    (next: OrderChannel) => {
+      setChannelOverride(next)
+      setPreferredChannel(next)
+    },
+    [setPreferredChannel]
+  )
   const [tableNumber, setTableNumber] = React.useState("1")
   const [customerName, setCustomerName] = React.useState("")
   const [customerSex, setCustomerSex] = React.useState<GuestSex | null>(null)
@@ -833,7 +864,7 @@ export function PosView({
       setCustomerSex(serverGuests[0]?.sex ?? null)
       setCustomerAgeRange(serverGuests[0]?.ageRange ?? null)
     }
-  }, [activeOrder])
+  }, [activeOrder, setChannel])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -861,7 +892,7 @@ export function PosView({
     setOrderId("")
     setPendingOrder((current) => (current?.id === orderId ? null : current))
     setCart([])
-    setChannel("DINE_IN")
+    resetChannel()
     setTableNumber("1")
     setCustomerName("")
     setCustomerSex(null)
@@ -876,7 +907,7 @@ export function PosView({
     setPendingProductId(null)
     dismissComboNotice()
     setComboConflict(null)
-  }, [orders, orderId])
+  }, [orders, orderId, resetChannel])
 
   // Sin «General»: en mesa siempre hay un cliente activo. Si el cliente
   // seleccionado desaparece, se toma el primero de la lista. En mostrador no
@@ -1541,7 +1572,7 @@ export function PosView({
     if (!value) {
       setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
       setPartySize(1)
-      setChannel("DINE_IN")
+      resetChannel()
       setTableNumber("1")
       setCustomerName("")
       setCustomerSex(null)
@@ -1570,7 +1601,7 @@ export function PosView({
     setPartySize(1)
     setPartySizeDraft("1")
     setActiveGuestKey(null)
-    setChannel("DINE_IN")
+    resetChannel()
     setTableNumber("1")
     setCustomerName("")
     setCustomerSex(null)
@@ -1678,7 +1709,7 @@ export function PosView({
 
     const resetDraft = () => {
       setCart([])
-      setChannel("DINE_IN")
+      resetChannel()
       setTableNumber("1")
       setCustomerName("")
       setCustomerSex(null)
@@ -2249,7 +2280,7 @@ export function PosView({
                         }
                         onClick={() => {
                           posCapture.noteComandaInteraction()
-                          setChannel(value)
+                          selectChannel(value)
                         }}
                       >
                         {ORDER_CHANNEL_LABELS[value]}
@@ -3327,7 +3358,9 @@ export function PosView({
           </div>
 
           {!showComandaColumn ? (
-            <div className="flex flex-col gap-2 rounded-lg">
+            <>
+              <Separator />
+              <div className="flex flex-col gap-2 rounded-lg">
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
                   const disabled =
@@ -3352,7 +3385,7 @@ export function PosView({
                       }
                       onClick={() => {
                         posCapture.noteComandaInteraction()
-                        setChannel(value)
+                        selectChannel(value)
                       }}
                     >
                       {ORDER_CHANNEL_LABELS[value]}
@@ -3360,8 +3393,6 @@ export function PosView({
                   )
                 })}
               </div>
-
-              <Separator />
 
               {isDineIn ? (
                 <>
@@ -3549,7 +3580,8 @@ export function PosView({
                   </Button>
                 </div>
               ) : null}
-            </div>
+              </div>
+            </>
           ) : null}
 
           <PosCatalog
@@ -3898,7 +3930,7 @@ export function PosView({
             setPartySize(1)
             setActiveGuestKey(null)
             setTableNumber("1")
-            setChannel("DINE_IN")
+            resetChannel()
             setCustomerName("")
             setCustomerSex(null)
             setCustomerAgeRange(null)
