@@ -7,6 +7,7 @@ import {
   ChefHatIcon,
   Loader2Icon,
   PlusIcon,
+  RotateCcwIcon,
   SparklesIcon,
   Trash2Icon,
   UsersIcon,
@@ -34,6 +35,7 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import { InfoHint } from "@/components/info-hint"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -48,36 +50,35 @@ import {
   createKitchenPosition,
   createKitchenRouting,
   createKitchenStation,
-  createKitchenCourse,
   deactivateKitchenPosition,
   deleteKitchenRouting,
   saveKitchenAssignment,
   saveKitchenMode,
   seedKitchenPositions,
-  updateKitchenCourse,
+  updateKitchenPosition,
   updateKitchenStation,
 } from "@/lib/kitchen-config-actions"
 import {
   KITCHEN_MODE_LABELS,
   KITCHEN_POSITION_LEVEL_LABELS,
-  KITCHEN_STATION_TYPE_LABELS,
-  KITCHEN_STATION_TYPES,
   type KitchenConfig,
-  type KitchenCourse,
   type KitchenMember,
   type KitchenMode,
   type KitchenPosition,
   type KitchenPositionLevel,
   type KitchenRoutingRule,
   type KitchenStation,
-  type KitchenStationType,
 } from "@/lib/kitchen-config"
+import { roleLabel } from "@/lib/roles"
 import type { ActionResult } from "@/lib/server-api"
 
 interface Option {
   id: string
   name: string
 }
+
+const SLA_HINT =
+  "SLA significa Service Level Agreement: minutos objetivo de preparación, desde que la estación inicia el ticket hasta que lo marca listo. No cuenta la espera antes de iniciar. Si se deja vacío, se usa el estimado de la ronda y luego 15 minutos."
 
 /**
  * Configuración de cocina: modo General / Avanzado, estaciones, brigada,
@@ -129,7 +130,7 @@ export function KitchenConfigCard({
           </CardTitle>
           <CardDescription>
             General usa el tablero simple de tres columnas. Avanzado divide las
-            comandas por estación, asigna puestos de brigada y rutea cada
+            comandas por estación, asigna puestos de cocina y rutea cada
             artículo a su partida.
           </CardDescription>
         </CardHeader>
@@ -165,7 +166,7 @@ export function KitchenConfigCard({
           {config.mode === "GENERAL" ? (
             <p className="text-sm text-muted-foreground">
               El modo General no requiere configuración. Al activar Avanzado se
-              crean los puestos preset de la brigada y una estación inicial; la
+              crean los puestos preset de cocina y una estación inicial; la
               cocina seguirá funcionando igual hasta que configures el ruteo.
             </p>
           ) : null}
@@ -204,12 +205,6 @@ export function KitchenConfigCard({
             pending={pending}
             run={run}
           />
-          <CoursesCard
-            courses={config.courses}
-            canManage={canManage}
-            pending={pending}
-            run={run}
-          />
         </>
       ) : null}
     </div>
@@ -231,7 +226,6 @@ function StationsCard({
   ) => void
 }) {
   const [name, setName] = React.useState("")
-  const [type, setType] = React.useState<KitchenStationType>("CUSTOM")
   const [slaMinutes, setSlaMinutes] = React.useState("")
 
   function parseSla(value: string): number | null {
@@ -254,45 +248,27 @@ function StationsCard({
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 rounded-lg border p-3">
           <span className="text-sm font-medium">Nueva estación</span>
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
             <Input
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="Ej. Parrilla"
               maxLength={60}
             />
-            <Select
-              value={type}
-              onValueChange={(value) =>
-                setType(value as KitchenStationType)
-              }
-              items={KITCHEN_STATION_TYPES.map((value) => ({
-                value,
-                label: KITCHEN_STATION_TYPE_LABELS[value],
-              }))}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {KITCHEN_STATION_TYPES.map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {KITCHEN_STATION_TYPE_LABELS[value]}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              max={240}
-              value={slaMinutes}
-              onChange={(event) => setSlaMinutes(event.target.value)}
-              placeholder="SLA min"
-              aria-label="SLA de la estación en minutos"
-              className="w-28 tabular-nums"
-            />
+            <div className="flex items-center gap-1">
+              <Input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={240}
+                value={slaMinutes}
+                onChange={(event) => setSlaMinutes(event.target.value)}
+                placeholder="SLA min"
+                aria-label="SLA de la estación en minutos"
+                className="w-28 tabular-nums"
+              />
+              <InfoHint text={SLA_HINT} />
+            </div>
             <Button
               type="button"
               disabled={!canManage || pending || name.trim().length < 2}
@@ -307,7 +283,6 @@ function StationsCard({
                 run(async () => {
                   const result = await createKitchenStation({
                     name: name.trim(),
-                    type,
                     slaMinutes: parsedSla,
                   })
                   if (result.ok) {
@@ -349,8 +324,7 @@ function StationsCard({
                     {station.name}
                   </span>
                   <span className="block text-xs text-muted-foreground">
-                    {station.code} ·{" "}
-                    {KITCHEN_STATION_TYPE_LABELS[station.type]}
+                    {station.code}
                   </span>
                 </span>
                 <StationSlaField
@@ -430,6 +404,7 @@ function StationSlaField({
   return (
     <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
       SLA
+      <InfoHint text={SLA_HINT} />
       <Input
         type="number"
         inputMode="numeric"
@@ -473,10 +448,11 @@ function PositionsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Brigada</CardTitle>
+        <CardTitle>Puestos de cocina</CardTitle>
         <CardDescription>
-          Puestos de cocina y permisos. Los presets cubren la brigada clásica;
-          puedes crear puestos propios.
+          Definen los permisos dentro de cocina: iniciar, marcar listo, validar
+          pase, anular, rehacer o ver todas las estaciones. No cambian el rol de
+          acceso a la app.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -490,7 +466,7 @@ function PositionsCard({
             }
           >
             <SparklesIcon />
-            Crear presets de brigada
+            Crear presets de cocina
           </Button>
         </div>
 
@@ -571,16 +547,38 @@ function PositionsCard({
                 {!position.isActive ? (
                   <Badge variant="outline">Inactivo</Badge>
                 ) : null}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label={`Desactivar ${position.name}`}
-                  disabled={!canManage || pending || !position.isActive}
-                  onClick={() => setDeleting(position)}
-                >
-                  <Trash2Icon />
-                </Button>
+                {!position.isActive ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-label={`Reactivar ${position.name}`}
+                    disabled={!canManage || pending}
+                    onClick={() =>
+                      run(
+                        () =>
+                          updateKitchenPosition(position.id, {
+                            isActive: true,
+                          }),
+                        "Puesto reactivado"
+                      )
+                    }
+                  >
+                    <RotateCcwIcon />
+                    Reactivar
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Desactivar ${position.name}`}
+                    disabled={!canManage || pending}
+                    onClick={() => setDeleting(position)}
+                  >
+                    <Trash2Icon />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
@@ -646,10 +644,11 @@ function TeamCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Equipo y estaciones</CardTitle>
+        <CardTitle>Equipo: rol, puesto y estaciones</CardTitle>
         <CardDescription>
-          Asigna a cada miembro su puesto de brigada y las estaciones que puede
-          ver y operar.
+          El rol de acceso define los módulos de la app. El puesto de cocina
+          define los permisos dentro de cocina. Las estaciones definen qué
+          tickets ve y opera cada miembro.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -705,6 +704,19 @@ function MemberRow({
     stationIds.length !== member.stationIds.length ||
     stationIds.some((id) => !member.stationIds.includes(id))
 
+  const selectedPosition = positions.find(
+    (position) => position.id === positionId
+  )
+  const selectedStations = stations.filter((station) =>
+    stationIds.includes(station.id)
+  )
+  const roleSummary =
+    member.roles.map((role) => roleLabel(role) ?? role).join(", ") ||
+    "Sin rol de acceso"
+  const missingKitchenRole =
+    positionId !== "none" &&
+    !member.roles.some((role) => role === "KITCHEN" || role === "ADMIN")
+
   return (
     <div className="flex flex-col gap-3 rounded-lg border p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -713,15 +725,29 @@ function MemberRow({
           <span className="block truncate text-sm font-medium">
             {member.name ?? member.username ?? member.email ?? "Miembro"}
           </span>
+          {member.username || member.email ? (
+            <span className="block text-xs text-muted-foreground">
+              {member.username ?? member.email}
+            </span>
+          ) : null}
           <span className="block text-xs text-muted-foreground">
-            {member.username ?? member.email ?? member.roles.join(", ")}
+            {roleSummary} · {selectedPosition?.name ?? "Sin puesto"} ·{" "}
+            {selectedStations.length > 0
+              ? selectedStations.map((station) => station.name).join(", ")
+              : "Sin estaciones"}
           </span>
         </span>
       </div>
 
+      {missingKitchenRole ? (
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          Este miembro no tiene rol KITCHEN ni ADMIN; no podrá entrar a cocina.
+        </p>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-[minmax(0,240px)_minmax(0,1fr)_auto] md:items-end">
         <div className="flex flex-col gap-1.5">
-          <Label>Puesto</Label>
+          <Label>Puesto de cocina</Label>
           <Select
             value={positionId}
             onValueChange={(value) => setPositionId(value ?? "none")}
@@ -753,7 +779,7 @@ function MemberRow({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Estaciones</Label>
+          <Label>Estaciones asignadas</Label>
           <div className="flex flex-wrap gap-x-4 gap-y-2">
             {stations.filter((station) => station.isActive).length === 0 ? (
               <span className="text-xs text-muted-foreground">
@@ -805,98 +831,6 @@ function MemberRow({
         </Button>
       </div>
     </div>
-  )
-}
-
-function CoursesCard({
-  courses,
-  canManage,
-  pending,
-  run,
-}: {
-  courses: KitchenCourse[]
-  canManage: boolean
-  pending: boolean
-  run: (
-    action: () => Promise<ActionResult<unknown>>,
-    success: string
-  ) => void
-}) {
-  const [name, setName] = React.useState("")
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Cursos</CardTitle>
-        <CardDescription>
-          Tiempos del servicio (entradas, fuertes, postres). Una ronda puede
-          retenerse y dispararse cuando el salón indique el curso.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Ej. Entradas"
-            maxLength={60}
-          />
-          <Button
-            type="button"
-            disabled={!canManage || pending || name.trim().length < 2}
-            onClick={() =>
-              run(async () => {
-                const result = await createKitchenCourse({
-                  name: name.trim(),
-                })
-                if (result.ok) setName("")
-                return result
-              }, "Curso creado")
-            }
-          >
-            <PlusIcon />
-            Agregar
-          </Button>
-        </div>
-
-        {courses.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            Sin cursos. Si no los usas, las rondas se envían directo a cocina.
-          </p>
-        ) : (
-          <ul className="divide-y rounded-lg border">
-            {courses.map((course) => (
-              <li
-                key={course.id}
-                className="flex items-center gap-3 px-3 py-2.5"
-              >
-                <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {course.name}
-                </span>
-                <span className="text-xs text-muted-foreground">
-                  {course.isActive ? "Activo" : "Inactivo"}
-                </span>
-                <Switch
-                  checked={course.isActive}
-                  disabled={!canManage || pending}
-                  onCheckedChange={(checked) =>
-                    run(
-                      () =>
-                        updateKitchenCourse(course.id, {
-                          name: course.name,
-                          isActive: checked,
-                        }),
-                      checked ? "Curso activado" : "Curso desactivado"
-                    )
-                  }
-                  aria-label={`Activar ${course.name}`}
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
   )
 }
 

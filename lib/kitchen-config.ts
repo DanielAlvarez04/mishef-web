@@ -2,18 +2,6 @@
 
 export type KitchenMode = "GENERAL" | "ADVANCED"
 
-export type KitchenStationType =
-  | "GARDE_MANGER"
-  | "ENTREMETIER"
-  | "SAUCIER"
-  | "GRILL"
-  | "FRY"
-  | "FISH"
-  | "PASTRY"
-  | "BUTCHERY"
-  | "EXPO"
-  | "CUSTOM"
-
 export type KitchenPositionLevel =
   | "MANAGEMENT"
   | "CHEF_DE_PARTIE"
@@ -27,7 +15,6 @@ export interface KitchenStation {
   branchId: string | null
   name: string
   code: string
-  type: KitchenStationType
   color: string | null
   sortOrder: number
   /** Minutos objetivo de preparación; `null` = usa el estimado de la ronda. */
@@ -90,19 +77,6 @@ export const KITCHEN_MODE_LABELS: Record<KitchenMode, string> = {
   ADVANCED: "Avanzado",
 }
 
-export const KITCHEN_STATION_TYPE_LABELS: Record<KitchenStationType, string> = {
-  GARDE_MANGER: "Garde manger / fríos",
-  ENTREMETIER: "Entremetier / entrantes",
-  SAUCIER: "Saucier / salsas",
-  GRILL: "Parrilla / asados",
-  FRY: "Frituras",
-  FISH: "Pescados y mariscos",
-  PASTRY: "Pastelería",
-  BUTCHERY: "Carnicería",
-  EXPO: "Pase / expo",
-  CUSTOM: "Personalizada",
-}
-
 export const KITCHEN_POSITION_LEVEL_LABELS: Record<
   KitchenPositionLevel,
   string
@@ -128,9 +102,5 @@ export const KITCHEN_PERMISSION_LABELS: Record<string, string> = {
   "kitchen.settings": "Configurar cocina",
   "kitchen.reports": "Ver reportes",
 }
-
-export const KITCHEN_STATION_TYPES = Object.keys(
-  KITCHEN_STATION_TYPE_LABELS
-) as KitchenStationType[]
 
 export const KITCHEN_PERMISSIONS = Object.keys(KITCHEN_PERMISSION_LABELS)

@@ -74,7 +74,6 @@ export interface KitchenStationSummary {
   name: string
   code: string
   color: string | null
-  type: string
   sortOrder: number
   slaMinutes: number | null
 }

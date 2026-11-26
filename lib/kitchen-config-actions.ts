@@ -5,7 +5,6 @@ import type {
   KitchenConfig,
   KitchenMode,
   KitchenPositionLevel,
-  KitchenStationType,
 } from "@/lib/kitchen-config"
 
 const PATHS = ["/settings"]
@@ -23,7 +22,6 @@ export async function seedKitchenPositions(): Promise<ActionResult<unknown>> {
 export interface KitchenStationInput {
   name?: string
   code?: string
-  type?: KitchenStationType
   color?: string | null
   sortOrder?: number
   /** Minutos objetivo de preparación; `null` = usa el estimado de la ronda. */
@@ -51,7 +49,7 @@ export async function deactivateKitchenStation(
 }
 
 export interface KitchenPositionInput {
-  name: string
+  name?: string
   code?: string
   level?: KitchenPositionLevel
   permissions?: string[]
@@ -59,7 +57,7 @@ export interface KitchenPositionInput {
 }
 
 export async function createKitchenPosition(
-  input: KitchenPositionInput
+  input: KitchenPositionInput & { name: string }
 ): Promise<ActionResult<unknown>> {
   return mutateApi("/kitchen/positions", "POST", input, PATHS)
 }
