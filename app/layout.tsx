@@ -34,7 +34,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#2563eb",
+  themeColor: "#085C81",
   width: "device-width",
   initialScale: 1,
   // La barra inferior usa `env(safe-area-inset-bottom)` en iPhone/PWA.
