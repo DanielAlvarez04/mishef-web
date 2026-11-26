@@ -22,6 +22,7 @@ import {
   PlusIcon,
   PrinterIcon,
   ReceiptTextIcon,
+  SaveIcon,
   SearchIcon,
   SparklesIcon,
   Trash2Icon,
@@ -1576,6 +1577,17 @@ export function PosView({
     setComboConflict(null)
     dismissComboNotice()
 
+    if (value && !draftsRef.current.has(value)) {
+      try {
+        const stored = window.localStorage.getItem(`pos-draft-${value}`)
+        if (stored) {
+          draftsRef.current.set(value, JSON.parse(stored) as OrderDraft)
+        }
+      } catch {
+        // Borrador local corrupto o almacenamiento no disponible.
+      }
+    }
+
     const draft = draftsRef.current.get(value)
 
     setOrderId(value)
@@ -1700,7 +1712,7 @@ export function PosView({
     if (previous !== null) selectOrder(previous)
   })
 
-  const handleSend = async (payFirst = false) => {
+  const handleSend = async (payFirst = false, draftOnly = false) => {
     if (cart.length === 0) {
       toast.error("Añade al menos un artículo")
       return
@@ -1949,6 +1961,39 @@ export function PosView({
         return guestId ? { ...input, guestId } : input
       })
 
+      if (draftOnly) {
+        const draft: OrderDraft = {
+          cart,
+          channel,
+          tableNumber,
+          customerName,
+          customerSex,
+          customerAgeRange,
+          customerPhone,
+          deliveryAddress,
+          deliveryFee,
+          guests,
+          partySize,
+          partySizeDraft,
+          activeGuestKey,
+        }
+
+        draftsRef.current.set(targetId, draft)
+
+        try {
+          window.localStorage.setItem(
+            `pos-draft-${targetId}`,
+            JSON.stringify(draft)
+          )
+        } catch {
+          // Sin almacenamiento local el borrador sigue en memoria.
+        }
+
+        toast.success("Borrador guardado")
+        router.refresh()
+        return
+      }
+
       const result = await sendRound(targetId, {
         items: itemsWithGuests,
         idempotencyKey: roundKey,
@@ -2010,6 +2055,12 @@ export function PosView({
       })
       draftsRef.current.delete(targetId)
       draftsRef.current.delete("")
+
+      try {
+        window.localStorage.removeItem(`pos-draft-${targetId}`)
+      } catch {
+        // Sin almacenamiento local no hay nada que limpiar.
+      }
       resetDraft()
       router.refresh()
     } catch {
@@ -3016,37 +3067,50 @@ export function PosView({
                 <>
                   {displayChannel === "COUNTER" ? (
                     <>
-                      <Button
-                        type="button"
-                        className="w-full justify-between gap-3"
-                        onClick={handlePayAndSend}
-                        disabled={
-                          sending ||
-                          !canConfirm ||
-                          !cash.session ||
-                          !offline.isOnline ||
-                          (cart.length === 0 && !pendingPaymentRound)
-                        }
-                        title={
-                          !cash.session
-                            ? "Abre la caja para cobrar"
-                            : !offline.isOnline
-                              ? "Conecta el dispositivo para cobrar y enviar"
-                              : undefined
-                        }
-                      >
-                        {sending ? (
-                          <Loader2Icon className="animate-spin" />
-                        ) : null}
-                        <span>
-                          {pendingPaymentRound && cart.length === 0
-                            ? "Cobrar pendiente"
-                            : "Cobrar y enviar"}
-                        </span>
-                        <span className="border-l pl-3 tabular-nums">
-                          {money(payFirstAmount)}
-                        </span>
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          className="min-w-0 flex-1 justify-between gap-3"
+                          onClick={handlePayAndSend}
+                          disabled={
+                            sending ||
+                            !canConfirm ||
+                            !cash.session ||
+                            !offline.isOnline ||
+                            (cart.length === 0 && !pendingPaymentRound)
+                          }
+                          title={
+                            !cash.session
+                              ? "Abre la caja para cobrar"
+                              : !offline.isOnline
+                                ? "Conecta el dispositivo para cobrar y enviar"
+                                : undefined
+                          }
+                        >
+                          {sending ? (
+                            <Loader2Icon className="animate-spin" />
+                          ) : null}
+                          <span>
+                            {pendingPaymentRound && cart.length === 0
+                              ? "Cobrar pendiente"
+                              : "Cobrar y enviar"}
+                          </span>
+                          <span className="border-l pl-3 tabular-nums">
+                            {money(payFirstAmount)}
+                          </span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={
+                            sending || !offline.isOnline || cart.length === 0
+                          }
+                          onClick={() => void handleSend(false, true)}
+                        >
+                          <SaveIcon />
+                          Guardar
+                        </Button>
+                      </div>
                       {!cash.session ? (
                         <p className="text-xs text-amber-700 dark:text-amber-300">
                           Abre la caja para cobrar y enviar a cocina.
@@ -3060,19 +3124,33 @@ export function PosView({
                     </>
                   ) : (
                     <>
-                      <Button
-                        onClick={() => void handleSend(false)}
-                        disabled={sending || cart.length === 0}
-                      >
-                        {sending ? (
-                          <Loader2Icon className="animate-spin" />
+                      <div className="flex gap-2">
+                        <Button
+                          className="min-w-0 flex-1"
+                          onClick={() => void handleSend(false)}
+                          disabled={sending || cart.length === 0}
+                        >
+                          {sending ? (
+                            <Loader2Icon className="animate-spin" />
+                          ) : null}
+                          {offline.isOnline
+                            ? orderId
+                              ? "Enviar ronda"
+                              : "Abrir cuenta y enviar"
+                            : "Guardar comanda sin conexión"}
+                        </Button>
+                        {offline.isOnline ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={sending || cart.length === 0}
+                            onClick={() => void handleSend(false, true)}
+                          >
+                            <SaveIcon />
+                            Guardar
+                          </Button>
                         ) : null}
-                        {offline.isOnline
-                          ? orderId
-                            ? "Enviar ronda"
-                            : "Abrir cuenta y enviar"
-                          : "Guardar comanda sin conexión"}
-                      </Button>
+                      </div>
                       {!offline.isOnline ? (
                         <p className="text-xs text-amber-700 dark:text-amber-300">
                           Cocina no recibirá la comanda hasta que vuelva la conexión.

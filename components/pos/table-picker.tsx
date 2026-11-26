@@ -183,7 +183,7 @@ export function TablePicker({
                             Cuenta abierta
                           </Badge>
                         ) : null}
-                        {currentTable ? (
+                        {currentTable && current.size > 1 ? (
                           <Badge variant="outline" className="mt-1">
                             <ArmchairIcon />
                             Juntada
