@@ -12,6 +12,7 @@ import {
   CreditCardIcon,
   GroupIcon,
   LayoutGridIcon,
+  Link2Icon,
   Loader2Icon,
   LockIcon,
   MinusIcon,
@@ -127,17 +128,22 @@ import {
   addOrderGuest,
   createOrder,
   getChargeSummary,
+  mergeOrders,
+  releasePaymentRound,
   removeOrderGuest,
   sendRound,
   updateOrderGuest,
+  updateOrderTables,
   type RoundItemInput,
 } from "@/lib/order-actions"
 import { API_BASE_URL } from "@/lib/api-base"
 import type { CashSessionPayload } from "@/lib/cash"
 import type { Menu, MenuTrendingItem } from "@/lib/menus"
 import { printOrderReceipt } from "@/lib/mercadopago-actions"
+import { cancelOrderSplits } from "@/lib/split-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import type { PosDisplayInfo, PosDisplayState } from "@/lib/pos-display"
+import type { DiningTable } from "@/lib/tables"
 import {
   GUEST_AGE_RANGES,
   GUEST_AGE_RANGE_LABELS,
@@ -167,13 +173,9 @@ import { PosCatalog } from "@/components/pos/pos-catalog"
 import { CashSessionActions, CashSessionDialog, type CashSessionAction } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
+import { TablePicker, type TablePickerMode } from "./table-picker"
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
-
-/** Mesas disponibles por ahora (1–25). */
-const TABLE_OPTIONS = Array.from({ length: 25 }, (_, index) =>
-  String(index + 1)
-)
 
 /** Escalas de texto de las cards del catálogo (1 = chico, 4 = extra grande). */
 const CARD_TEXT_SCALES = ["md", "lg", "xl", "2xl"] as const
@@ -484,6 +486,7 @@ export function PosView({
   displays,
   taxRate,
   kitchenAdvanced = false,
+  diningTables = [],
 }: {
   products: ItemListItem[]
   orders: Order[]
@@ -506,6 +509,8 @@ export function PosView({
   taxRate: string
   /** La sucursal usa cocina Avanzada (estaciones y rondas retenidas). */
   kitchenAdvanced?: boolean
+  /** Mesas configuradas de la sucursal. */
+  diningTables?: DiningTable[]
 }) {
   const router = useRouter()
   useWakeLock()
@@ -564,6 +569,10 @@ export function PosView({
     null
   )
   const [charging, setCharging] = React.useState(false)
+  const [chargeOrder, setChargeOrder] = React.useState<Order | null>(null)
+  const [payFirstRoundId, setPayFirstRoundId] = React.useState<string | null>(
+    null
+  )
   const [printingAccount, setPrintingAccount] = React.useState(false)
 
   const [comboNotice, setComboNotice] = React.useState<{
@@ -608,7 +617,19 @@ export function PosView({
     },
     [setPreferredChannel]
   )
-  const [tableNumber, setTableNumber] = React.useState("1")
+  const initialFreeTable = diningTables.find(
+    (table) => table.isActive && table.activeOrders.length === 0
+  )
+  const [tableNumber, setTableNumber] = React.useState(
+    initialFreeTable?.number ?? "1"
+  )
+  const [tableId, setTableId] = React.useState(initialFreeTable?.id ?? "")
+  const [tablePickerOpen, setTablePickerOpen] = React.useState(false)
+  const [tablePickerMode, setTablePickerMode] =
+    React.useState<TablePickerMode>("select")
+  const [mergeAccountOrderId, setMergeAccountOrderId] = React.useState<
+    string | null
+  >(null)
   const [customerName, setCustomerName] = React.useState("")
   const [customerSex, setCustomerSex] = React.useState<GuestSex | null>(null)
   const [customerAgeRange, setCustomerAgeRange] =
@@ -763,6 +784,16 @@ export function PosView({
     : channel === "DINE_IN"
   const displayChannel = activeOrder?.channel ?? channel
   const total = cart.reduce((sum, line) => sum + cartLineTotal(line), 0)
+  const pendingPaymentRounds =
+    activeOrder?.rounds?.filter((round) => round.status === "PENDING_PAYMENT") ??
+    []
+  const pendingPaymentRound = pendingPaymentRounds[0] ?? null
+  const dialogOrder = chargeOrder ?? activeOrder
+  const activeTableIds =
+    activeOrder?.tables?.map((row) => row.table.id) ??
+    (tableNumber ? diningTables.filter((t) => t.number === tableNumber).map((t) => t.id) : [])
+  const payFirstAmount =
+    Math.max(Number(activeOrder?.balance ?? 0), 0) + total
 
   // La comanda se muestra como columna solo cuando hay ancho suficiente para
   // catálogo + panel (xl). En tablet horizontal y teléfono se usa el sheet.
@@ -1669,10 +1700,29 @@ export function PosView({
     if (previous !== null) selectOrder(previous)
   })
 
-  const handleSend = async () => {
+  const handleSend = async (payFirst = false) => {
     if (cart.length === 0) {
       toast.error("Añade al menos un artículo")
       return
+    }
+
+    if (payFirst) {
+      if (displayChannel !== "COUNTER") {
+        toast.error("El cobro anticipado solo está disponible en mostrador")
+        return
+      }
+
+      if (!canConfirm) {
+        toast.error("Solo caja o administración pueden cobrar y enviar")
+        return
+      }
+
+      if (!offline.isOnline) {
+        toast.error("Conecta el dispositivo para cobrar y enviar")
+        return
+      }
+
+      if (holdRound) setHoldRound(false)
     }
 
     if (channel === "DINE_IN" && !tableNumber.trim()) {
@@ -1680,10 +1730,12 @@ export function PosView({
       return
     }
 
-    if (
-      (channel === "PHONE" || channel === "DELIVERY") &&
-      !customerPhone.trim()
-    ) {
+    if (channel === "PHONE" && !customerName.trim()) {
+      toast.error("Escribe el nombre del cliente para Drive-Thru")
+      return
+    }
+
+    if (channel === "DELIVERY" && !customerPhone.trim()) {
       toast.error("Escribe el teléfono del cliente")
       return
     }
@@ -1716,6 +1768,7 @@ export function PosView({
       setCart([])
       resetChannel()
       setTableNumber("1")
+      setTableId("")
       setCustomerName("")
       setCustomerSex(null)
       setCustomerAgeRange(null)
@@ -1783,6 +1836,7 @@ export function PosView({
     try {
       let targetId = orderId
       let createdGuests: OrderGuest[] = []
+      let createdOrder: Order | null = null
 
       if (!targetId) {
         const created = await createOrder({
@@ -1791,6 +1845,8 @@ export function PosView({
             channel === "DINE_IN"
               ? tableNumber.trim() || "1"
               : undefined,
+          tableIds:
+            channel === "DINE_IN" && tableId ? [tableId] : undefined,
           partySize: channel === "DINE_IN" ? partySize : 1,
           customerName: customerName.trim() || undefined,
           customerPhone: customerPhone.trim() || undefined,
@@ -1831,6 +1887,7 @@ export function PosView({
 
         targetId = created.data.id
         createdGuests = created.data.guests ?? []
+        createdOrder = created.data
         setPendingOrder(created.data)
         setOrderId(targetId)
       }
@@ -1895,7 +1952,8 @@ export function PosView({
       const result = await sendRound(targetId, {
         items: itemsWithGuests,
         idempotencyKey: roundKey,
-        hold: holdRound || undefined,
+        hold: payFirst ? undefined : holdRound || undefined,
+        paymentPending: payFirst || undefined,
       })
 
       if (!result.ok) {
@@ -1908,11 +1966,31 @@ export function PosView({
         return
       }
 
-      toast.success(
-        holdRound
-          ? "Ronda retenida · dispara desde cocina"
-          : `Ronda enviada · ${money(total)}`
-      )
+      if (payFirst) {
+        setPayFirstRoundId(result.data?.id ?? null)
+        const baseOrder = activeOrder ?? createdOrder
+
+        if (baseOrder) {
+          const nextTotal = Number(baseOrder.total) + total
+
+          setChargeOrder({
+            ...baseOrder,
+            total: nextTotal.toFixed(2),
+            rounds: result.data
+              ? [...(baseOrder.rounds ?? []), result.data]
+              : baseOrder.rounds,
+          })
+        }
+
+        setCharging(true)
+        toast.success("Pedido guardado · cobra para enviarlo a cocina")
+      } else {
+        toast.success(
+          holdRound
+            ? "Ronda retenida · dispara desde cocina"
+            : `Ronda enviada · ${money(total)}`
+        )
+      }
       setHoldRound(false)
 
       const warnings = result.data?.warnings ?? []
@@ -2270,9 +2348,7 @@ export function PosView({
                 <div className="flex flex-wrap gap-1.5">
                   {CHANNELS.map((value) => {
                     const disabled =
-                      value === "PHONE" ||
-                      value === "DELIVERY" ||
-                      Boolean(activeOrder)
+                      value === "DELIVERY" || Boolean(activeOrder)
                     const active = displayChannel === value
 
                     return (
@@ -2285,7 +2361,7 @@ export function PosView({
                         aria-pressed={active}
                         disabled={disabled}
                         title={
-                          value === "PHONE" || value === "DELIVERY"
+                          value === "DELIVERY"
                             ? "Disponible próximamente"
                             : undefined
                         }
@@ -2305,29 +2381,51 @@ export function PosView({
                     <div className="grid grid-cols-2 items-end gap-2">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="pos-table">Mesa</Label>
-                        <Select
-                          value={activeOrder?.tableNumber ?? tableNumber}
-                          onValueChange={(value) => {
+                        <Button
+                          id="pos-table"
+                          type="button"
+                          variant="outline"
+                          className="w-full justify-between gap-2"
+                          onClick={() => {
+                            if (activeOrder && activeTableIds.length === 0) {
+                              toast.error("La cuenta no tiene mesas asignadas")
+                              return
+                            }
                             posCapture.noteComandaInteraction()
-                            setTableNumber(value ?? "1")
+                            setTablePickerMode(activeOrder ? "change" : "select")
+                            setTablePickerOpen(true)
                           }}
-                          disabled={Boolean(activeOrder)}
-                          items={TABLE_OPTIONS.map((value) => ({
-                            value,
-                            label: `Mesa ${value}`,
-                          }))}
                         >
-                          <SelectTrigger id="pos-table" className="w-full" aria-label="Mesa">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TABLE_OPTIONS.map((value) => (
-                              <SelectItem key={value} value={value}>
-                                Mesa {value}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          <span className="truncate">
+                            {activeOrder
+                              ? activeOrder.tables?.length
+                                ? activeOrder.tables
+                                    .map((row) => `Mesa ${row.table.number}`)
+                                    .join(" + ")
+                                : `Mesa ${activeOrder.tableNumber ?? "—"}`
+                              : diningTables.find((table) => table.id === tableId)
+                                  ? `Mesa ${diningTables.find((table) => table.id === tableId)?.number}`
+                                  : `Mesa ${tableNumber}`}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {activeOrder ? "Cambiar" : "Elegir"}
+                          </span>
+                        </Button>
+                        {activeOrder ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              posCapture.noteComandaInteraction()
+                              setTablePickerMode("merge")
+                              setTablePickerOpen(true)
+                            }}
+                          >
+                            <Link2Icon />
+                            Juntar mesas
+                          </Button>
+                        ) : null}
                       </div>
 
                       <div className="flex flex-col gap-2">
@@ -2462,7 +2560,9 @@ export function PosView({
                   </div>
                 ) : null}
 
-                {!activeOrder && !isDineIn && displayChannel === "COUNTER" ? (
+                {!activeOrder &&
+                !isDineIn &&
+                (displayChannel === "COUNTER" || displayChannel === "PHONE") ? (
                   <div className="flex items-end gap-2">
                     <div className="flex min-w-0 flex-1 flex-col gap-2">
                       <Label htmlFor="pos-customer">
@@ -2750,6 +2850,125 @@ export function PosView({
     </>
   )
 
+  const handleTableConfirm = (ids: string[]) => {
+    if (ids.length === 0) return
+
+    if (!activeOrder) {
+      const table = diningTables.find((entry) => entry.id === ids[0])
+      if (!table) return
+      setTableId(table.id)
+      setTableNumber(table.number)
+      return
+    }
+
+    const nextIds = tablePickerMode === "change" ? ids.slice(0, 1) : ids
+
+    void (async () => {
+      const result = await updateOrderTables(activeOrder.id, nextIds)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudieron actualizar las mesas")
+        return
+      }
+
+      toast.success(
+        tablePickerMode === "change" ? "Mesa cambiada" : "Mesas juntadas"
+      )
+      router.refresh()
+    })()
+  }
+
+  const handleMergeOrder = (sourceOrderId: string) => {
+    setTablePickerOpen(false)
+    setMergeAccountOrderId(sourceOrderId)
+  }
+
+  const confirmMergeAccount = async () => {
+    if (!activeOrder || !mergeAccountOrderId) return
+
+    const result = await mergeOrders(activeOrder.id, mergeAccountOrderId)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudieron juntar las cuentas")
+      return
+    }
+
+    toast.success("Cuentas juntadas · puedes cobrar todo o por cuenta")
+    setMergeAccountOrderId(null)
+    router.refresh()
+  }
+
+  const openPendingPayment = () => {
+    if (!activeOrder) return
+    setChargeOrder(activeOrder)
+    setCharging(true)
+  }
+
+  const handlePayAndSend = () => {
+    if (cart.length === 0) {
+      if (pendingPaymentRound) {
+        openPendingPayment()
+        return
+      }
+
+      toast.error("Añade al menos un artículo")
+      return
+    }
+
+    void handleSend(true)
+  }
+
+  const releasePayFirstRound = async () => {
+    const target = chargeOrder ?? activeOrder
+
+    if (!target) return
+
+    const ids = new Set<string>()
+
+    for (const round of target.rounds ?? []) {
+      if (round.status === "PENDING_PAYMENT") ids.add(round.id)
+    }
+
+    if (payFirstRoundId) ids.add(payFirstRoundId)
+
+    if (ids.size === 0) return
+
+    for (const roundId of ids) {
+      const result = await releasePaymentRound(target.id, roundId)
+
+      if (!result.ok) {
+        toast.error(
+          result.message ??
+            "El pago se confirmó, pero no se pudo enviar a cocina. Usa Cobrar pendiente."
+        )
+        setCharging(false)
+        setChargeOrder(null)
+        router.refresh()
+        return
+      }
+    }
+
+    toast.success("Pago confirmado · pedido enviado a cocina")
+    setCharging(false)
+    setChargeOrder(null)
+    setPayFirstRoundId(null)
+    router.refresh()
+  }
+
+  const handleChargeAllMerged = async () => {
+    if (!activeOrder) return
+
+    const result = await cancelOrderSplits(activeOrder.id)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudo unir la cuenta para cobrar")
+      return
+    }
+
+    setChargeOrder({ ...activeOrder, splits: [] })
+    setCharging(true)
+  }
+
   const handlePrintAccount = async () => {
     if (!activeOrder) return
 
@@ -2780,6 +2999,11 @@ export function PosView({
   const hasConfirmedPayments = (activeOrder?.payments ?? []).some(
     (payment) => payment.status === "CONFIRMED"
   )
+  const splitAccounts = activeOrder?.splits ?? []
+  const hasMergedAccounts = splitAccounts.length > 1
+  const hasSplitPayments = splitAccounts.some(
+    (split) => split.paidAmount > 0 || split.pendingAmount > 0
+  )
   const isTableServiceOrder =
     !activeOrder?.isTakeaway &&
     (activeOrder?.channel ?? "DINE_IN") === "DINE_IN"
@@ -2790,34 +3014,84 @@ export function PosView({
     <>
       {canSend ? (
                 <>
-                  <Button
-                    onClick={handleSend}
-                    disabled={sending || cart.length === 0}
-                  >
-                    {sending ? <Loader2Icon className="animate-spin" /> : null}
-                    {offline.isOnline
-                      ? orderId
-                        ? "Enviar ronda"
-                        : "Abrir cuenta y enviar"
-                      : "Guardar comanda sin conexión"}
-                  </Button>
-                  {!offline.isOnline ? (
-                    <p className="text-xs text-amber-700 dark:text-amber-300">
-                      Cocina no recibirá la comanda hasta que vuelva la conexión.
-                    </p>
-                  ) : null}
-                  {kitchenAdvanced ? (
-                    <div className="flex flex-col gap-2">
-                      <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <Switch
-                          checked={holdRound}
-                          onCheckedChange={setHoldRound}
-                          disabled={!offline.isOnline || sending}
-                        />
-                        Mantener para después
-                      </label>
-                    </div>
-                  ) : null}
+                  {displayChannel === "COUNTER" ? (
+                    <>
+                      <Button
+                        type="button"
+                        className="w-full justify-between gap-3"
+                        onClick={handlePayAndSend}
+                        disabled={
+                          sending ||
+                          !canConfirm ||
+                          !cash.session ||
+                          !offline.isOnline ||
+                          (cart.length === 0 && !pendingPaymentRound)
+                        }
+                        title={
+                          !cash.session
+                            ? "Abre la caja para cobrar"
+                            : !offline.isOnline
+                              ? "Conecta el dispositivo para cobrar y enviar"
+                              : undefined
+                        }
+                      >
+                        {sending ? (
+                          <Loader2Icon className="animate-spin" />
+                        ) : null}
+                        <span>
+                          {pendingPaymentRound && cart.length === 0
+                            ? "Cobrar pendiente"
+                            : "Cobrar y enviar"}
+                        </span>
+                        <span className="border-l pl-3 tabular-nums">
+                          {money(payFirstAmount)}
+                        </span>
+                      </Button>
+                      {!cash.session ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          Abre la caja para cobrar y enviar a cocina.
+                        </p>
+                      ) : null}
+                      {!canConfirm ? (
+                        <p className="text-xs text-muted-foreground">
+                          Caja o administración deben cobrar este pedido.
+                        </p>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => void handleSend(false)}
+                        disabled={sending || cart.length === 0}
+                      >
+                        {sending ? (
+                          <Loader2Icon className="animate-spin" />
+                        ) : null}
+                        {offline.isOnline
+                          ? orderId
+                            ? "Enviar ronda"
+                            : "Abrir cuenta y enviar"
+                          : "Guardar comanda sin conexión"}
+                      </Button>
+                      {!offline.isOnline ? (
+                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                          Cocina no recibirá la comanda hasta que vuelva la conexión.
+                        </p>
+                      ) : null}
+                      {kitchenAdvanced ? (
+                        <div className="flex flex-col gap-2">
+                          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Switch
+                              checked={holdRound}
+                              onCheckedChange={setHoldRound}
+                              disabled={!offline.isOnline || sending}
+                            />
+                            Mantener para después
+                          </label>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground">
@@ -2856,15 +3130,29 @@ export function PosView({
                           return
                         }
 
-                        if (offline.isOnline) setCharging(true)
-                        else setOfflineCharging(true)
+                        if (offline.isOnline) {
+                          setChargeOrder(activeOrder)
+                          setCharging(true)
+                        } else {
+                          setOfflineCharging(true)
+                        }
                       }}
                     >
                       {offline.isOnline ? <CreditCardIcon /> : <BanknoteIcon />}
                       {offline.isOnline
-                        ? "Cobrar cuenta"
+                        ? hasMergedAccounts
+                          ? "Cobrar por cuenta"
+                          : "Cobrar cuenta"
                         : "Cobrar sin conexión"}
                     </Button>
+                    {hasMergedAccounts && offline.isOnline && !hasSplitPayments ? (
+                      <Button
+                        variant="outline"
+                        onClick={() => void handleChargeAllMerged()}
+                      >
+                        Cobrar todo
+                      </Button>
+                    ) : null}
                     {canPrintAccount ? (
                       <Button
                         variant="ghost"
@@ -3427,9 +3715,7 @@ export function PosView({
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
                   const disabled =
-                    value === "PHONE" ||
-                    value === "DELIVERY" ||
-                    Boolean(activeOrder)
+                    value === "DELIVERY" || Boolean(activeOrder)
                   const active = displayChannel === value
 
                   return (
@@ -3442,7 +3728,7 @@ export function PosView({
                       aria-pressed={active}
                       disabled={disabled}
                       title={
-                        value === "PHONE" || value === "DELIVERY"
+                        value === "DELIVERY"
                           ? "Disponible próximamente"
                           : undefined
                       }
@@ -3466,33 +3752,52 @@ export function PosView({
                       >
                         Mesa
                       </Label>
-                      <Select
-                        value={activeOrder?.tableNumber ?? tableNumber}
-                        onValueChange={(value) => {
+                      <Button
+                        id="mobile-pos-table"
+                        type="button"
+                        variant="outline"
+                        className="h-8 w-full justify-between gap-2 px-2 text-xs"
+                        onClick={() => {
+                          if (activeOrder && activeTableIds.length === 0) {
+                            toast.error("La cuenta no tiene mesas asignadas")
+                            return
+                          }
                           posCapture.noteComandaInteraction()
-                          setTableNumber(value ?? "1")
+                          setTablePickerMode(activeOrder ? "change" : "select")
+                          setTablePickerOpen(true)
                         }}
-                        disabled={Boolean(activeOrder)}
-                        items={TABLE_OPTIONS.map((value) => ({
-                          value,
-                          label: `Mesa ${value}`,
-                        }))}
                       >
-                        <SelectTrigger
-                          id="mobile-pos-table"
-                          className="h-8 w-full"
-                          aria-label="Mesa"
+                        <span className="truncate">
+                          {activeOrder
+                            ? activeOrder.tables?.length
+                              ? activeOrder.tables
+                                  .map((row) => `M${row.table.number}`)
+                                  .join("+")
+                              : `M${activeOrder.tableNumber ?? "—"}`
+                            : diningTables.find((table) => table.id === tableId)
+                              ? `Mesa ${diningTables.find((table) => table.id === tableId)?.number}`
+                              : `Mesa ${tableNumber}`}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">
+                          {activeOrder ? "Cambiar" : "Elegir"}
+                        </span>
+                      </Button>
+                      {activeOrder ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => {
+                            posCapture.noteComandaInteraction()
+                            setTablePickerMode("merge")
+                            setTablePickerOpen(true)
+                          }}
                         >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {TABLE_OPTIONS.map((value) => (
-                            <SelectItem key={value} value={value}>
-                              Mesa {value}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                          <Link2Icon />
+                          Juntar
+                        </Button>
+                      ) : null}
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -3547,7 +3852,7 @@ export function PosView({
                       </ButtonGroup>
                     </div>
                   </div>
-              ) : displayChannel === "COUNTER" ? (
+              ) : displayChannel === "COUNTER" || displayChannel === "PHONE" ? (
                 activeOrder ? (
                   <p className="text-xs text-muted-foreground">
                     Cliente:{" "}
@@ -3902,24 +4207,66 @@ export function PosView({
         </AlertDialogContent>
       </AlertDialog>
 
-      {charging && activeOrder ? (
+      <TablePicker
+        key={`${tablePickerMode}-${tablePickerOpen ? "open" : "closed"}-${activeTableIds.join("|")}`}
+        open={tablePickerOpen}
+        onOpenChange={setTablePickerOpen}
+        tables={diningTables}
+        mode={tablePickerMode}
+        currentOrderId={activeOrder?.id ?? null}
+        currentTableIds={activeTableIds}
+        onConfirm={handleTableConfirm}
+        onMergeOrder={handleMergeOrder}
+      />
+
+      <AlertDialog
+        open={Boolean(mergeAccountOrderId)}
+        onOpenChange={(open) => !open && setMergeAccountOrderId(null)}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Link2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>¿Juntar las cuentas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Las rondas y clientes de la otra cuenta se moverán a esta. Podrás
+              cobrar todo junto o por cuenta desde el diálogo de cobro.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirmMergeAccount()}
+            >
+              Juntar cuentas
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {charging && dialogOrder ? (
         <ChargeDialog
-          order={activeOrder}
+          order={dialogOrder}
           canConfirm={canConfirm}
           mercadoPago={mercadoPago}
           initialSummary={
-            chargeSnapshot.current.get(chargeSummaryCacheKey(activeOrder)) ??
+            chargeSnapshot.current.get(chargeSummaryCacheKey(dialogOrder)) ??
             null
           }
           displayTipPercent={displayState?.tipPercent ?? null}
+          onFullyPaid={() => void releasePayFirstRound()}
           onClose={() => {
             setCharging(false)
+            setChargeOrder(null)
             // Los cobros se reflejan en el diálogo sin revalidar el POS; al
             // cerrarlo se trae la lista de cuentas con los saldos reales.
             router.refresh()
           }}
           onClosed={() => {
             setCharging(false)
+            setChargeOrder(null)
+            setPayFirstRoundId(null)
             setOrderId("")
             setCart([])
             setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])

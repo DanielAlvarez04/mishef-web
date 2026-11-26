@@ -7,7 +7,7 @@ export type OrderChannel = "DINE_IN" | "COUNTER" | "PHONE" | "DELIVERY"
 export const ORDER_CHANNEL_LABELS: Record<OrderChannel, string> = {
   DINE_IN: "Mesa",
   COUNTER: "Mostrador",
-  PHONE: "Teléfono",
+  PHONE: "Drive-Thru",
   DELIVERY: "Domicilio",
 }
 
@@ -158,6 +158,7 @@ export interface ChargeSummary {
 export type RoundStatus =
   | "PENDING"
   | "HELD"
+  | "PENDING_PAYMENT"
   | "FIRED"
   | "PREPARING"
   | "READY"
@@ -174,6 +175,7 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 export const ROUND_STATUS_LABELS: Record<RoundStatus, string> = {
   PENDING: "Pendiente",
   HELD: "En espera",
+  PENDING_PAYMENT: "Pendiente de pago",
   FIRED: "Disparada",
   PREPARING: "En preparación",
   READY: "Lista",
@@ -205,6 +207,9 @@ export const ROUND_ACTIONS: Record<RoundStatus, RoundAction[]> = {
   DELIVERED: [],
   CANCELLED: [],
   HELD: [],
+  PENDING_PAYMENT: [
+    { status: "CANCELLED", label: "Cancelar", variant: "destructive" },
+  ],
   FIRED: [],
   PICKED_UP: [],
 }
@@ -392,6 +397,17 @@ export interface Order {
   rounds: (OrderRound | OrderSummaryRound)[]
   guests?: OrderGuest[]
   payments?: Payment[]
+  tables?: Array<{
+    id: string
+    isPrimary: boolean
+    table: {
+      id: string
+      number: string
+      zone: string | null
+      seats: number
+    }
+  }>
+  splits?: OrderSplit[]
   paidTotal?: string
   balance?: string
 }
@@ -470,7 +486,7 @@ export function canDraftOrders(roles: string[]): boolean {
 }
 
 export function canSendOrders(roles: string[]): boolean {
-  return roles.some((role) => ["ADMIN", "WAITER"].includes(role))
+  return roles.some((role) => ["ADMIN", "WAITER", "CASHIER"].includes(role))
 }
 
 export function canWorkKitchen(roles: string[]): boolean {
@@ -517,11 +533,15 @@ export function orderLabel(order: {
   isTakeaway: boolean
   channel?: OrderChannel
   customerName?: string | null
+  tables?: Array<{ table: { number: string } }>
 }): string {
   const channel = order.channel
   if (channel === "DELIVERY") return "Domicilio"
-  if (channel === "PHONE") return "Teléfono"
+  if (channel === "PHONE") return "Drive-Thru"
   if (channel === "COUNTER") return "Mostrador"
+  if (order.tables && order.tables.length > 1) {
+    return `Mesas ${order.tables.map((row) => row.table.number).join(" + ")}`
+  }
   if (order.tableNumber) return `Mesa ${order.tableNumber}`
   return order.isTakeaway ? "Mostrador" : "Sin mesa"
 }

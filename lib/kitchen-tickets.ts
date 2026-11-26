@@ -65,6 +65,7 @@ export interface KitchenTicket {
       isTakeaway: boolean
       branchId: string | null
       status: string
+      tables?: Array<{ table: { number: string } }>
     }
   }
 }
@@ -132,11 +133,16 @@ export const KITCHEN_TICKET_STATUS_LABELS: Record<
 export function kitchenOrderLabel(ticket: KitchenTicket): string {
   const order = ticket.orderRound.order
 
+  if (order.tables && order.tables.length > 1) {
+    return `Mesas ${order.tables.map((row) => row.table.number).join(" + ")}`
+  }
   if (order.tableNumber) return `Mesa ${order.tableNumber}`
   if (order.channel === "COUNTER") {
     return order.customerName?.trim() || "Mostrador"
   }
-  if (order.channel === "PHONE") return "Teléfono"
+  if (order.channel === "PHONE") {
+    return order.customerName?.trim() || "Drive-Thru"
+  }
   if (order.channel === "DELIVERY") return "Domicilio"
   return "Pedido"
 }

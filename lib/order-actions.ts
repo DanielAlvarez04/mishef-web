@@ -38,6 +38,8 @@ export interface SendRoundInput {
   hold?: boolean
   /** Curso de la ronda (modo Avanzado). */
   courseId?: string
+  /** Ronda de mostrador retenida hasta confirmar el pago. */
+  paymentPending?: boolean
 }
 
 export interface CreateOrderGuestInput {
@@ -49,6 +51,7 @@ export interface CreateOrderGuestInput {
 
 export interface CreateOrderInput {
   tableNumber?: string
+  tableIds?: string[]
   partySize?: number
   isTakeaway?: boolean
   channel?: OrderChannel
@@ -105,6 +108,45 @@ export async function sendRound(
     `/orders/${orderId}/rounds`,
     "POST",
     input,
+    ORDER_PATHS
+  )
+}
+
+/** Libera a cocina una ronda de mostrador ya pagada. */
+export async function releasePaymentRound(
+  orderId: string,
+  roundId: string
+): Promise<ActionResult<OrderRound>> {
+  return mutateApi<OrderRound>(
+    `/orders/${orderId}/rounds/${roundId}/release`,
+    "POST",
+    undefined,
+    ORDER_PATHS
+  )
+}
+
+/** Cambia o junta mesas libres de una cuenta abierta. */
+export async function updateOrderTables(
+  orderId: string,
+  tableIds: string[]
+): Promise<ActionResult<Order>> {
+  return mutateApi<Order>(
+    `/orders/${orderId}/tables`,
+    "PATCH",
+    { tableIds },
+    ORDER_PATHS
+  )
+}
+
+/** Junta dos cuentas abiertas de mesa. */
+export async function mergeOrders(
+  targetOrderId: string,
+  sourceOrderId: string
+): Promise<ActionResult<Order>> {
+  return mutateApi<Order>(
+    `/orders/${targetOrderId}/merge`,
+    "POST",
+    { sourceOrderId },
     ORDER_PATHS
   )
 }

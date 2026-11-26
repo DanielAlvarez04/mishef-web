@@ -399,7 +399,7 @@ export function AdvancedKitchenView({
                 : round.order.channel === "COUNTER"
                   ? "Mostrador"
                   : round.order.channel === "PHONE"
-                    ? "Teléfono"
+                    ? "Drive-Thru"
                     : "Domicilio"
               const itemCount = round.items.reduce(
                 (sum, item) => sum + item.quantity,

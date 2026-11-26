@@ -13,6 +13,7 @@ import type { RoundStatus } from "@/lib/orders"
 const STATUS_ICONS: Record<RoundStatus, LucideIcon> = {
   PENDING: TimerIcon,
   HELD: TimerIcon,
+  PENDING_PAYMENT: TimerIcon,
   FIRED: FlameIcon,
   PREPARING: FlameIcon,
   READY: HandPlatterIcon,

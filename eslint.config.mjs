@@ -14,6 +14,10 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Plantillas de skills: no son código de la aplicación.
     ".agents/**",
+    // Artefactos generados por Playwright.
+    "playwright-report/**",
+    "playwright-report-advanced/**",
+    "test-results/**",
   ]),
 ]);
 

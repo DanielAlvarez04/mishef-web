@@ -16,6 +16,7 @@ import {
   type Order,
 } from "@/lib/orders"
 import type { CashSessionPayload } from "@/lib/cash"
+import type { DiningTable } from "@/lib/tables"
 import type { PosDisplayInfo } from "@/lib/pos-display"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
 import { requireAnyRole } from "@/lib/session"
@@ -48,6 +49,7 @@ export default async function PointOfSalePage() {
     pointConfigResponse,
     trendingResponse,
     kitchenModeResponse,
+    tablesResponse,
   ] = await Promise.all([
     apiFetch("/catalog/items"),
     apiFetch("/catalog/categories"),
@@ -61,6 +63,7 @@ export default async function PointOfSalePage() {
       : Promise.resolve(null),
     apiFetch("/catalog/menus/trending"),
     apiFetch("/kitchen/mode"),
+    apiFetch("/tables"),
   ])
 
   // Primero el modo offline: si la red falló, no se puede saber si falta
@@ -155,6 +158,9 @@ export default async function PointOfSalePage() {
   const kitchenMode = kitchenModeResponse.ok
     ? ((await kitchenModeResponse.json()) as { mode?: string }).mode
     : "GENERAL"
+  const diningTables = tablesResponse.ok
+    ? ((await tablesResponse.json()) as DiningTable[])
+    : []
 
   return (
     <>
@@ -181,6 +187,7 @@ export default async function PointOfSalePage() {
       displays={displays}
         taxRate={user.organizationTaxRate ?? "0.16"}
         kitchenAdvanced={kitchenMode === "ADVANCED"}
+        diningTables={diningTables}
       />
     </>
   )

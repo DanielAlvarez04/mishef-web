@@ -158,6 +158,7 @@ export function ChargeDialog({
   initialSummary = null,
   onClose,
   onClosed,
+  onFullyPaid,
 }: {
   order: Order
   canConfirm: boolean
@@ -168,6 +169,8 @@ export function ChargeDialog({
   initialSummary?: ChargeSummary | null
   onClose: () => void
   onClosed: () => void
+  /** Se llama una vez cuando el saldo confirmado llega a cero. */
+  onFullyPaid?: () => void
 }) {
   const money = useMoney()
 
@@ -178,6 +181,7 @@ export function ChargeDialog({
    * partes se ajustan aquí; al cerrar el diálogo el padre refresca la cuenta.
    */
   const [localPayments, setLocalPayments] = React.useState<ChargePayment[]>([])
+  const fullyPaidNotified = React.useRef(false)
 
   const [method, setMethod] = React.useState<PaymentMethod>("CASH")
   /**
@@ -344,6 +348,15 @@ export function ChargeDialog({
   const balance = Math.max(Number(order.total) - confirmedTotal, 0)
   /** Lo que de verdad se puede cobrar: el saldo menos lo pendiente. */
   const available = Math.max(balance - pendingTotal, 0)
+
+  React.useEffect(() => {
+    if (detailLoading) return
+    if (!detail && !initialSummaryRef.current) return
+    if (balance > 0.004 || fullyPaidNotified.current) return
+
+    fullyPaidNotified.current = true
+    onFullyPaid?.()
+  }, [balance, detail, detailLoading, onFullyPaid])
   const pendingPayments = payments.filter(
     (payment) => payment.status === "PENDING"
   )

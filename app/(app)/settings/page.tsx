@@ -17,6 +17,7 @@ import {
   KitchenPrepCard,
 } from "@/components/settings/kitchen-settings-card"
 import { KitchenConfigCard } from "@/components/settings/kitchen-config-card"
+import { DiningTablesCard } from "@/components/settings/dining-tables-card"
 import { PracticeModeCard } from "@/components/settings/practice-mode-card"
 import { BranchesCard } from "@/components/settings/branches-card"
 import { PosDevicesCard } from "@/components/settings/pos-devices-card"
@@ -67,6 +68,7 @@ import { isAdmin, requireUser } from "@/lib/session"
 import type { FiscalProfile } from "@/lib/fiscal"
 import type { KitchenSettings } from "@/lib/kitchen"
 import type { KitchenConfig } from "@/lib/kitchen-config"
+import type { DiningTable } from "@/lib/tables"
 import type { MercadoPagoStatus } from "@/lib/mercadopago"
 import type { OrganizationReceiptsData } from "@/lib/receipts"
 import type { PosPairedDevice } from "@/lib/pos-device"
@@ -327,6 +329,7 @@ export default async function SettingsPage({
     articleCategoriesResponse,
     recipeCategoriesResponse,
     optionPresetsResponse,
+    diningTablesResponse,
   ] = await Promise.all([
     apiFetch("/inventory/ingredients?includeInactive=true"),
     apiFetch("/inventory/ingredient-categories?includeInactive=true"),
@@ -335,6 +338,7 @@ export default async function SettingsPage({
     apiFetch("/catalog/categories?includeInactive=true&kind=article"),
     apiFetch("/catalog/categories?includeInactive=true&kind=recipe"),
     apiFetch("/catalog/option-groups/presets"),
+    admin ? apiFetch("/tables") : Promise.resolve(null),
   ])
   const ingredients: Ingredient[] = ingredientsResponse.ok
     ? ((await ingredientsResponse.json()) as Ingredient[])
@@ -354,6 +358,10 @@ export default async function SettingsPage({
   const optionPresets: OptionGroupPreset[] = optionPresetsResponse.ok
     ? ((await optionPresetsResponse.json()) as OptionGroupPreset[])
     : []
+  const diningTables: DiningTable[] =
+    diningTablesResponse?.ok
+      ? ((await diningTablesResponse.json()) as DiningTable[])
+      : []
   const inventoryLoaded = ingredientsResponse.ok
   const catalogLoaded =
     inventoryLoaded && categoriesResponse.ok && locationsResponse.ok
@@ -620,6 +628,7 @@ export default async function SettingsPage({
               canManage={admin}
             />
             <BranchesCard branches={branches} canManage={admin} />
+            <DiningTablesCard tables={diningTables} canManage={admin} />
             <PosDevicesCard
               devices={posDevices}
               branches={branches}
