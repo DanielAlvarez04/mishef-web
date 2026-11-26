@@ -22,7 +22,7 @@ export default defineConfig({
     ["html", { outputFolder: "playwright-report-advanced", open: "never" }],
   ],
   expect: { timeout: 15_000 },
-  timeout: 120_000,
+  timeout: 180_000,
   use: {
     baseURL: BASE_URL,
     locale: "es-MX",

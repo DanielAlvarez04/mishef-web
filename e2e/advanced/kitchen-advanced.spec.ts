@@ -16,7 +16,9 @@ import { openRoute } from "../mobile/helpers"
  */
 
 const STATION_NAME = "A E2E Parrilla"
-const PRODUCT_NAME = "Aros de cebolla"
+const PRODUCT_NAME = "E2E Hamburguesa"
+const PRODUCT_SKU = "E2E-KITCHEN"
+const API_URL = process.env.E2E_API_URL ?? "http://localhost:3001/v1"
 
 let restoreMode: "GENERAL" | "ADVANCED" | null = null
 
@@ -27,6 +29,26 @@ async function chooseOption(page: Page, triggerSelector: string, label: string) 
     .filter({ hasText: label })
     .first()
     .click()
+}
+
+async function ensureBranch(page: Page) {
+  await page.getByRole("tab", { name: "Negocio", exact: true }).click()
+  await expect(page.getByText("Sucursales", { exact: true })).toBeVisible()
+
+  const empty = page.getByText("Aún no hay sucursales.")
+  if (!(await empty.isVisible().catch(() => false))) return
+
+  const name = "E2E Sucursal"
+  await page.locator("#branch-name").fill(name)
+  await page.getByRole("button", { name: "Crear sucursal", exact: true }).click()
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+}
+
+async function openKitchenSettings(page: Page, createBranch = false) {
+  await openRoute(page, "/settings")
+  if (createBranch) await ensureBranch(page)
+  await page.getByRole("tab", { name: "Cocina", exact: true }).click()
+  await expect(page.locator("#kitchen-mode")).toBeVisible()
 }
 
 async function setKitchenMode(page: Page, mode: "General" | "Avanzado") {
@@ -50,14 +72,33 @@ async function ensureStation(page: Page) {
     .getByRole("button", { name: "Agregar", exact: true })
     .click()
 
-  await expect(page.getByText(STATION_NAME, { exact: true })).toBeVisible()
+  await expect(page.getByText(STATION_NAME, { exact: true }).first()).toBeVisible()
+}
+
+async function ensureProduct(page: Page) {
+  const response = await page.request.post(`${API_URL}/catalog/items`, {
+    headers: { Origin: new URL(page.url()).origin },
+    data: {
+      name: PRODUCT_NAME,
+      sku: PRODUCT_SKU,
+      price: 10,
+      taxRate: 0,
+      prepMinutes: 5,
+    },
+  })
+
+  if (response.ok() || response.status() === 409) return
+
+  throw new Error(
+    `No se pudo preparar el producto E2E (${response.status()}): ${await response.text()}`
+  )
 }
 
 test.describe("cocina avanzada", () => {
   test.afterEach(async ({ page }) => {
     if (restoreMode !== "GENERAL") return
 
-    await openRoute(page, "/settings")
+    await openKitchenSettings(page)
     const trigger = page.locator("#kitchen-mode")
 
     if (!(await trigger.isVisible().catch(() => false))) return
@@ -71,6 +112,12 @@ test.describe("cocina avanzada", () => {
     page,
   }) => {
     await page.addInitScript(() => {
+      try {
+        window.localStorage.setItem("pwa-install-dismissed", "1")
+      } catch {
+        // Sin localStorage el aviso de instalación aparecería a los 3 s.
+      }
+
       const instrumented = window as unknown as { __printCalls?: number }
       instrumented.__printCalls = 0
       window.print = () => {
@@ -81,7 +128,7 @@ test.describe("cocina avanzada", () => {
     const customerName = `E2E ${Date.now()}`
 
     // 1. Configuración de la sucursal.
-    await openRoute(page, "/settings")
+    await openKitchenSettings(page, true)
 
     const initialMode = ((await page.locator("#kitchen-mode").textContent()) ??
       "").includes("Avanzado")
@@ -91,10 +138,9 @@ test.describe("cocina avanzada", () => {
     restoreMode = initialMode
 
     await setKitchenMode(page, "Avanzado")
-    await expect(
-      page.getByRole("heading", { name: "Estaciones" })
-    ).toBeVisible()
+    await expect(page.getByPlaceholder("Ej. Parrilla")).toBeVisible()
     await ensureStation(page)
+    await ensureProduct(page)
 
     // 2. Comanda desde el POS (mostrador para identificar por cliente).
     await openRoute(page, "/pos")
@@ -109,9 +155,22 @@ test.describe("cocina avanzada", () => {
       .getByRole("button", { name: `Abrir ${PRODUCT_NAME}` })
       .first()
       .click()
-    await page
+
+    const productDialog = page
+      .locator('[data-slot="dialog-content"]')
+      .filter({ hasText: PRODUCT_NAME })
+    await expect(productDialog).toBeVisible()
+    await productDialog
+      .getByRole("button", { name: `Añadir una unidad de ${PRODUCT_NAME}` })
+      .click()
+    await productDialog
       .getByRole("button", { name: "Añadir a la comanda", exact: true })
       .click()
+
+    await expect(
+      page.getByText("Elige artículos del catálogo para armar la ronda.")
+    ).toBeHidden()
+
     await page
       .getByRole("button", { name: "Abrir cuenta y enviar", exact: true })
       .click()
