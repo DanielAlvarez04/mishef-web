@@ -149,6 +149,15 @@ export async function transitionKitchenTicket(
   )
 }
 
+/** Rehace un ticket de estación: crea una comanda nueva con los mismos ítems. */
+export async function refireKitchenTicket(
+  ticketId: string
+): Promise<ActionResult<unknown>> {
+  return mutateApi(`/kitchen/tickets/${ticketId}/refire`, "POST", undefined, [
+    "/kitchen",
+  ])
+}
+
 /** Dispara una ronda retenida (modo Avanzado). */
 export async function fireKitchenRound(
   roundId: string

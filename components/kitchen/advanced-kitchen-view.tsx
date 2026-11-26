@@ -12,6 +12,7 @@ import {
   Maximize2Icon,
   Minimize2Icon,
   RefreshCwIcon,
+  RotateCcwIcon,
   TimerIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -50,6 +51,7 @@ import {
   expoValidateKitchenTicket,
   fireKitchenRound,
   getKitchenTicketHistory,
+  refireKitchenTicket,
   transitionKitchenTicket,
 } from "@/lib/order-actions"
 import { useWakeLock } from "@/hooks/use-wake-lock"
@@ -112,6 +114,10 @@ export function AdvancedKitchenView({
     null
   )
   const [cancelReason, setCancelReason] = React.useState("")
+  const [refireTicket, setRefireTicket] = React.useState<KitchenTicket | null>(
+    null
+  )
+  const [refirePending, setRefirePending] = React.useState(false)
   const [view, setView] = React.useState<"stations" | "expo">("stations")
   const [expoPendingId, setExpoPendingId] = React.useState<string | null>(null)
   const [historyTicket, setHistoryTicket] = React.useState<KitchenTicket | null>(
@@ -229,6 +235,25 @@ export function AdvancedKitchenView({
       router.refresh()
     } finally {
       setExpoPendingId(null)
+    }
+  }
+
+  async function refire(ticket: KitchenTicket) {
+    setRefirePending(true)
+
+    try {
+      const result = await refireKitchenTicket(ticket.id)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo rehacer el ticket")
+        return
+      }
+
+      toast.success("Ticket rehecho: nueva comanda creada")
+      setRefireTicket(null)
+      router.refresh()
+    } finally {
+      setRefirePending(false)
     }
   }
 
@@ -405,8 +430,10 @@ export function AdvancedKitchenView({
                   canExpo={canExpo}
                   expoPending={expoPendingId === ticket.id}
                   pending={pendingId === ticket.id}
+                  refirePending={refirePending}
                   onTransition={transition}
                   onRequestCancel={setCancelTicket}
+                  onRequestRefire={setRefireTicket}
                   onValidateExpo={(entry) => void validateExpo(entry)}
                   onOpenHistory={(entry) => void openHistory(entry)}
                 />
@@ -498,8 +525,10 @@ export function AdvancedKitchenView({
                           canExpo={canExpo}
                           expoPending={expoPendingId === ticket.id}
                           pending={pendingId === ticket.id}
+                          refirePending={refirePending}
                           onTransition={transition}
                           onRequestCancel={setCancelTicket}
+                          onRequestRefire={setRefireTicket}
                           onValidateExpo={(entry) => void validateExpo(entry)}
                           onOpenHistory={(entry) => void openHistory(entry)}
                         />
@@ -557,6 +586,38 @@ export function AdvancedKitchenView({
               }}
             >
               Anular ticket
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={Boolean(refireTicket)}
+        onOpenChange={(open) => {
+          if (!open) setRefireTicket(null)
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <RotateCcwIcon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>¿Rehacer ticket?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Se creará una comanda nueva en la misma estación con los mismos
+              ítems. El ticket original se conserva en el historial.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Conservar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={refirePending}
+              onClick={() => {
+                if (!refireTicket) return
+                void refire(refireTicket)
+              }}
+            >
+              Rehacer
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -626,8 +687,10 @@ function TicketCard({
   canExpo,
   expoPending,
   pending,
+  refirePending,
   onTransition,
   onRequestCancel,
+  onRequestRefire,
   onValidateExpo,
   onOpenHistory,
 }: {
@@ -638,12 +701,14 @@ function TicketCard({
   canExpo: boolean
   expoPending: boolean
   pending: boolean
+  refirePending: boolean
   onTransition: (
     ticket: KitchenTicket,
     status: KitchenTicketStatus,
     reason?: string
   ) => Promise<void>
   onRequestCancel: (ticket: KitchenTicket) => void
+  onRequestRefire: (ticket: KitchenTicket) => void
   onValidateExpo: (ticket: KitchenTicket) => void
   onOpenHistory: (ticket: KitchenTicket) => void
 }) {
@@ -802,6 +867,20 @@ function TicketCard({
           >
             <CircleCheckIcon />
             Validar pase
+          </Button>
+        ) : null}
+
+        {canWork &&
+        ["CANCELLED", "DELIVERED"].includes(ticket.status) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={refirePending}
+            onClick={() => onRequestRefire(ticket)}
+          >
+            <RotateCcwIcon />
+            Rehacer
           </Button>
         ) : null}
 
