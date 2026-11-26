@@ -86,7 +86,7 @@ import {
   type PointPayment,
 } from "@/lib/mercadopago-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
-import { supportsTerminalTips } from "@/lib/mercadopago"
+import { isPdvTerminal, supportsTerminalTips } from "@/lib/mercadopago"
 import { cn } from "@/lib/utils"
 
 const PROVIDER_DETAIL_LABELS: Record<string, string> = {
@@ -932,6 +932,8 @@ export function ChargeDialog({
     mercadoPago.terminals.find((terminal) => terminal.id === terminalId) ??
     mercadoPago.terminals[0] ??
     null
+  /** Solo una terminal PDV vinculada puede imprimir el ticket. */
+  const canPrintReceipt = mercadoPago.terminals.some(isPdvTerminal)
   const terminalLabel = selectedTerminal?.name ?? "Terminal Point"
   const terminalTipSupport =
     selectedTerminal?.supportsTips ??
@@ -2739,19 +2741,21 @@ export function ChargeDialog({
 
             {step === "close" && canClose ? (
               <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => void handlePrintReceipt()}
-                  disabled={pending !== null || printing}
-                >
-                  {printing ? (
-                    <Loader2Icon className="animate-spin" />
-                  ) : (
-                    <ReceiptTextIcon />
-                  )}
-                  Imprimir ticket
-                </Button>
+                {canPrintReceipt ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void handlePrintReceipt()}
+                    disabled={pending !== null || printing}
+                  >
+                    {printing ? (
+                      <Loader2Icon className="animate-spin" />
+                    ) : (
+                      <ReceiptTextIcon />
+                    )}
+                    Imprimir ticket
+                  </Button>
+                ) : null}
                 <Button type="button" onClick={onDone}>
                   <CheckIcon />
                   Cerrar
