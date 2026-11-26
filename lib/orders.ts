@@ -157,8 +157,11 @@ export interface ChargeSummary {
 
 export type RoundStatus =
   | "PENDING"
+  | "HELD"
+  | "FIRED"
   | "PREPARING"
   | "READY"
+  | "PICKED_UP"
   | "DELIVERED"
   | "CANCELLED"
 
@@ -170,8 +173,11 @@ export const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
 
 export const ROUND_STATUS_LABELS: Record<RoundStatus, string> = {
   PENDING: "Pendiente",
+  HELD: "En espera",
+  FIRED: "Disparada",
   PREPARING: "En preparación",
   READY: "Lista",
+  PICKED_UP: "Recogida",
   DELIVERED: "Entregada",
   CANCELLED: "Cancelada",
 }
@@ -198,6 +204,9 @@ export const ROUND_ACTIONS: Record<RoundStatus, RoundAction[]> = {
   ],
   DELIVERED: [],
   CANCELLED: [],
+  HELD: [],
+  FIRED: [],
+  PICKED_UP: [],
 }
 
 export interface OrderItemExtra {

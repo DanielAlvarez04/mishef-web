@@ -13,6 +13,7 @@ import type {
   OrderRound,
   RoundStatus,
 } from "@/lib/orders"
+import type { KitchenTicketStatus } from "@/lib/kitchen-tickets"
 
 const ORDER_PATHS = ["/pos", "/kitchen"]
 
@@ -124,6 +125,20 @@ export async function cancelOrder(
     "PATCH",
     { reason },
     ORDER_PATHS
+  )
+}
+
+/** Cambia el estado de un ticket de estación (modo Avanzado). */
+export async function transitionKitchenTicket(
+  ticketId: string,
+  status: KitchenTicketStatus,
+  reason?: string
+): Promise<ActionResult<unknown>> {
+  return mutateApi(
+    `/kitchen/tickets/${ticketId}/status`,
+    "PATCH",
+    { status, reason },
+    ["/kitchen"]
   )
 }
 

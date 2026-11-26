@@ -12,8 +12,11 @@ import type { RoundStatus } from "@/lib/orders"
 /** Icono homologado para cada estado de comanda. */
 const STATUS_ICONS: Record<RoundStatus, LucideIcon> = {
   PENDING: TimerIcon,
+  HELD: TimerIcon,
+  FIRED: FlameIcon,
   PREPARING: FlameIcon,
   READY: HandPlatterIcon,
+  PICKED_UP: HandPlatterIcon,
   DELIVERED: CircleCheckIcon,
   CANCELLED: CircleXIcon,
 }

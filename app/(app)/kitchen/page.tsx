@@ -1,5 +1,6 @@
 import { TriangleAlertIcon } from "lucide-react"
 
+import { AdvancedKitchenView } from "@/components/kitchen/advanced-kitchen-view"
 import { KitchenView } from "@/components/kitchen/kitchen-view"
 import {
   Card,
@@ -9,17 +10,36 @@ import {
 } from "@/components/ui/card"
 import { apiFetch } from "@/lib/api"
 import { getActiveBranch } from "@/lib/branch-server"
+import type { KitchenBoard } from "@/lib/kitchen-tickets"
 import { canWorkKitchen, type KitchenRound } from "@/lib/orders"
 import { requireAnyRole } from "@/lib/session"
 
 export default async function KitchenPage() {
   const user = await requireAnyRole(["ADMIN", "WAITER", "KITCHEN"])
 
-  const [response, branch, settingsResponse] = await Promise.all([
-    apiFetch("/kitchen/rounds"),
-    getActiveBranch(),
-    apiFetch("/kitchen/settings"),
-  ])
+  const [response, branch, settingsResponse, ticketsResponse] =
+    await Promise.all([
+      apiFetch("/kitchen/rounds"),
+      getActiveBranch(),
+      apiFetch("/kitchen/settings"),
+      apiFetch("/kitchen/tickets"),
+    ])
+
+  const board: KitchenBoard | null = ticketsResponse.ok
+    ? ((await ticketsResponse.json()) as KitchenBoard)
+    : null
+
+  if (board?.mode === "ADVANCED") {
+    return (
+      <div className="flex flex-1 flex-col p-4">
+        <AdvancedKitchenView
+          board={board}
+          roles={user.roles}
+          serverNow={new Date().toISOString()}
+        />
+      </div>
+    )
+  }
 
   if (!response.ok) {
     return (
