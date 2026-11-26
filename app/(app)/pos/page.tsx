@@ -48,7 +48,6 @@ export default async function PointOfSalePage() {
     pointConfigResponse,
     trendingResponse,
     kitchenModeResponse,
-    kitchenCoursesResponse,
   ] = await Promise.all([
     apiFetch("/catalog/items"),
     apiFetch("/catalog/categories"),
@@ -62,7 +61,6 @@ export default async function PointOfSalePage() {
       : Promise.resolve(null),
     apiFetch("/catalog/menus/trending"),
     apiFetch("/kitchen/mode"),
-    apiFetch("/kitchen/courses"),
   ])
 
   // Primero el modo offline: si la red falló, no se puede saber si falta
@@ -157,12 +155,6 @@ export default async function PointOfSalePage() {
   const kitchenMode = kitchenModeResponse.ok
     ? ((await kitchenModeResponse.json()) as { mode?: string }).mode
     : "GENERAL"
-  const kitchenCourses = kitchenCoursesResponse.ok
-    ? ((await kitchenCoursesResponse.json()) as Array<{
-        id: string
-        name: string
-      }>)
-    : []
 
   return (
     <>
@@ -189,7 +181,6 @@ export default async function PointOfSalePage() {
       displays={displays}
         taxRate={user.organizationTaxRate ?? "0.16"}
         kitchenAdvanced={kitchenMode === "ADVANCED"}
-        kitchenCourses={kitchenCourses}
       />
     </>
   )

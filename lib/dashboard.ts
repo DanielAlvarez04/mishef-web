@@ -192,7 +192,7 @@ export interface KitchenReport {
     lateTickets: number
     lateRate: number | null
   }>
-  byCourse: Array<{
+  byCourse?: Array<{
     course: string
     tickets: number
     averageTotalMinutes: number | null

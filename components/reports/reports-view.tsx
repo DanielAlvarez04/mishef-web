@@ -546,45 +546,6 @@ export function ReportsView({
                   </Table>
                 </CardContent>
               </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Cursos</CardTitle>
-                  <CardDescription>
-                    Tickets y tiempo total por curso.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="px-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Curso</TableHead>
-                        <TableHead className="text-right">Tickets</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {kitchen.byCourse.length === 0 ? (
-                        <EmptyRow colSpan={3} text="Sin cursos." />
-                      ) : (
-                        kitchen.byCourse.map((row) => (
-                          <TableRow key={row.course}>
-                            <TableCell className="font-medium">
-                              {row.course}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {row.tickets}
-                            </TableCell>
-                            <TableCell className="text-right tabular-nums">
-                              {formatMinutes(row.averageTotalMinutes)}
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
             </div>
 
             <Card>

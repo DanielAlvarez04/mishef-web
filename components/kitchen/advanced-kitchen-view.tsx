@@ -236,7 +236,7 @@ export function AdvancedKitchenView({
         return
       }
 
-      toast.success("Curso disparado a las estaciones")
+      toast.success("Ronda disparada a las estaciones")
       router.refresh()
     } finally {
       setPendingRoundId(null)
@@ -388,7 +388,7 @@ export function AdvancedKitchenView({
           <header className="flex items-center justify-between gap-2">
             <h2 className="flex items-center gap-2 text-sm font-medium">
               <TimerIcon className="size-4" />
-              Cursos en espera
+              Rondas en espera
             </h2>
             <Badge variant="outline">{board.heldRounds.length}</Badge>
           </header>
@@ -414,8 +414,7 @@ export function AdvancedKitchenView({
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium">{label}</span>
                     <span className="block text-xs text-muted-foreground">
-                      {round.course?.name ?? "Sin curso"} · {itemCount}{" "}
-                      artículo{itemCount === 1 ? "" : "s"} ·{" "}
+                      {itemCount} artículo{itemCount === 1 ? "" : "s"} ·{" "}
                       {elapsedMinutes(
                         round.sentAt ?? round.createdAt,
                         now
@@ -855,14 +854,23 @@ function TicketCard({
   onPrint: (ticket: KitchenTicket) => void
 }) {
   const sentAt = ticket.orderRound.sentAt ?? ticket.orderRound.createdAt
-  const ageMinutes = sentAt
-    ? Math.max(0, Math.floor((now - new Date(sentAt).getTime()) / 60_000))
+  const prepMinutes = ticket.startedAt
+    ? Math.max(
+        0,
+        Math.floor(
+          ((ticket.readyAt
+            ? new Date(ticket.readyAt).getTime()
+            : now) -
+            new Date(ticket.startedAt).getTime()) /
+            60_000
+        )
+      )
     : 0
   const targetMinutes =
     ticket.station.slaMinutes ?? ticket.orderRound.estimatedMinutes ?? 15
   const late =
-    ageMinutes > targetMinutes &&
-    ["PENDING", "PREPARING", "READY"].includes(ticket.status)
+    prepMinutes > targetMinutes &&
+    ["PREPARING", "READY"].includes(ticket.status)
 
   return (
     <li
@@ -879,6 +887,7 @@ function TicketCard({
           <p className="text-[11px] text-muted-foreground">
             Ronda {ticket.orderRound.id.slice(-4)} ·{" "}
             {formatTime(sentAt)} · {elapsedMinutes(sentAt, now)}
+            {ticket.startedAt ? ` · Prep. ${prepMinutes} min` : ""}
             {late ? (
               <span className="ml-1 font-medium text-destructive">
                 · Atrasado
