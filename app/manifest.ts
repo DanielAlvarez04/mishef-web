@@ -26,8 +26,32 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["business", "food", "productivity"],
     icons: [
       {
+        src: "/icons/icon-96-v2.png",
+        sizes: "96x96",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-128-v2.png",
+        sizes: "128x128",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-144-v2.png",
+        sizes: "144x144",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
         src: "/icons/icon-192-v2.png",
         sizes: "192x192",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/icon-256-v2.png",
+        sizes: "256x256",
         type: "image/png",
         purpose: "any",
       },
