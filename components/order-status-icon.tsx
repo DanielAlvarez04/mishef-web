@@ -3,7 +3,7 @@ import {
   CircleXIcon,
   FlameIcon,
   HandPlatterIcon,
-  HourglassIcon,
+  TimerIcon,
   type LucideIcon,
 } from "lucide-react"
 
@@ -11,7 +11,7 @@ import type { RoundStatus } from "@/lib/orders"
 
 /** Icono homologado para cada estado de comanda. */
 const STATUS_ICONS: Record<RoundStatus, LucideIcon> = {
-  PENDING: HourglassIcon,
+  PENDING: TimerIcon,
   PREPARING: FlameIcon,
   READY: HandPlatterIcon,
   DELIVERED: CircleCheckIcon,
