@@ -170,6 +170,59 @@ export function CashSessionActions({
   )
 }
 
+export type CashSessionAction = "open" | "close" | "movement"
+
+/**
+ * Diálogos de caja controlados desde fuera de la barra.
+ *
+ * La barra de escritorio (`CashSessionActions`) conserva su propio estado; este
+ * componente permite abrir los mismos diálogos desde el menú móvil sin montar
+ * los botones.
+ */
+export function CashSessionDialog({
+  action,
+  onActionChange,
+  session,
+  summary,
+}: {
+  action: CashSessionAction | null
+  onActionChange: (action: CashSessionAction | null) => void
+  session: CashSession | null
+  summary: CashSummary | null
+}) {
+  const router = useRouter()
+  const offline = useOfflineSync()
+
+  return (
+    <>
+      <OpenDialog
+        open={action === "open"}
+        onOpenChange={(open) => onActionChange(open ? "open" : null)}
+        onDone={() => router.refresh()}
+      />
+      {session ? (
+        <CloseDialog
+          open={action === "close"}
+          onOpenChange={(open) => onActionChange(open ? "close" : null)}
+          session={session}
+          summary={summary}
+          onDone={() => {
+            if (offline.isOnline) router.refresh()
+          }}
+        />
+      ) : null}
+      {session ? (
+        <MovementDialog
+          open={action === "movement"}
+          onOpenChange={(open) => onActionChange(open ? "movement" : null)}
+          session={session}
+          onDone={() => router.refresh()}
+        />
+      ) : null}
+    </>
+  )
+}
+
 function OpenDialog({
   open,
   onOpenChange,

@@ -4,6 +4,7 @@ import * as React from "react"
 import { useRouter } from "next/navigation"
 import {
   AlertTriangleIcon,
+  ArrowDownToLineIcon,
   ArrowUpDownIcon,
   BanknoteIcon,
   CakeIcon,
@@ -12,15 +13,19 @@ import {
   GroupIcon,
   LayoutGridIcon,
   Loader2Icon,
+  LockIcon,
   MinusIcon,
+  MoreVerticalIcon,
   NotebookTextIcon,
   PencilLineIcon,
   PlusIcon,
   PrinterIcon,
+  ReceiptTextIcon,
   SearchIcon,
   SparklesIcon,
   Trash2Icon,
   Undo2Icon,
+  WalletIcon,
   XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -63,9 +68,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
@@ -154,7 +163,7 @@ import {
 } from "@/components/ui/card"
 import { PosCatalog } from "@/components/pos/pos-catalog"
 
-import { CashSessionActions } from "./cash-session"
+import { CashSessionActions, CashSessionDialog, type CashSessionAction } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
 
@@ -530,6 +539,9 @@ export function PosView({
     "pos-card-square",
     true
   )
+  // Diálogos de caja abiertos desde el menú móvil de tres puntos.
+  const [cashAction, setCashAction] =
+    React.useState<CashSessionAction | null>(null)
   const dialogOpenedAtRef = React.useRef<number | null>(null)
   const dialogSavedRef = React.useRef(false)
   const [cart, setCart] = React.useState<CartLine[]>([])
@@ -2879,13 +2891,210 @@ export function PosView({
     </>
   )
 
+  // Menú móvil de tres puntos: reúne los controles que en escritorio viven en
+  // la fila superior (menú, orden, vista y caja) para no saturar la pantalla.
+  const mobileToolsMenu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="shrink-0"
+            aria-label="Herramientas del punto de venta"
+          />
+        }
+      >
+        <MoreVerticalIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <NotebookTextIcon />
+            Menú global
+            <span className="ml-1.5 max-w-24 truncate text-xs font-normal text-muted-foreground">
+              {selectedMenu?.name ?? ""}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-60">
+            <DropdownMenuRadioGroup
+              value={menuId}
+              onValueChange={(value) => {
+                const next = value ?? ""
+
+                if (!next) return
+
+                setMenuId(next)
+                posCapture.noteFilter()
+                trackEvent({
+                  name: "pos.menu_filtered",
+                  menuId: next,
+                })
+              }}
+            >
+              {menus.map((menu) => (
+                <DropdownMenuRadioItem key={menu.id} value={menu.id}>
+                  {menu.name}
+                  {menu.isAvailableNow ? "" : " · fuera de horario"}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <ArrowUpDownIcon />
+            Ordenar
+            <span className="ml-1.5 max-w-24 truncate text-xs font-normal text-muted-foreground">
+              {
+                SORT_OPTIONS.find((option) => option.value === sortOrder)
+                  ?.label
+              }
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-52">
+            <DropdownMenuRadioGroup
+              value={sortOrder}
+              onValueChange={(value) =>
+                setSortOrder(value as PosSortOrder)
+              }
+            >
+              {SORT_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <LayoutGridIcon />
+            Vista
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="w-56">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Ancho de tarjetas</DropdownMenuLabel>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={cardColumns >= 7}
+                onClick={() =>
+                  setCardColumns((current) => Math.min(7, current + 1))
+                }
+              >
+                <MinusIcon />
+                Más angostas
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={cardColumns <= 4}
+                onClick={() =>
+                  setCardColumns((current) => Math.max(4, current - 1))
+                }
+              >
+                <PlusIcon />
+                Más anchas
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Tamaño del texto</DropdownMenuLabel>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={cardTextSize <= 1}
+                onClick={() =>
+                  setCardTextSize((current) => Math.max(1, current - 1))
+                }
+              >
+                <MinusIcon />
+                Más pequeño
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={cardTextSize >= 4}
+                onClick={() =>
+                  setCardTextSize((current) => Math.min(4, current + 1))
+                }
+              >
+                <PlusIcon />
+                Más grande
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Altura de tarjetas</DropdownMenuLabel>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={!squareCards}
+                onClick={() => setSquareCards(false)}
+              >
+                <MinusIcon />
+                Más bajas
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={squareCards}
+                onClick={() => setSquareCards(true)}
+              >
+                <PlusIcon />
+                Más altas
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        {canManageCash ? (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <WalletIcon />
+              Caja
+              <span className="ml-1.5 max-w-24 truncate text-xs font-normal text-muted-foreground">
+                {cash.session ? "Abierta" : "Cerrada"}
+              </span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-56">
+              <DropdownMenuLabel>
+                {cash.session ? "Caja abierta" : "Caja cerrada"}
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                disabled={Boolean(cash.session)}
+                onClick={() => setCashAction("open")}
+              >
+                <ReceiptTextIcon />
+                Abrir caja
+              </DropdownMenuItem>
+              {cash.session ? (
+                <DropdownMenuItem
+                  disabled={cashClosePending}
+                  onClick={() => setCashAction("close")}
+                >
+                  <LockIcon />
+                  {cashClosePending ? "Cierre pendiente" : "Cerrar caja"}
+                </DropdownMenuItem>
+              ) : null}
+              {cash.session ? (
+                <DropdownMenuItem onClick={() => setCashAction("movement")}>
+                  <ArrowDownToLineIcon />
+                  Movimiento
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+
   return (
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
             <div className="flex min-w-0 items-center gap-2 sm:flex-1">
-              <div className="relative min-w-0 flex-1 sm:w-56 sm:flex-none">
+              <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={search}
@@ -2901,48 +3110,52 @@ export function PosView({
                 />
               </div>
 
-              <Select
-                value={menuId}
-                onValueChange={(value) => {
-                  const next = value ?? ""
+              <div className="hidden xl:block">
+                <Select
+                  value={menuId}
+                  onValueChange={(value) => {
+                    const next = value ?? ""
 
-                  if (!next) return
+                    if (!next) return
 
-                  setMenuId(next)
-                  posCapture.noteFilter()
-                  trackEvent({
-                    name: "pos.menu_filtered",
-                    menuId: next,
-                  })
-                }}
-                items={menus.map((menu) => ({
-                  value: menu.id,
-                  label: `${menu.name}${
-                    menu.isAvailableNow ? "" : " · fuera de horario"
-                  }`,
-                }))}
-              >
-                <SelectTrigger
-                  className="w-max max-w-[45%] shrink-0 sm:w-44 sm:max-w-none"
-                  aria-label="Filtrar por menú"
+                    setMenuId(next)
+                    posCapture.noteFilter()
+                    trackEvent({
+                      name: "pos.menu_filtered",
+                      menuId: next,
+                    })
+                  }}
+                  items={menus.map((menu) => ({
+                    value: menu.id,
+                    label: `${menu.name}${
+                      menu.isAvailableNow ? "" : " · fuera de horario"
+                    }`,
+                  }))}
                 >
-                  <span className="flex min-w-0 items-center gap-1.5">
-                    <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                    <SelectValue placeholder="Menú" />
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {menus.map((menu) => (
-                    <SelectItem key={menu.id} value={menu.id}>
-                      {menu.name}
-                      {menu.isAvailableNow ? "" : " · fuera de horario"}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  <SelectTrigger
+                    className="w-44"
+                    aria-label="Filtrar por menú"
+                  >
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Menú" />
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {menus.map((menu) => (
+                      <SelectItem key={menu.id} value={menu.id}>
+                        {menu.name}
+                        {menu.isAvailableNow ? "" : " · fuera de horario"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="xl:hidden">{mobileToolsMenu}</div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <div className="flex flex-wrap items-center gap-2 max-xl:hidden sm:ml-auto">
               <Popover>
                 <PopoverTrigger
                   render={
@@ -3102,7 +3315,7 @@ export function PosView({
               </DropdownMenu>
 
               {canManageCash ? (
-                <div className="flex min-w-0 flex-1 xl:flex-none max-xl:[&>button]:w-full max-xl:[&>[data-slot=button-group]]:w-full max-xl:[&>[data-slot=button-group]>button:first-child]:flex-1">
+                <div className="flex min-w-0 flex-1 xl:flex-none">
                   <CashSessionActions
                     session={cash.session}
                     summary={cash.summary}
@@ -3147,6 +3360,8 @@ export function PosView({
                   )
                 })}
               </div>
+
+              <Separator />
 
               {isDineIn ? (
                 <>
@@ -3240,7 +3455,7 @@ export function PosView({
                     </div>
                   </div>
 
-                  <div className="flex flex-nowrap items-center gap-1.5 overflow-x-auto">
+                  <div className="no-scrollbar -mx-4 -my-1 flex flex-nowrap items-center gap-1.5 overflow-x-auto overscroll-x-contain px-4 py-1 lg:-mx-6 lg:px-6">
                     {guests.map((guest, index) => (
                       <div
                         key={guest.key}
@@ -3709,6 +3924,13 @@ export function PosView({
           }}
         />
       ) : null}
+
+      <CashSessionDialog
+        action={cashAction}
+        onActionChange={setCashAction}
+        session={cash.session}
+        summary={cash.summary}
+      />
     </div>
   )
 }

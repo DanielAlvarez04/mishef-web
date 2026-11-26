@@ -8,7 +8,7 @@ test.describe("POS móvil", () => {
   }) => {
     await openRoute(page, "/pos")
 
-    await page.getByLabel("Buscar artículos").fill("Latte")
+    await page.getByLabel("Buscar por nombre, categoría o grupo").fill("Latte")
     const product = page
       .getByRole("button", { name: "Abrir Latte", exact: true })
       .first()
@@ -77,14 +77,22 @@ test.describe("POS móvil", () => {
 
     await openRoute(page, "/pos")
 
-    const search = page.getByLabel("Buscar artículos")
-    const menu = page.getByRole("combobox", { name: "Filtrar por menú" })
+    const search = page.getByLabel("Buscar por nombre, categoría o grupo")
+    const tools = page.getByRole("button", {
+      name: "Herramientas del punto de venta",
+    })
 
     const searchBox = await search.boundingBox()
-    const menuBox = await menu.boundingBox()
+    const toolsBox = await tools.boundingBox()
 
     expect(searchBox?.width ?? 0).toBeGreaterThan(160)
-    expect(Math.abs((menuBox?.y ?? 0) - (searchBox?.y ?? 0))).toBeLessThan(8)
-    expect(menuBox?.width ?? 0).toBeLessThan(searchBox?.width ?? 0)
+    expect(Math.abs((toolsBox?.y ?? 0) - (searchBox?.y ?? 0))).toBeLessThan(8)
+
+    await tools.click()
+    await expect(
+      page.getByRole("menuitem", { name: /Menú global/ })
+    ).toBeVisible()
+    await expect(page.getByRole("menuitem", { name: /Ordenar/ })).toBeVisible()
+    await expect(page.getByRole("menuitem", { name: /Vista/ })).toBeVisible()
   })
 })
