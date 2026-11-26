@@ -13,7 +13,10 @@ import type {
   OrderRound,
   RoundStatus,
 } from "@/lib/orders"
-import type { KitchenTicketStatus } from "@/lib/kitchen-tickets"
+import type {
+  KitchenTicketHistoryEntry,
+  KitchenTicketStatus,
+} from "@/lib/kitchen-tickets"
 
 const ORDER_PATHS = ["/pos", "/kitchen"]
 
@@ -153,6 +156,22 @@ export async function fireKitchenRound(
   return mutateApi(`/kitchen/rounds/${roundId}/fire`, "POST", undefined, [
     "/kitchen",
   ])
+}
+
+/** Valida un ticket en el pase/expo. */
+export async function expoValidateKitchenTicket(
+  ticketId: string
+): Promise<ActionResult<unknown>> {
+  return mutateApi(`/kitchen/tickets/${ticketId}/expo`, "POST", undefined, [
+    "/kitchen",
+  ])
+}
+
+/** Historial detallado de un ticket. */
+export async function getKitchenTicketHistory(
+  ticketId: string
+): Promise<ActionResult<KitchenTicketHistoryEntry[]>> {
+  return readApi(`/kitchen/tickets/${ticketId}/history`)
 }
 
 /** Añade una persona (comensal) a la cuenta. */

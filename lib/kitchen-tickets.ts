@@ -35,6 +35,10 @@ export interface KitchenTicket {
   readyAt: string | null
   pickedUpAt: string | null
   deliveredAt: string | null
+  cancelledAt?: string | null
+  cancelReason?: string | null
+  expoAt: string | null
+  expoValidatedByName: string | null
   station: { id: string; name: string; code: string; color: string | null }
   assignedMembership: {
     id: string
@@ -85,6 +89,16 @@ export interface HeldRound {
     quantity: number
     notes: string | null
   }>
+}
+
+export interface KitchenTicketHistoryEntry {
+  id: string
+  previousStatus: KitchenTicketStatus | null
+  newStatus: KitchenTicketStatus
+  changedById: string | null
+  changedByName: string | null
+  changedAt: string
+  reason: string | null
 }
 
 export interface KitchenBoard {

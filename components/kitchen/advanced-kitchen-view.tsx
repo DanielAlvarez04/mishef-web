@@ -18,6 +18,13 @@ import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
   AlertDialog,
@@ -36,11 +43,17 @@ import {
   kitchenOrderLabel,
   type KitchenBoard,
   type KitchenTicket,
+  type KitchenTicketHistoryEntry,
   type KitchenTicketStatus,
 } from "@/lib/kitchen-tickets"
-import { transitionKitchenTicket, fireKitchenRound } from "@/lib/order-actions"
+import {
+  expoValidateKitchenTicket,
+  fireKitchenRound,
+  getKitchenTicketHistory,
+  transitionKitchenTicket,
+} from "@/lib/order-actions"
 import { useWakeLock } from "@/hooks/use-wake-lock"
-import { formatTime } from "@/lib/catalog"
+import { formatDateTime, formatTime } from "@/lib/catalog"
 import { cn } from "cn"
 
 const STATUS_ICONS: Record<KitchenTicketStatus, React.ReactNode> = {
@@ -99,10 +112,21 @@ export function AdvancedKitchenView({
     null
   )
   const [cancelReason, setCancelReason] = React.useState("")
+  const [view, setView] = React.useState<"stations" | "expo">("stations")
+  const [expoPendingId, setExpoPendingId] = React.useState<string | null>(null)
+  const [historyTicket, setHistoryTicket] = React.useState<KitchenTicket | null>(
+    null
+  )
+  const [history, setHistory] = React.useState<KitchenTicketHistoryEntry[]>([])
+  const [historyLoading, setHistoryLoading] = React.useState(false)
   const [fullscreen, setFullscreen] = React.useState(false)
 
   const canWork = roles.some((role) => ["ADMIN", "KITCHEN"].includes(role))
   const canPickup = roles.some((role) => ["ADMIN", "WAITER"].includes(role))
+  const canExpo = canWork
+  const expoTickets = board.tickets.filter(
+    (ticket) => ticket.status === "READY" || ticket.status === "PICKED_UP"
+  )
   const activeStationId = activeStation || board.stations[0]?.id || ""
 
   React.useEffect(() => {
@@ -190,6 +214,43 @@ export function AdvancedKitchenView({
     }
   }
 
+  async function validateExpo(ticket: KitchenTicket) {
+    setExpoPendingId(ticket.id)
+
+    try {
+      const result = await expoValidateKitchenTicket(ticket.id)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo validar el pase")
+        return
+      }
+
+      toast.success("Pase validado")
+      router.refresh()
+    } finally {
+      setExpoPendingId(null)
+    }
+  }
+
+  async function openHistory(ticket: KitchenTicket) {
+    setHistoryTicket(ticket)
+    setHistory([])
+    setHistoryLoading(true)
+
+    try {
+      const result = await getKitchenTicketHistory(ticket.id)
+
+      if (!result.ok) {
+        toast.error(result.message ?? "No se pudo cargar el historial")
+        return
+      }
+
+      setHistory(result.data ?? [])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
   async function toggleFullscreen() {
     try {
       if (document.fullscreenElement) {
@@ -219,6 +280,25 @@ export function AdvancedKitchenView({
             {board.tickets.length === 1 ? "" : "s"} activo
             {board.tickets.length === 1 ? "" : "s"} · modo Avanzado
           </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border bg-muted/30 p-0.5">
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "stations" ? "default" : "ghost"}
+            onClick={() => setView("stations")}
+          >
+            Estaciones
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={view === "expo" ? "default" : "ghost"}
+            onClick={() => setView("expo")}
+          >
+            Pase
+            <Badge variant="outline">{expoTickets.length}</Badge>
+          </Button>
         </div>
         <Button
           type="button"
@@ -303,7 +383,38 @@ export function AdvancedKitchenView({
         </section>
       ) : null}
 
-      {board.stations.length === 0 ? (
+      {view === "expo" ? (
+        <section className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            Tickets listos o recogidos. Valida la calidad en el pase antes de
+            que el mesero los retire.
+          </p>
+          {expoTickets.length === 0 ? (
+            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              No hay tickets listos en el pase.
+            </p>
+          ) : (
+            <ul className="grid gap-3 lg:grid-cols-3">
+              {expoTickets.map((ticket) => (
+                <TicketCard
+                  key={ticket.id}
+                  ticket={ticket}
+                  now={now}
+                  canWork={canWork}
+                  canPickup={canPickup}
+                  canExpo={canExpo}
+                  expoPending={expoPendingId === ticket.id}
+                  pending={pendingId === ticket.id}
+                  onTransition={transition}
+                  onRequestCancel={setCancelTicket}
+                  onValidateExpo={(entry) => void validateExpo(entry)}
+                  onOpenHistory={(entry) => void openHistory(entry)}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : board.stations.length === 0 ? (
         <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
           No hay estaciones activas. Configura la cocina en Configuración →
           Cocina.
@@ -384,9 +495,13 @@ export function AdvancedKitchenView({
                           now={now}
                           canWork={canWork}
                           canPickup={canPickup}
+                          canExpo={canExpo}
+                          expoPending={expoPendingId === ticket.id}
                           pending={pendingId === ticket.id}
                           onTransition={transition}
                           onRequestCancel={setCancelTicket}
+                          onValidateExpo={(entry) => void validateExpo(entry)}
+                          onOpenHistory={(entry) => void openHistory(entry)}
                         />
                       ))}
                     </ul>
@@ -446,6 +561,59 @@ export function AdvancedKitchenView({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog
+        open={Boolean(historyTicket)}
+        onOpenChange={(open) => !open && setHistoryTicket(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Historial del ticket</DialogTitle>
+            <DialogDescription>
+              {historyTicket
+                ? `${kitchenOrderLabel(historyTicket)} · ronda ${historyTicket.orderRound.id.slice(-4)}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {historyLoading ? (
+            <p className="text-sm text-muted-foreground">Cargando historial…</p>
+          ) : history.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Sin movimientos registrados.
+            </p>
+          ) : (
+            <ol className="flex max-h-80 flex-col gap-2 overflow-y-auto">
+              {history.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex flex-col gap-0.5 rounded-lg border p-2.5 text-sm"
+                >
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {entry.previousStatus ? (
+                      <span className="text-muted-foreground">
+                        {KITCHEN_TICKET_STATUS_LABELS[entry.previousStatus]} →{" "}
+                      </span>
+                    ) : null}
+                    <span className="font-medium">
+                      {KITCHEN_TICKET_STATUS_LABELS[entry.newStatus]}
+                    </span>
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {formatDateTime(entry.changedAt)}
+                    {entry.changedByName ? ` · ${entry.changedByName}` : ""}
+                  </span>
+                  {entry.reason ? (
+                    <span className="text-xs text-muted-foreground">
+                      {entry.reason}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ol>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -455,14 +623,20 @@ function TicketCard({
   now,
   canWork,
   canPickup,
+  canExpo,
+  expoPending,
   pending,
   onTransition,
   onRequestCancel,
+  onValidateExpo,
+  onOpenHistory,
 }: {
   ticket: KitchenTicket
   now: number
   canWork: boolean
   canPickup: boolean
+  canExpo: boolean
+  expoPending: boolean
   pending: boolean
   onTransition: (
     ticket: KitchenTicket,
@@ -470,6 +644,8 @@ function TicketCard({
     reason?: string
   ) => Promise<void>
   onRequestCancel: (ticket: KitchenTicket) => void
+  onValidateExpo: (ticket: KitchenTicket) => void
+  onOpenHistory: (ticket: KitchenTicket) => void
 }) {
   const sentAt = ticket.orderRound.sentAt ?? ticket.orderRound.createdAt
   const ageMinutes = sentAt
@@ -508,6 +684,14 @@ function TicketCard({
           {STATUS_ICONS[ticket.status]}
           {KITCHEN_TICKET_STATUS_LABELS[ticket.status]}
         </Badge>
+        {ticket.expoAt ? (
+          <Badge
+            variant="outline"
+            className="border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+          >
+            Pase validado
+          </Badge>
+        ) : null}
       </div>
 
       <ul className="mt-2 flex flex-col gap-1.5 border-t pt-2">
@@ -603,6 +787,30 @@ function TicketCard({
             Esperando al mesero en el pase.
           </span>
         ) : null}
+
+        {canExpo &&
+        !ticket.expoAt &&
+        ["READY", "PICKED_UP"].includes(ticket.status) ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={expoPending}
+            onClick={() => onValidateExpo(ticket)}
+          >
+            <CircleCheckIcon />
+            Validar pase
+          </Button>
+        ) : null}
+
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => onOpenHistory(ticket)}
+        >
+          Historial
+        </Button>
 
         {canWork &&
         ["PENDING", "PREPARING", "READY"].includes(ticket.status) ? (
