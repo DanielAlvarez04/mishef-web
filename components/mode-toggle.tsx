@@ -4,46 +4,36 @@ import { MoonIcon, SunIcon } from "lucide-react"
 
 import { useTheme } from "@/components/theme-provider"
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { formatShortcut, getShortcut } from "@/lib/keyboard/shortcuts"
 
 const themeShortcut = formatShortcut(getShortcut("theme.toggle"))
 
+/**
+ * Alterna entre claro y oscuro.
+ *
+ * El botón muestra el tema al que se cambiará: en claro muestra "Oscuro" con
+ * una luna y en oscuro muestra "Claro" con un sol. En móvil queda solo el
+ * icono para no ocupar espacio en el header.
+ */
 export function ModeToggle() {
-  const { setTheme } = useTheme()
+  const { resolvedTheme, setTheme } = useTheme()
+  const target = resolvedTheme === "dark" ? "light" : "dark"
+  const targetLabel = target === "dark" ? "oscuro" : "claro"
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="outline"
-            size="icon"
-            className="relative"
-            title={`Cambiar tema (${themeShortcut})`}
-          >
-            <SunIcon className="size-4 scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />
-            <MoonIcon className="absolute size-4 scale-0 rotate-90 transition-all dark:scale-100 dark:rotate-0" />
-            <span className="sr-only">Cambiar tema</span>
-          </Button>
-        }
-      />
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          Claro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          Oscuro
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          Sistema
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      className="sm:w-auto sm:gap-1.5 sm:px-2.5"
+      title={`Cambiar a modo ${targetLabel} (${themeShortcut})`}
+      aria-label={`Cambiar a modo ${targetLabel}`}
+      onClick={() => setTheme(target)}
+    >
+      <MoonIcon className="size-4 dark:hidden" />
+      <SunIcon className="hidden size-4 dark:block" />
+      <span className="hidden sm:inline dark:hidden">Oscuro</span>
+      <span className="hidden dark:sm:inline">Claro</span>
+    </Button>
   )
 }

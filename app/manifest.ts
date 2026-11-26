@@ -17,6 +17,9 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: "/dashboard",
     scope: "/",
     display: "standalone",
+    // En Android/Chrome abre sin barras del sistema; iOS usa el modo
+    // `standalone` como respaldo (no admite fullscreen en PWA).
+    display_override: ["fullscreen", "standalone"],
     orientation: "any",
     background_color: "#ffffff",
     theme_color: "#e2703a",
