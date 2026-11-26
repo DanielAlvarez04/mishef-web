@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "jest",
     "test:e2e": "playwright test",
+    "test:e2e:advanced": "playwright test --config=playwright.advanced.config.ts",
     "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
