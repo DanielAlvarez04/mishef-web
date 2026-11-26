@@ -1,4 +1,10 @@
-import { expect, test, type Browser, type Page } from "@playwright/test"
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Page,
+} from "@playwright/test"
 
 /**
  * KITCHEN sin estación: la cuenta puede entrar a cocina, pero no ve la
@@ -159,9 +165,11 @@ test.describe("cocina avanzada", () => {
     })
     expect(advanced.ok()).toBeTruthy()
 
-    const context = await loginKitchen(browser, admin.organizationSlug)
+    let context: BrowserContext | null = null
 
     try {
+      context = await loginKitchen(browser, admin.organizationSlug)
+
       const sessionResponse = await context.request.get(`${API_URL}/auth/me`, {
         headers: ORIGIN,
       })
@@ -223,7 +231,7 @@ test.describe("cocina avanzada", () => {
         method: "PATCH",
         data: { mode: initialMode },
       })
-      await context.close()
+      await context?.close()
     }
   })
 })
