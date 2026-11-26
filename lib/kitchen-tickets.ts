@@ -134,7 +134,9 @@ export function kitchenOrderLabel(ticket: KitchenTicket): string {
   const order = ticket.orderRound.order
 
   if (order.tableNumber) return `Mesa ${order.tableNumber}`
-  if (order.channel === "COUNTER") return "Mostrador"
+  if (order.channel === "COUNTER") {
+    return order.customerName?.trim() || "Mostrador"
+  }
   if (order.channel === "PHONE") return "Teléfono"
   if (order.channel === "DELIVERY") return "Domicilio"
   return "Pedido"
