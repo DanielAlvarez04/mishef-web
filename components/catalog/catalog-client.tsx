@@ -90,6 +90,7 @@ export function CatalogClient({
   canManage,
   branch,
   taxRate,
+  stations,
 }: {
   recipes: Recipe[]
   articles: ArticleListItem[]
@@ -103,6 +104,8 @@ export function CatalogClient({
   branch: Branch | null
   /** Tasa de IVA por defecto de la organización (fracción). */
   taxRate: string
+  /** Estaciones activas para el ruteo primario del artículo. */
+  stations: Array<{ id: string; name: string }>
 }) {
   const router = useRouter()
   const rowForm = useActionForm(() => router.refresh())
@@ -518,6 +521,7 @@ export function CatalogClient({
             (article) => !article.isCombo && !article.isArchived
           )}
           taxRate={taxRate}
+          stations={stations}
           onSaved={(saveAs) =>
             setTab(
               saveAs === "combo"

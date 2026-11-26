@@ -271,6 +271,8 @@ export interface RecipePublishInput {
   taxRate?: number | null
   /** Minutos de preparación del artículo publicado. */
   prepMinutes?: number | null
+  /** Estación primaria de cocina para el modo Avanzado. */
+  defaultStationId?: string | null
   variants?: Array<{
     id?: string
     name: string
@@ -380,6 +382,8 @@ export interface RecipeDraftItemInput {
   price?: number
   /** Categoría del artículo borrador (independiente de la de la receta). */
   categoryId?: string | null
+  /** Estación primaria de cocina para el modo Avanzado. */
+  defaultStationId?: string | null
   variants?: ArticleInput["variants"]
   optionGroups?: ArticleInput["optionGroups"]
 }
@@ -426,6 +430,8 @@ export interface ArticleInput {
   isCombo?: boolean
   /** Minutos de preparación propios; `null` hereda el tiempo del negocio. */
   prepMinutes?: number | null
+  /** Estación primaria de cocina para el modo Avanzado. */
+  defaultStationId?: string | null
   variants?: Array<{
     /** Presentación existente; permite renombrarla sin perder su imagen. */
     id?: string

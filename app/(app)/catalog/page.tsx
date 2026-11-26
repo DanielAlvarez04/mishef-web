@@ -34,6 +34,7 @@ export default async function CatalogPage() {
     optionGroupsResponse,
     optionPresetsResponse,
     branch,
+    stationsResponse,
   ] = await Promise.all([
     apiFetch("/catalog/recipes?includeInactive=true"),
     // `includeArchived` trae los borradores de artículo de las recetas.
@@ -45,6 +46,7 @@ export default async function CatalogPage() {
     apiFetch("/catalog/option-groups"),
     apiFetch("/catalog/option-groups/presets"),
     getActiveBranch(),
+    apiFetch("/kitchen/stations"),
   ])
 
   if (
@@ -93,6 +95,14 @@ export default async function CatalogPage() {
     optionPresetsResponse.json() as Promise<OptionGroupPreset[]>,
   ])
 
+  const stations: Array<{ id: string; name: string }> =
+    stationsResponse.ok
+      ? ((await stationsResponse.json()) as Array<{
+          id: string
+          name: string
+        }>)
+      : []
+
   return (
     <CatalogClient
       recipes={recipes}
@@ -108,6 +118,7 @@ export default async function CatalogPage() {
       canManage={canManageCatalog(user.roles)}
       branch={branch}
       taxRate={user.organizationTaxRate}
+      stations={stations}
     />
   )
 }

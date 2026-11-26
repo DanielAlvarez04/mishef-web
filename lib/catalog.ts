@@ -380,6 +380,8 @@ export interface ItemListItem {
   imageName: string | null
   price: string
   taxRate: string | null
+  /** Estación primaria de cocina para el modo Avanzado. */
+  defaultStationId: string | null
   isActive: boolean
   /** Marcado manual: el menú público lo muestra como agotado. */
   isSoldOut: boolean
@@ -497,6 +499,8 @@ export interface Recipe {
     imageUrl: string | null
     imageVariants: ImageAssets | null
     isCombo: boolean
+    /** Estación primaria de cocina para el modo Avanzado. */
+    defaultStationId: string | null
     /** Categoría del artículo (independiente de la de la receta). */
     category: { id: string; name: string } | null
     variants: Variant[]

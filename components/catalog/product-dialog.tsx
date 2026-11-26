@@ -375,6 +375,7 @@ export function ProductDialog({
   optionPresets,
   products,
   taxRate,
+  stations,
   onSaved,
 }: {
   open: boolean
@@ -392,6 +393,8 @@ export function ProductDialog({
   products: ArticleListItem[]
   /** Tasa de IVA por defecto de la organización (fracción). */
   taxRate: string
+  /** Estaciones activas para el ruteo primario. */
+  stations: Array<{ id: string; name: string }>
   /** Se llama tras crear un producto, para abrir el tab donde aparece. */
   onSaved?: (saveAs: ProductSaveAs) => void
 }) {
@@ -510,6 +513,9 @@ export function ProductDialog({
   /** Minutos de preparación; vacío = hereda el tiempo del negocio. */
   const [prepMinutes, setPrepMinutes] = useState(() =>
     article?.prepMinutes != null ? String(article.prepMinutes) : ""
+  )
+  const [defaultStationId, setDefaultStationId] = useState(
+    article?.defaultStationId ?? recipe?.item?.defaultStationId ?? ""
   )
   const [image, setImage] = useState<DialogImage | null>(() => {
     const key = article?.imageKey ?? recipe?.imageKey
@@ -1187,6 +1193,7 @@ export function ProductDialog({
           isCombo: true,
           categoryId: null,
           prepMinutes: prepValue,
+          defaultStationId: defaultStationId || null,
           comboComponents: components,
           promotions: promotion ? [promotion] : [],
         })
@@ -1214,6 +1221,10 @@ export function ProductDialog({
           ...((article.prepMinutes ?? null) === prepValue
             ? {}
             : { prepMinutes: prepValue }),
+          ...((article.defaultStationId ?? null) ===
+          (defaultStationId || null)
+            ? {}
+            : { defaultStationId: defaultStationId || null }),
           ...(article.category ? { categoryId: null } : {}),
         }
 
@@ -1573,6 +1584,10 @@ export function ProductDialog({
           (article.prepMinutes ?? null) !== prepValue
             ? { prepMinutes: prepValue }
             : {}),
+          ...(saveAs !== "ingredient" &&
+          (article.defaultStationId ?? null) !== (defaultStationId || null)
+            ? { defaultStationId: defaultStationId || null }
+            : {}),
           ...(saveAs !== "ingredient" && variantsChanged(article, variants)
             ? { variants }
             : {}),
@@ -1666,6 +1681,7 @@ export function ProductDialog({
             price: priceBase,
             categoryId: articleCategoryId,
             prepMinutes: prepValue,
+            defaultStationId: defaultStationId || null,
             ...(variants.length > 0 ? { variants } : {}),
           })
 
@@ -1707,6 +1723,7 @@ export function ProductDialog({
             categoryId: articleCategoryId,
             price: priceBase,
             prepMinutes: prepValue,
+            defaultStationId: defaultStationId || null,
             variants,
             ...(optionsEnabled && savedGroups.length > 0
               ? { optionGroups: optionGroupPayload(savedGroups) }
@@ -1791,6 +1808,7 @@ export function ProductDialog({
                 ...(articleCategoryId
                   ? { categoryId: articleCategoryId }
                   : {}),
+                defaultStationId: defaultStationId || null,
                 variants: multiple ? variants : [],
                 optionGroups: optionsEnabled
                   ? optionGroupPayload(savedGroups)
@@ -1889,6 +1907,7 @@ export function ProductDialog({
               ...(articleCategoryId
                 ? { categoryId: articleCategoryId }
                 : {}),
+              defaultStationId: defaultStationId || null,
               variants: multiple ? variants : [],
               optionGroups: optionsEnabled
                 ? optionGroupPayload(savedGroups)
@@ -2503,6 +2522,45 @@ export function ProductDialog({
               <p className="text-xs text-muted-foreground">
                 Vacío = usa el tiempo del negocio. Sirve para ordenar la cola
                 de cocina y estimar cuándo estará lista la ronda.
+              </p>
+            </Field>
+          ) : null}
+
+          {saveAs !== "ingredient" ? (
+            <Field>
+              <FieldLabel htmlFor="product-station">
+                Estación de cocina
+              </FieldLabel>
+              <Select
+                value={defaultStationId || "none"}
+                onValueChange={(value) =>
+                  setDefaultStationId(value === "none" ? "" : (value ?? ""))
+                }
+                items={[
+                  { value: "none", label: "Sin estación" },
+                  ...stations.map((station) => ({
+                    value: station.id,
+                    label: station.name,
+                  })),
+                ]}
+                disabled={stations.length === 0}
+              >
+                <SelectTrigger id="product-station" className="w-full max-w-72">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sin estación</SelectItem>
+                  {stations.map((station) => (
+                    <SelectItem key={station.id} value={station.id}>
+                      {station.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {stations.length > 0
+                  ? "Estación primaria para el modo Avanzado. Si se omite, se usa el ruteo por categoría o la estación de respaldo."
+                  : "No hay estaciones configuradas. Créalas en Configuración → Cocina."}
               </p>
             </Field>
           ) : null}
