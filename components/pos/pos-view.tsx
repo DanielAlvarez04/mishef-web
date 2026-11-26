@@ -160,6 +160,7 @@ import {
   type OrderChannel,
   type OrderGuest,
 } from "@/lib/orders"
+import { createPosDraft, listPosDrafts, type PosDraft } from "@/lib/pos-drafts"
 import { trackEvent } from "@/lib/analytics"
 import { jalapenoChipClass } from "@/lib/chips"
 import { cn } from "@/lib/utils"
@@ -174,6 +175,7 @@ import { PosCatalog } from "@/components/pos/pos-catalog"
 import { CashSessionActions, CashSessionDialog, type CashSessionAction } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
+import { PosDraftsDialog } from "./pos-drafts-dialog"
 import { TablePicker, type TablePickerMode } from "./table-picker"
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
@@ -651,6 +653,9 @@ export function PosView({
     React.useState<PosDisplayState | null>(null)
   const displaySession = React.useRef<string | null>(null)
   const [sending, setSending] = React.useState(false)
+  const [savingDraft, setSavingDraft] = React.useState(false)
+  const [draftsOpen, setDraftsOpen] = React.useState(false)
+  const [draftCount, setDraftCount] = React.useState(0)
   const [holdRound, setHoldRound] = React.useState(false)
 
   /** Borradores por cuenta: no se pierden al revisar otra mesa. */
@@ -1577,17 +1582,6 @@ export function PosView({
     setComboConflict(null)
     dismissComboNotice()
 
-    if (value && !draftsRef.current.has(value)) {
-      try {
-        const stored = window.localStorage.getItem(`pos-draft-${value}`)
-        if (stored) {
-          draftsRef.current.set(value, JSON.parse(stored) as OrderDraft)
-        }
-      } catch {
-        // Borrador local corrupto o almacenamiento no disponible.
-      }
-    }
-
     const draft = draftsRef.current.get(value)
 
     setOrderId(value)
@@ -1712,7 +1706,144 @@ export function PosView({
     if (previous !== null) selectOrder(previous)
   })
 
-  const handleSend = async (payFirst = false, draftOnly = false) => {
+  /** Deja limpia la captura para atender al siguiente comensal. */
+  const clearDraftCapture = () => {
+    setCart([])
+    resetChannel()
+    setTableNumber("1")
+    setTableId("")
+    setCustomerName("")
+    setCustomerSex(null)
+    setCustomerAgeRange(null)
+    setCustomerPhone("")
+    setDeliveryAddress("")
+    setDeliveryFee("0")
+    setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
+    setPartySize(1)
+    setPartySizeDraft("1")
+    setActiveGuestKey(null)
+    setPendingProductId(null)
+    displaySession.current = null
+    dismissComboNotice()
+    setComboConflict(null)
+  }
+
+  React.useEffect(() => {
+    let cancelled = false
+
+    listPosDrafts().then((result) => {
+      if (!cancelled && result.ok && result.data) {
+        setDraftCount(result.data.length)
+      }
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /**
+   * Guarda la captura en el servidor sin abrir cuenta.
+   *
+   * No ocupa mesa ni genera tickets; la mesa queda libre para el siguiente
+   * comensal. El borrador lo puede reanudar cualquier persona del POS.
+   */
+  const handleSaveDraft = async () => {
+    if (cart.length === 0) {
+      toast.error("Añade al menos un artículo")
+      return
+    }
+
+    if (!offline.isOnline) {
+      toast.error("Conecta el dispositivo para guardar el borrador")
+      return
+    }
+
+    setSavingDraft(true)
+
+    try {
+      const result = await createPosDraft({
+        orderId: orderId || undefined,
+        channel,
+        tableNumber:
+          channel === "DINE_IN" ? tableNumber.trim() || undefined : undefined,
+        tableId: channel === "DINE_IN" ? tableId || undefined : undefined,
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
+        customerSex,
+        customerAgeRange,
+        deliveryAddress: deliveryAddress.trim() || undefined,
+        deliveryFee: Number(deliveryFee) || 0,
+        partySize: channel === "DINE_IN" ? partySize : 1,
+        cart,
+        guests,
+        total,
+      })
+
+      if (!result.ok || !result.data) {
+        toast.error(result.message ?? "No se pudo guardar el borrador")
+        return
+      }
+
+      draftsRef.current.delete(orderId)
+      draftsRef.current.delete("")
+      setOrderId("")
+      setPendingOrder(null)
+      clearDraftCapture()
+      setDraftCount((current) => current + 1)
+      toast.success("Borrador guardado", {
+        description:
+          "Vence en 15 minutos y cualquier persona del POS puede reanudarlo.",
+      })
+    } finally {
+      setSavingDraft(false)
+    }
+  }
+
+  /** Restaura una captura guardada; el borrador ya quedó consumido. */
+  const handleResumeDraft = (draft: PosDraft) => {
+    const targetOrderId =
+      draft.orderId && orders.some((order) => order.id === draft.orderId)
+        ? draft.orderId
+        : ""
+
+    draftsRef.current.delete(orderId)
+    draftsRef.current.delete("")
+    restoringRef.current = targetOrderId || "__new__"
+
+    setOrderId(targetOrderId)
+    setPendingOrder(null)
+    setCart(draft.cart as CartLine[])
+    setChannel(draft.channel)
+    setTableNumber(draft.tableNumber ?? "1")
+    setTableId(draft.tableId ?? "")
+    setCustomerName(draft.customerName ?? "")
+    setCustomerSex(draft.customerSex)
+    setCustomerAgeRange(draft.customerAgeRange)
+    setCustomerPhone(draft.customerPhone ?? "")
+    setDeliveryAddress(draft.deliveryAddress ?? "")
+    setDeliveryFee(draft.deliveryFee)
+    setGuests(
+      Array.isArray(draft.guests) && draft.guests.length > 0
+        ? (draft.guests as GuestDraft[])
+        : [
+            {
+              key: newGuestKey(),
+              name: "",
+              savedName: "",
+              sex: null,
+              ageRange: null,
+            },
+          ]
+    )
+    setPartySize(Math.max(1, draft.partySize))
+    setPartySizeDraft(String(Math.max(1, draft.partySize)))
+    setActiveGuestKey(null)
+    setPendingProductId(null)
+    toast.success("Borrador reanudado")
+  }
+
+  const handleSend = async (payFirst = false) => {
     if (cart.length === 0) {
       toast.error("Añade al menos un artículo")
       return
@@ -1776,26 +1907,6 @@ export function PosView({
     const orderKey = crypto.randomUUID()
     const roundKey = crypto.randomUUID()
 
-    const resetDraft = () => {
-      setCart([])
-      resetChannel()
-      setTableNumber("1")
-      setTableId("")
-      setCustomerName("")
-      setCustomerSex(null)
-      setCustomerAgeRange(null)
-      setCustomerPhone("")
-      setDeliveryAddress("")
-      setDeliveryFee("0")
-      setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
-      setPartySize(1)
-      setActiveGuestKey(null)
-      setPendingProductId(null)
-      displaySession.current = null
-      dismissComboNotice()
-      setComboConflict(null)
-    }
-
     // Guarda la comanda en IndexedDB. Nunca se anuncia como recibida por
     // cocina: eso solo ocurre cuando el servidor confirma el envío.
     const queueOffline = async (targetOrderId?: string) => {
@@ -1835,7 +1946,7 @@ export function PosView({
         channel,
         offline: true,
       })
-      resetDraft()
+      clearDraftCapture()
     }
 
     if (!offline.isOnline) {
@@ -1961,39 +2072,6 @@ export function PosView({
         return guestId ? { ...input, guestId } : input
       })
 
-      if (draftOnly) {
-        const draft: OrderDraft = {
-          cart,
-          channel,
-          tableNumber,
-          customerName,
-          customerSex,
-          customerAgeRange,
-          customerPhone,
-          deliveryAddress,
-          deliveryFee,
-          guests,
-          partySize,
-          partySizeDraft,
-          activeGuestKey,
-        }
-
-        draftsRef.current.set(targetId, draft)
-
-        try {
-          window.localStorage.setItem(
-            `pos-draft-${targetId}`,
-            JSON.stringify(draft)
-          )
-        } catch {
-          // Sin almacenamiento local el borrador sigue en memoria.
-        }
-
-        toast.success("Borrador guardado")
-        router.refresh()
-        return
-      }
-
       const result = await sendRound(targetId, {
         items: itemsWithGuests,
         idempotencyKey: roundKey,
@@ -2055,13 +2133,7 @@ export function PosView({
       })
       draftsRef.current.delete(targetId)
       draftsRef.current.delete("")
-
-      try {
-        window.localStorage.removeItem(`pos-draft-${targetId}`)
-      } catch {
-        // Sin almacenamiento local no hay nada que limpiar.
-      }
-      resetDraft()
+      clearDraftCapture()
       router.refresh()
     } catch {
       if (!navigator.onLine) {
@@ -2381,6 +2453,22 @@ export function PosView({
                     <XIcon />
                   </SheetClose>
                 )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  className="relative shrink-0"
+                  aria-label={`Borradores (${draftCount})`}
+                  title="Borradores guardados"
+                  onClick={() => setDraftsOpen(true)}
+                >
+                  <NotebookTextIcon />
+                  {draftCount > 0 ? (
+                    <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                      {draftCount > 9 ? "9+" : draftCount}
+                    </span>
+                  ) : null}
+                </Button>
     </>
   )
 
@@ -3103,11 +3191,18 @@ export function PosView({
                           type="button"
                           variant="outline"
                           disabled={
-                            sending || !offline.isOnline || cart.length === 0
+                            sending ||
+                            savingDraft ||
+                            !offline.isOnline ||
+                            cart.length === 0
                           }
-                          onClick={() => void handleSend(false, true)}
+                          onClick={() => void handleSaveDraft()}
                         >
-                          <SaveIcon />
+                          {savingDraft ? (
+                            <Loader2Icon className="animate-spin" />
+                          ) : (
+                            <SaveIcon />
+                          )}
                           Guardar
                         </Button>
                       </div>
@@ -3143,10 +3238,16 @@ export function PosView({
                           <Button
                             type="button"
                             variant="outline"
-                            disabled={sending || cart.length === 0}
-                            onClick={() => void handleSend(false, true)}
+                            disabled={
+                              sending || savingDraft || cart.length === 0
+                            }
+                            onClick={() => void handleSaveDraft()}
                           >
-                            <SaveIcon />
+                            {savingDraft ? (
+                              <Loader2Icon className="animate-spin" />
+                            ) : (
+                              <SaveIcon />
+                            )}
                             Guardar
                           </Button>
                         ) : null}
@@ -4295,6 +4396,13 @@ export function PosView({
         currentTableIds={activeTableIds}
         onConfirm={handleTableConfirm}
         onMergeOrder={handleMergeOrder}
+      />
+
+      <PosDraftsDialog
+        open={draftsOpen}
+        onOpenChange={setDraftsOpen}
+        onResume={handleResumeDraft}
+        onCountChange={setDraftCount}
       />
 
       <AlertDialog
