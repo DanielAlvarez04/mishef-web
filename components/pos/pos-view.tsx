@@ -3124,9 +3124,8 @@ export function PosView({
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex flex-col gap-3">
           {!showComandaColumn ? (
-            <>
-              <Card className="flex flex-col gap-3 border p-4 ring-0">
-                <div className="comanda-rapida-mobile flex flex-col gap-2 rounded-lg">
+            <Card className="flex flex-col gap-3 border p-4 ring-0">
+              <div className="comanda-rapida-mobile flex flex-col gap-2 rounded-lg">
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
                   const disabled =
@@ -3348,8 +3347,6 @@ export function PosView({
               ) : null}
                 </div>
               </Card>
-              <Separator />
-            </>
           ) : null}
 
           <div className="filtros-mobile flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
