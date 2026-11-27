@@ -12,6 +12,7 @@ import type {
   OrderGuest,
   OrderRound,
   RoundStatus,
+  KitchenRound,
 } from "@/lib/orders"
 import type {
   KitchenTicketHistoryEntry,
@@ -223,6 +224,16 @@ export async function getKitchenTicketHistory(
   ticketId: string
 ): Promise<ActionResult<KitchenTicketHistoryEntry[]>> {
   return readApi(`/kitchen/tickets/${ticketId}/history`)
+}
+
+/**
+ * Rondas activas de cocina para el POS móvil.
+ *
+ * Incluye cuentas ya cobradas que siguen en preparación; por eso no se usa la
+ * lista de cuentas abiertas del POS.
+ */
+export async function getKitchenRounds(): Promise<ActionResult<KitchenRound[]>> {
+  return readApi<KitchenRound[]>("/kitchen/rounds")
 }
 
 /** Añade una persona (comensal) a la cuenta. */

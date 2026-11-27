@@ -45,7 +45,7 @@ test.describe("POS móvil", () => {
     await openRoute(page, "/pos")
 
     const width = viewportWidth(page)
-    const pill = page.getByRole("button", { name: /^Nueva/ }).first()
+    const pill = page.getByRole("button", { name: "Ver pedido actual" })
 
     if (width < 1280) {
       await expect(pill).toBeVisible()

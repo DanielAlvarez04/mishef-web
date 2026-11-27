@@ -13,6 +13,7 @@ import {
   canManageCash,
   canRegisterPayments,
   canSendOrders,
+  type KitchenRound,
   type Order,
 } from "@/lib/orders"
 import type { CashSessionPayload } from "@/lib/cash"
@@ -50,6 +51,8 @@ export default async function PointOfSalePage() {
     trendingResponse,
     kitchenModeResponse,
     tablesResponse,
+    kitchenRoundsResponse,
+    draftsResponse,
   ] = await Promise.all([
     apiFetch("/catalog/items"),
     apiFetch("/catalog/categories"),
@@ -64,6 +67,8 @@ export default async function PointOfSalePage() {
     apiFetch("/catalog/menus/trending"),
     apiFetch("/kitchen/mode"),
     apiFetch("/tables"),
+    apiFetch("/kitchen/rounds"),
+    apiFetch("/pos/drafts"),
   ])
 
   // Primero el modo offline: si la red falló, no se puede saber si falta
@@ -161,6 +166,12 @@ export default async function PointOfSalePage() {
   const diningTables = tablesResponse.ok
     ? ((await tablesResponse.json()) as DiningTable[])
     : []
+  const initialServiceRounds: KitchenRound[] = kitchenRoundsResponse.ok
+    ? ((await kitchenRoundsResponse.json()) as KitchenRound[])
+    : []
+  const initialDraftCount = draftsResponse.ok
+    ? ((await draftsResponse.json()) as unknown[]).length
+    : 0
 
   return (
     <>
@@ -188,6 +199,8 @@ export default async function PointOfSalePage() {
         taxRate={user.organizationTaxRate ?? "0.16"}
         kitchenAdvanced={kitchenMode === "ADVANCED"}
         diningTables={diningTables}
+        initialServiceRounds={initialServiceRounds}
+        initialDraftCount={initialDraftCount}
       />
     </>
   )

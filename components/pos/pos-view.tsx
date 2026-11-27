@@ -7,9 +7,14 @@ import {
   ArrowDownToLineIcon,
   ArrowUpDownIcon,
   BanknoteIcon,
+  BanknoteXIcon,
   CakeIcon,
+  ChefHatIcon,
+  ClipboardClockIcon,
+  ConciergeBellIcon,
   CopyIcon,
   CreditCardIcon,
+  FilePlusIcon,
   GroupIcon,
   LayoutGridIcon,
   Link2Icon,
@@ -52,13 +57,6 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "@/components/ui/carousel"
 import {
   Dialog,
   DialogContent,
@@ -118,7 +116,6 @@ import { usePersistentNumber } from "@/hooks/use-persistent-number"
 import { usePersistentTab } from "@/hooks/use-persistent-tab"
 import {
   PROMOTION_TYPE_LABELS,
-  formatTime,
   isItemOptionValueAvailable,
   itemOptionValueName,
   type ItemListItem,
@@ -129,6 +126,7 @@ import {
   addOrderGuest,
   createOrder,
   getChargeSummary,
+  getKitchenRounds,
   mergeOrders,
   releasePaymentRound,
   removeOrderGuest,
@@ -156,11 +154,13 @@ import {
   type ChargeSummary,
   type GuestAgeRange,
   type GuestSex,
+  type KitchenRound,
   type Order,
   type OrderChannel,
   type OrderGuest,
 } from "@/lib/orders"
 import { createPosDraft, listPosDrafts, type PosDraft } from "@/lib/pos-drafts"
+import { pendingPaymentOrders, splitServiceRounds } from "@/lib/pos-service"
 import { trackEvent } from "@/lib/analytics"
 import { jalapenoChipClass } from "@/lib/chips"
 import { cn } from "@/lib/utils"
@@ -175,7 +175,8 @@ import { PosCatalog } from "@/components/pos/pos-catalog"
 import { CashSessionActions, CashSessionDialog, type CashSessionAction } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
-import { PosDraftsDialog } from "./pos-drafts-dialog"
+import { PosDraftsSheet } from "./pos-drafts-sheet"
+import { PosServiceQueueSheet, type ServiceQueueMode } from "./pos-service-queue-sheet"
 import { TablePicker, type TablePickerMode } from "./table-picker"
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
@@ -490,6 +491,8 @@ export function PosView({
   taxRate,
   kitchenAdvanced = false,
   diningTables = [],
+  initialServiceRounds = [],
+  initialDraftCount = 0,
 }: {
   products: ItemListItem[]
   orders: Order[]
@@ -514,6 +517,10 @@ export function PosView({
   kitchenAdvanced?: boolean
   /** Mesas configuradas de la sucursal. */
   diningTables?: DiningTable[]
+  /** Rondas activas de cocina para la barra móvil. */
+  initialServiceRounds?: KitchenRound[]
+  /** Borradores activos al cargar la página. */
+  initialDraftCount?: number
 }) {
   const router = useRouter()
   useWakeLock()
@@ -655,7 +662,7 @@ export function PosView({
   const [sending, setSending] = React.useState(false)
   const [savingDraft, setSavingDraft] = React.useState(false)
   const [draftsOpen, setDraftsOpen] = React.useState(false)
-  const [draftCount, setDraftCount] = React.useState(0)
+  const [draftCount, setDraftCount] = React.useState(initialDraftCount)
   const [holdRound, setHoldRound] = React.useState(false)
 
   /** Borradores por cuenta: no se pierden al revisar otra mesa. */
@@ -805,8 +812,11 @@ export function PosView({
   // catálogo + panel (xl). En tablet horizontal y teléfono se usa el sheet.
   const showComandaColumn = useMediaQuery("(min-width: 1280px)", true)
   const [comandaOpen, setComandaOpen] = React.useState(false)
-  const [pendingOpen, setPendingOpen] = React.useState(false)
   const [confirmNewComanda, setConfirmNewComanda] = React.useState(false)
+  const [serviceRounds, setServiceRounds] =
+    React.useState<KitchenRound[]>(initialServiceRounds)
+  const [serviceQueueMode, setServiceQueueMode] =
+    React.useState<ServiceQueueMode | null>(null)
 
   const comandaUnits =
     cart.reduce((count, line) => count + line.quantity, 0) +
@@ -822,6 +832,13 @@ export function PosView({
 
       return count + (round._count?.items ?? 0)
     }, 0)
+
+  const { kitchen: kitchenQueueRounds, ready: readyQueueRounds } =
+    React.useMemo(() => splitServiceRounds(serviceRounds), [serviceRounds])
+  const pendingQueueOrders = React.useMemo(
+    () => pendingPaymentOrders(carouselOrders),
+    [carouselOrders]
+  )
 
   /**
    * El precio del catálogo es final (IVA incluido), así que el IVA se extrae
@@ -1658,10 +1675,28 @@ export function PosView({
   }
 
   /**
-   * “Nueva” del POS móvil: pasa a la comanda nueva y abre el Sheet.
+   * Refresca los contadores de la barra móvil: rondas de cocina y borradores.
+   */
+  const refreshServiceData = React.useCallback(async () => {
+    const [roundsResult, draftsResult] = await Promise.all([
+      getKitchenRounds(),
+      listPosDrafts(),
+    ])
+
+    if (roundsResult.ok && roundsResult.data) {
+      setServiceRounds(roundsResult.data)
+    }
+
+    if (draftsResult.ok && draftsResult.data) {
+      setDraftCount(draftsResult.data.length)
+    }
+  }, [])
+
+  /**
+   * «Pedido» del POS móvil: abre la comanda actual sin crear ni borrar nada.
    *
    * Si la cuenta actual ya está guardada, su borrador queda en `draftsRef` y
-   * se recupera al volver a seleccionarla desde Pendientes.
+   * se recupera al volver a seleccionarla.
    */
   function startNewComanda() {
     posCapture.noteComandaInteraction()
@@ -1688,9 +1723,14 @@ export function PosView({
     setComandaOpen(true)
   }
 
-  function openPendingOrder(id: string) {
+  function openServiceQueue(mode: ServiceQueueMode) {
+    setServiceQueueMode(mode)
+    void refreshServiceData()
+  }
+
+  function handleSelectQueueOrder(id: string) {
     selectOrder(id)
-    setPendingOpen(false)
+    setServiceQueueMode(null)
     setComandaOpen(true)
   }
 
@@ -1729,18 +1769,16 @@ export function PosView({
   }
 
   React.useEffect(() => {
-    let cancelled = false
-
-    listPosDrafts().then((result) => {
-      if (!cancelled && result.ok && result.data) {
-        setDraftCount(result.data.length)
-      }
-    })
+    const initial = window.setTimeout(() => void refreshServiceData(), 0)
+    const timer = window.setInterval(() => {
+      if (!document.hidden) void refreshServiceData()
+    }, 30_000)
 
     return () => {
-      cancelled = true
+      window.clearTimeout(initial)
+      window.clearInterval(timer)
     }
-  }, [])
+  }, [refreshServiceData])
 
   /**
    * Guarda la captura en el servidor sin abrir cuenta.
@@ -1840,6 +1878,7 @@ export function PosView({
     setPartySizeDraft(String(Math.max(1, draft.partySize)))
     setActiveGuestKey(null)
     setPendingProductId(null)
+    setComandaOpen(true)
     toast.success("Borrador reanudado")
   }
 
@@ -2135,6 +2174,7 @@ export function PosView({
       draftsRef.current.delete("")
       clearDraftCapture()
       router.refresh()
+      void refreshServiceData()
     } catch {
       if (!navigator.onLine) {
         await queueOffline(orderId || undefined)
@@ -2402,6 +2442,25 @@ export function PosView({
     }
   }
 
+  const draftsHeaderButton = (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon-sm"
+      className="relative shrink-0"
+      aria-label={`Borradores (${draftCount})`}
+      title="Borradores guardados"
+      onClick={() => setDraftsOpen(true)}
+    >
+      <NotebookTextIcon />
+      {draftCount > 0 ? (
+        <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+          {draftCount > 9 ? "9+" : draftCount}
+        </span>
+      ) : null}
+    </Button>
+  )
+
   const comandaHeaderContent = (
     <>
                 <CardTitle className="flex items-center gap-2">
@@ -2414,6 +2473,7 @@ export function PosView({
                   ) : null}
                 </CardTitle>
                 {showComandaColumn ? (
+                  <>
                   <Select
                     value={orderId || "new"}
                     onValueChange={(value) =>
@@ -2439,36 +2499,35 @@ export function PosView({
                       ))}
                     </SelectContent>
                   </Select>
+                  {draftsHeaderButton}
+                  </>
                 ) : (
-                  <SheetClose
-                    render={
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label="Cerrar comanda"
-                      />
-                    }
-                  >
-                    <XIcon />
-                  </SheetClose>
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      aria-label="Empezar comanda nueva"
+                      title="Empezar comanda nueva"
+                      onClick={handleNewComanda}
+                    >
+                      <FilePlusIcon />
+                    </Button>
+                    {draftsHeaderButton}
+                    <SheetClose
+                      render={
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Cerrar comanda"
+                        />
+                      }
+                    >
+                      <XIcon />
+                    </SheetClose>
+                  </>
                 )}
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="icon-sm"
-                  className="relative shrink-0"
-                  aria-label={`Borradores (${draftCount})`}
-                  title="Borradores guardados"
-                  onClick={() => setDraftsOpen(true)}
-                >
-                  <NotebookTextIcon />
-                  {draftCount > 0 ? (
-                    <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                      {draftCount > 9 ? "9+" : draftCount}
-                    </span>
-                  ) : null}
-                </Button>
     </>
   )
 
@@ -3081,6 +3140,7 @@ export function PosView({
             "El pago se confirmó, pero no se pudo enviar a cocina. Usa Cobrar pendiente."
         )
         router.refresh()
+        void refreshServiceData()
         return
       }
     }
@@ -3088,6 +3148,7 @@ export function PosView({
     toast.success("Pago confirmado · pedido enviado a cocina")
     setPayFirstRoundId(null)
     router.refresh()
+    void refreshServiceData()
   }
 
   const handleChargeAllMerged = async () => {
@@ -4091,120 +4152,116 @@ export function PosView({
 
       {!showComandaColumn ? (
         <>
-          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
-            <button
+          <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
+            <ButtonGroup className="pointer-events-auto h-12 overflow-hidden rounded-full border bg-card p-0 shadow-lg shadow-black/10">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="relative h-12 rounded-none"
+                aria-label={
+                  draftCount > 0
+                    ? `Comandas guardadas (${draftCount})`
+                    : "Comandas guardadas"
+                }
+                title="Comandas guardadas"
+                onClick={() => {
+                  setDraftsOpen(true)
+                  void refreshServiceData()
+                }}
+              >
+                <ClipboardClockIcon />
+                {draftCount > 0 ? (
+                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {draftCount > 9 ? "9+" : draftCount}
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="relative h-12 rounded-none"
+                aria-label={
+                  kitchenQueueRounds.length > 0
+                    ? `Pedidos en cocina (${kitchenQueueRounds.length})`
+                    : "Pedidos en cocina"
+                }
+                title="Pedidos en cocina"
+                onClick={() => openServiceQueue("kitchen")}
+              >
+                <ChefHatIcon />
+                {kitchenQueueRounds.length > 0 ? (
+                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {kitchenQueueRounds.length > 9
+                      ? "9+"
+                      : kitchenQueueRounds.length}
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="relative h-12 rounded-none"
+                aria-label={
+                  readyQueueRounds.length > 0
+                    ? `Pedidos listos (${readyQueueRounds.length})`
+                    : "Pedidos listos"
+                }
+                title="Pedidos listos"
+                onClick={() => openServiceQueue("ready")}
+              >
+                <ConciergeBellIcon />
+                {readyQueueRounds.length > 0 ? (
+                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {readyQueueRounds.length > 9
+                      ? "9+"
+                      : readyQueueRounds.length}
+                  </span>
+                ) : null}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-lg"
+                className="relative h-12 rounded-none"
+                aria-label={
+                  pendingQueueOrders.length > 0
+                    ? `Cuentas por cobrar (${pendingQueueOrders.length})`
+                    : "Cuentas por cobrar"
+                }
+                title="Cuentas por cobrar"
+                onClick={() => openServiceQueue("pending")}
+              >
+                <BanknoteXIcon />
+                {pendingQueueOrders.length > 0 ? (
+                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
+                    {pendingQueueOrders.length > 9
+                      ? "9+"
+                      : pendingQueueOrders.length}
+                  </span>
+                ) : null}
+              </Button>
+            </ButtonGroup>
+
+            <Button
               type="button"
-              onClick={handleNewComanda}
-              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full border bg-card px-4 text-sm shadow-lg shadow-black/10 transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]"
+              className="pointer-events-auto h-12 rounded-full px-4 shadow-lg shadow-black/10"
+              aria-label="Ver pedido actual"
+              onClick={() => setComandaOpen(true)}
             >
-              <PencilLineIcon className="size-5 text-primary" aria-hidden />
-              <span className="font-medium">Nueva</span>
+              <ReceiptTextIcon data-icon="inline-start" />
+              <span className="hidden font-medium min-[350px]:inline">
+                Pedido
+              </span>
               {comandaUnits > 0 ? (
                 <Badge variant="secondary" className="tabular-nums">
                   {comandaUnits}
                 </Badge>
               ) : null}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setPendingOpen(true)}
-              aria-label="Comandas pendientes"
-              className="pointer-events-auto flex h-12 items-center gap-2 rounded-full border bg-card px-4 text-sm shadow-lg shadow-black/10 transition-transform focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none active:scale-[0.99]"
-            >
-              <NotebookTextIcon className="size-5 text-primary" aria-hidden />
-              <span className="font-medium">Pendientes</span>
-              {carouselOrders.length > 0 ? (
-                <Badge variant="secondary" className="tabular-nums">
-                  {carouselOrders.length}
-                </Badge>
-              ) : null}
-            </button>
+            </Button>
           </div>
-
-          <Sheet open={pendingOpen} onOpenChange={setPendingOpen}>
-            <SheetContent
-              side="bottom"
-              className="max-h-[80dvh] gap-0 overflow-hidden rounded-t-xl border-t p-0"
-            >
-              <div className="flex flex-col gap-3 p-4">
-                <Carousel
-                  opts={{ align: "start", containScroll: "trimSnaps" }}
-                  className="w-full"
-                >
-                  <div className="pr-10">
-                    <SheetTitle>Pendientes</SheetTitle>
-                    <SheetDescription>
-                      {carouselOrders.length === 1
-                        ? "1 cuenta abierta"
-                        : `${carouselOrders.length} cuentas abiertas`}
-                    </SheetDescription>
-                  </div>
-
-                  {carouselOrders.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-muted-foreground">
-                      No hay comandas pendientes.
-                    </p>
-                  ) : (
-                    <>
-                      <CarouselContent className="-ml-2">
-                        {carouselOrders.map((order) => (
-                          <CarouselItem
-                            key={order.id}
-                            className="basis-[85%] pl-2"
-                          >
-                            <button
-                              type="button"
-                              onClick={() => openPendingOrder(order.id)}
-                              aria-current={
-                                order.id === orderId ? "true" : undefined
-                              }
-                              className={cn(
-                                "flex w-full flex-col gap-2 rounded-xl border bg-card p-3 text-left transition-colors",
-                                order.id === orderId
-                                  ? "border-primary bg-primary/5"
-                                  : "hover:bg-muted/50"
-                              )}
-                            >
-                              <span className="flex items-start justify-between gap-2">
-                                <span className="truncate text-sm font-medium">
-                                  {orderSelectLabel(order)}
-                                </span>
-                                <span className="shrink-0 text-[11px] text-muted-foreground">
-                                  {formatTime(order.createdAt)}
-                                </span>
-                              </span>
-                              <span className="flex items-end justify-between gap-2">
-                                <span className="min-w-0 truncate text-xs text-muted-foreground">
-                                  {order.customerName?.trim() ||
-                                    ORDER_CHANNEL_LABELS[
-                                      order.channel ?? "DINE_IN"
-                                    ]}
-                                  {order.partySize > 1
-                                    ? ` · ${order.partySize} clientes`
-                                    : ""}
-                                </span>
-                                <span className="shrink-0 text-sm font-semibold tabular-nums">
-                                  {money(Number(order.total))}
-                                </span>
-                              </span>
-                            </button>
-                          </CarouselItem>
-                        ))}
-                      </CarouselContent>
-
-                      {carouselOrders.length > 1 ? (
-                        <div className="mt-2 flex justify-end gap-1">
-                          <CarouselPrevious className="relative! inset-auto!" />
-                          <CarouselNext className="relative! inset-auto!" />
-                        </div>
-                      ) : null}
-                    </>
-                  )}
-                </Carousel>
-              </div>
-            </SheetContent>
-          </Sheet>
 
           <Sheet open={comandaOpen} onOpenChange={setComandaOpen}>
             <SheetContent
@@ -4394,11 +4451,22 @@ export function PosView({
         onMergeOrder={handleMergeOrder}
       />
 
-      <PosDraftsDialog
+      <PosDraftsSheet
         open={draftsOpen}
         onOpenChange={setDraftsOpen}
         onResume={handleResumeDraft}
         onCountChange={setDraftCount}
+      />
+
+      <PosServiceQueueSheet
+        open={serviceQueueMode !== null}
+        mode={serviceQueueMode ?? "kitchen"}
+        onOpenChange={(open) => {
+          if (!open) setServiceQueueMode(null)
+        }}
+        rounds={serviceRounds}
+        orders={pendingQueueOrders}
+        onOpenOrder={handleSelectQueueOrder}
       />
 
       <AlertDialog
@@ -4441,6 +4509,7 @@ export function PosView({
           onClose={() => {
             setCharging(false)
             setChargeOrder(null)
+            setPendingOrder(null)
             // Los cobros se reflejan en el diálogo sin revalidar el POS; al
             // cerrarlo se trae la lista de cuentas con los saldos reales.
             router.refresh()
@@ -4449,6 +4518,7 @@ export function PosView({
             setCharging(false)
             setChargeOrder(null)
             setPayFirstRoundId(null)
+            setPendingOrder(null)
             setOrderId("")
             setCart([])
             setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
@@ -4466,6 +4536,7 @@ export function PosView({
             dismissComboNotice()
             setComboConflict(null)
             router.refresh()
+            void refreshServiceData()
           }}
         />
       ) : null}
