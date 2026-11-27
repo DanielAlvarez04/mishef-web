@@ -4153,7 +4153,10 @@ export function PosView({
       {!showComandaColumn ? (
         <>
           <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
-            <ButtonGroup className="pointer-events-auto h-12 overflow-hidden rounded-full border bg-card p-0 shadow-lg shadow-black/10">
+            <ButtonGroup
+              aria-label="Comandas y pedidos"
+              className="pointer-events-auto h-12 overflow-hidden rounded-full border bg-card p-0 shadow-lg shadow-black/10"
+            >
               <Button
                 type="button"
                 variant="ghost"

@@ -193,7 +193,7 @@ export function PosDraftsSheet({
                           {money(Number(draft.total))}
                         </span>
                       </ItemActions>
-                      <ItemFooter>
+                      <ItemFooter className="flex-wrap">
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <Badge variant="outline">
                             <Clock3Icon />
