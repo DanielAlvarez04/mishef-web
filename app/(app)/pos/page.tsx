@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto"
+
 import { PosView } from "@/components/pos/pos-view"
 import { PosOfflineFallback } from "@/components/pos/pos-offline-fallback"
 import { OfflineSnapshot } from "@/components/offline/offline-snapshot"
@@ -13,13 +15,14 @@ import {
   canManageCash,
   canRegisterPayments,
   canSendOrders,
-  type KitchenRound,
+  type KitchenRoundSummary,
   type Order,
 } from "@/lib/orders"
 import type { CashSessionPayload } from "@/lib/cash"
 import type { DiningTable } from "@/lib/tables"
 import type { PosDisplayInfo } from "@/lib/pos-display"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
+import type { PosDraft } from "@/lib/pos-drafts"
 import { requireAnyRole } from "@/lib/session"
 import { redirect } from "next/navigation"
 
@@ -67,7 +70,7 @@ export default async function PointOfSalePage() {
     apiFetch("/catalog/menus/trending"),
     apiFetch("/kitchen/mode"),
     apiFetch("/tables"),
-    apiFetch("/kitchen/rounds"),
+    apiFetch("/kitchen/rounds?summary=1"),
     apiFetch("/pos/drafts"),
   ])
 
@@ -166,12 +169,17 @@ export default async function PointOfSalePage() {
   const diningTables = tablesResponse.ok
     ? ((await tablesResponse.json()) as DiningTable[])
     : []
-  const initialServiceRounds: KitchenRound[] = kitchenRoundsResponse.ok
-    ? ((await kitchenRoundsResponse.json()) as KitchenRound[])
+  const initialServiceRoundSummary: KitchenRoundSummary[] =
+    kitchenRoundsResponse.ok
+      ? ((await kitchenRoundsResponse.json()) as KitchenRoundSummary[])
+      : []
+  const initialDrafts: PosDraft[] = draftsResponse.ok
+    ? ((await draftsResponse.json()) as PosDraft[])
     : []
-  const initialDraftCount = draftsResponse.ok
-    ? ((await draftsResponse.json()) as unknown[]).length
-    : 0
+
+  const snapshotSignature = createHash("sha1")
+    .update(JSON.stringify({ products, categories, menus, cash }))
+    .digest("hex")
 
   return (
     <>
@@ -182,6 +190,7 @@ export default async function PointOfSalePage() {
         categories={categories}
         menus={menus}
         cashSession={cash}
+        signature={snapshotSignature}
       />
       <PosView
       products={products}
@@ -199,8 +208,8 @@ export default async function PointOfSalePage() {
         taxRate={user.organizationTaxRate ?? "0.16"}
         kitchenAdvanced={kitchenMode === "ADVANCED"}
         diningTables={diningTables}
-        initialServiceRounds={initialServiceRounds}
-        initialDraftCount={initialDraftCount}
+        initialServiceRoundSummary={initialServiceRoundSummary}
+        initialDrafts={initialDrafts}
       />
     </>
   )

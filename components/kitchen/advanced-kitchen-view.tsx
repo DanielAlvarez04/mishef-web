@@ -550,8 +550,14 @@ export function AdvancedKitchenView({
                   "READY",
                   "PICKED_UP",
                 ]
+                const leftPriority = left.orderRound.prioritizedAt ? 1 : 0
+                const rightPriority = right.orderRound.prioritizedAt ? 1 : 0
+
                 return (
-                  order.indexOf(left.status) - order.indexOf(right.status)
+                  rightPriority - leftPriority ||
+                  order.indexOf(left.status) - order.indexOf(right.status) ||
+                  new Date(left.createdAt).getTime() -
+                    new Date(right.createdAt).getTime()
                 )
               })
 
@@ -902,6 +908,11 @@ function TicketCard({
           {STATUS_ICONS[ticket.status]}
           {KITCHEN_TICKET_STATUS_LABELS[ticket.status]}
         </Badge>
+        {ticket.orderRound.prioritizedAt ? (
+          <Badge variant="success" size="sm">
+            Priorizada
+          </Badge>
+        ) : null}
         {ticket.expoAt ? (
           <Badge
             variant="outline"

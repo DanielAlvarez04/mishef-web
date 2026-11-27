@@ -10,6 +10,7 @@ import {
   type ArticleCardTextSize,
 } from "@/components/catalog/article-card-visual"
 import { useShake } from "@/hooks/use-shake"
+import { PosRenderProfiler } from "@/components/pos/pos-render-profiler"
 import { type ItemListItem } from "@/lib/catalog"
 import { jalapenoChipClass } from "@/lib/chips"
 import { useMoney } from "@/lib/currency"
@@ -53,6 +54,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   selected,
   textSize,
   square,
+  showImages,
   groupColor,
   groupLabel,
   onOpen,
@@ -61,6 +63,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
   selected: boolean
   textSize: ArticleCardTextSize
   square: boolean
+  showImages: boolean
   groupColor: string | null
   groupLabel: string | null
   onOpen: (product: ItemListItem) => void
@@ -86,7 +89,7 @@ const PosCatalogCard = React.memo(function PosCatalogCard({
           selected={selected}
           compact
           textSize={textSize}
-          showImage
+          showImage={showImages}
           aspect={square ? "square" : "wide"}
           isCombo={product.isCombo}
           fallbackColor={groupColor ?? "var(--muted)"}
@@ -165,6 +168,7 @@ interface PosCatalogProps {
   pendingProductId: string | null
   cardTextScale: ArticleCardTextSize
   squareCards: boolean
+  showImages: boolean
   /** Nombre del menú fuera de horario; `null` cuando no hay aviso. */
   outOfScheduleMenuName: string | null
   onOpenProduct: (product: ItemListItem) => void
@@ -192,6 +196,7 @@ export const PosCatalog = React.memo(function PosCatalog({
   pendingProductId,
   cardTextScale,
   squareCards,
+  showImages,
   outOfScheduleMenuName,
   onOpenProduct,
   toolbar,
@@ -424,12 +429,13 @@ export const PosCatalog = React.memo(function PosCatalog({
   const hasChips = groupFilters.length > 0 || showPromotions || showTrending
 
   return (
+    <PosRenderProfiler id="PosCatalog">
     <>
       <div className="filtros-acciones-mobile sticky top-0 z-30 -mx-4 flex min-w-0 flex-col gap-2 bg-neutral-50 px-4 py-2 lg:-mx-6 lg:px-6 dark:bg-neutral-950 xl:static xl:z-auto xl:mx-0 xl:gap-3 xl:bg-transparent xl:px-0 xl:py-0">
         {toolbar}
         {hasChips ? (
           <div className="grupos-chips no-scrollbar -mx-4 -my-1 overflow-x-auto px-4 py-1 lg:mx-0 lg:my-0 lg:overflow-visible lg:p-0">
-            <div className="flex flex-wrap items-center gap-2 max-lg:w-[125%]">
+            <div className="flex flex-wrap items-center gap-2 max-md:w-[125%] md:w-[calc(100%+100px)] lg:w-auto">
               <Button
                 type="button"
                 variant="outline"
@@ -545,6 +551,7 @@ export const PosCatalog = React.memo(function PosCatalog({
                   }
                   textSize={cardTextScale}
                   square={squareCards}
+                  showImages={showImages}
                   groupColor={meta?.color ?? null}
                   groupLabel={meta?.label ?? null}
                   onOpen={onOpenProduct}
@@ -558,5 +565,6 @@ export const PosCatalog = React.memo(function PosCatalog({
       {/* Espacio para el botón flotante de comanda en móvil. */}
       <div aria-hidden className="h-16 xl:hidden" />
     </>
+    </PosRenderProfiler>
   )
 })

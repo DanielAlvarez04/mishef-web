@@ -231,6 +231,44 @@ input[type=number] {
 }
 
 /*
+ * Comanda rápida en tablet.
+ *
+ * A partir de 768 px el contenedor se divide en dos columnas: menú/caja a la
+ * izquierda y comanda rápida a la derecha. En teléfono la comanda ocupa todo el
+ * ancho y los accesos siguen en el menú de tres puntos.
+ */
+.comanda-tablet {
+  display: block;
+}
+
+.comanda-tablet-tools {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .comanda-tablet {
+    display: grid;
+    grid-template-columns: 2fr 3fr;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .comanda-tablet-tools {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 0.75rem;
+    height: 100%;
+  }
+}
+
+@media (min-width: 1280px) {
+  .comanda-tablet {
+    display: none;
+  }
+}
+
+/*
  * Comanda térmica de cocina (modo Avanzado).
  *
  * `data-printing="ticket"` se pone en <body> solo mientras se imprime un

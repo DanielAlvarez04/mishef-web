@@ -26,6 +26,8 @@ export interface SyncResult {
   orderId: string | null
   /** El cobro con tarjeta quedó registrado y espera conciliación. */
   pendingReview?: boolean
+  /** La cuenta quedó abierta porque faltan rondas por entregar. */
+  closeDeferred?: boolean
   message?: string
 }
 

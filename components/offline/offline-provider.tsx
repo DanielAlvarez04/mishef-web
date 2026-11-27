@@ -233,7 +233,9 @@ export function OfflineProvider({
                 : "Cierre de caja"
 
           toast.success(`${noun} sincronizada · ${money(operation.total)}`, {
-            description: operation.label,
+            description: result.closeDeferred
+              ? "La cuenta seguirá en «Cuentas abiertas» hasta que se entreguen las rondas pendientes."
+              : operation.label,
           })
         }
 

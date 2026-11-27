@@ -38,12 +38,24 @@ function isAlreadyClosed(message?: string): boolean {
   )
 }
 
+/** El cierre se difiere a propósito: cocina todavía no entregó las rondas. */
+function isPendingDeliveryClose(message?: string): boolean {
+  const text = message?.toLowerCase() ?? ""
+
+  return (
+    text.includes("rondas pendientes de entregar") ||
+    text.includes("ronda pendiente de entregar")
+  )
+}
+
 /**
  * Sincroniza una venta cobrada en efectivo sin conexión.
  *
  * Orden estricto: cuenta → ronda (si venía incluida) → pago confirmado →
  * cierre. Si el pago ya se había aplicado, su clave de idempotencia devuelve
  * el mismo registro; si la cuenta ya se cerró, el cierre se considera hecho.
+ * Si quedan rondas por entregar, el cierre se difiere y la cuenta sigue
+ * abierta hasta que cocina termine.
  */
 export async function syncQueuedCheckout(
   operation: QueuedCheckout,
@@ -154,6 +166,13 @@ export async function syncQueuedCheckout(
         if (isAlreadyClosed(closed.message)) {
           await deps.remove(attempt.id)
           return { outcome: "done", reconciled, orderId }
+        }
+
+        // La cuenta sigue abierta porque cocina no ha entregado las rondas.
+        // El pago ya quedó registrado; el cierre lo hará el auto-cierre.
+        if (isPendingDeliveryClose(closed.message)) {
+          await deps.remove(attempt.id)
+          return { outcome: "done", reconciled, orderId, closeDeferred: true }
         }
 
         return fail(attempt, closed, deps, orderId, reconciled)

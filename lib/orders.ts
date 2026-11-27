@@ -70,8 +70,12 @@ export interface Payment {
     expectedAmount: string
     status: SplitStatus
   } | null
-  user: { id: string; name: string | null; username: string | null } | null
-  confirmedBy: { id: string; name: string | null; username: string | null } | null
+  user?: { id: string; name: string | null; username: string | null } | null
+  confirmedBy?: {
+    id: string
+    name: string | null
+    username: string | null
+  } | null
   tipRecipient?: {
     id: string
     name: string | null
@@ -183,6 +187,22 @@ export const ROUND_STATUS_LABELS: Record<RoundStatus, string> = {
   DELIVERED: "Entregada",
   CANCELLED: "Cancelada",
 }
+
+/**
+ * Rondas que todavía no terminaron su ciclo de entrega.
+ *
+ * Misma regla que la API: una cuenta no se cierra mientras alguna ronda esté
+ * aquí. Solo `DELIVERED` y `CANCELLED` liberan la cuenta.
+ */
+export const PENDING_DELIVERY_STATUSES: RoundStatus[] = [
+  "PENDING",
+  "HELD",
+  "PENDING_PAYMENT",
+  "FIRED",
+  "PREPARING",
+  "READY",
+  "PICKED_UP",
+]
 
 export interface RoundAction {
   status: RoundStatus
@@ -391,6 +411,8 @@ export interface Order {
   taxTotal: string
   total: string
   createdAt: string
+  /** Última modificación de la cuenta; sirve para sincronizar sin recargar. */
+  updatedAt?: string
   /** Sucursal donde se abrió la cuenta; `null` en cuentas antiguas. */
   branch?: { id: string; name: string } | null
   user: { id: string; name: string | null; username: string | null } | null
@@ -410,6 +432,63 @@ export interface Order {
   splits?: OrderSplit[]
   paidTotal?: string
   balance?: string
+}
+
+/** Respuesta ligera al cambiar mesas. */
+export interface OrderTableUpdate {
+  id: string
+  tableNumber: string | null
+  partySize: number
+  status: OrderStatus
+  updatedAt?: string
+  tables: NonNullable<Order["tables"]>
+}
+
+/** Artículo mínimo para pintar la comanda. */
+export interface ComandaItem {
+  id: string
+  itemId: string
+  itemVariantId: string | null
+  itemName: string
+  variantName: string | null
+  quantity: number
+  subtotal: string
+  notes: string | null
+  guestId?: string | null
+  guestName?: string | null
+  extras: Array<{ id: string; extraName: string; extraPrice: string }>
+  options: Array<{
+    itemOptionValueId: string | null
+    groupName: string
+    optionName: string
+    priceDelta: string
+  }>
+  exclusions: Array<{ ingredient: { name: string } }>
+}
+
+/** Ronda con artículos completa, sin historial ni pagos. */
+export interface ComandaRound {
+  id: string
+  status: RoundStatus
+  sentAt: string | null
+  createdAt: string
+  items: ComandaItem[]
+}
+
+/** Detalle ligero de la comanda. */
+export interface ComandaDetail {
+  id: string
+  total: string
+  rounds: ComandaRound[]
+}
+
+/** Cantidad de rondas que faltan por entregar o cancelar. */
+export function countPendingDeliveryRounds(
+  order: Pick<Order, "rounds">
+): number {
+  return order.rounds.filter((round) =>
+    PENDING_DELIVERY_STATUSES.includes(round.status)
+  ).length
 }
 
 export type PrepPriority = "on_time" | "at_risk" | "late"
@@ -456,6 +535,9 @@ export interface KitchenRound extends OrderRound {
   estimateMinutes: number
   /** `true` si el estimado quedó congelado al enviar la ronda. */
   estimateFromSnapshot: boolean
+  /** El POS pidió atenderla primero. */
+  prioritized: boolean
+  prioritizedAt?: string | null
   /** Minutos transcurridos en la etapa actual. */
   stageMinutes: number
   /** Minutos desde el envío. */
@@ -471,6 +553,26 @@ export interface KitchenRound extends OrderRound {
   estimatedReadyAt: string
   /** Posición en la cola sugerida (solo PENDING/PREPARING). */
   suggestedRank: number | null
+}
+
+/** Ronda sin artículos: solo para contadores del POS. */
+export interface KitchenRoundSummary {
+  id: string
+  status: RoundStatus
+  sentAt: string | null
+  createdAt: string
+  prioritizedAt: string | null
+  estimatedMinutes: number | null
+  order: {
+    id: string
+    tableNumber: string | null
+    channel: OrderChannel
+    customerName: string | null
+    isTakeaway: boolean
+    status: OrderStatus
+    ticketNumber: number | null
+  }
+  _count: { items: number }
 }
 
 export interface ConsumptionWarning {

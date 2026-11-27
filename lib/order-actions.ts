@@ -3,6 +3,7 @@
 import { mutateApi, readApi, type ActionResult } from "@/lib/server-api"
 import type {
   ChargeSummary,
+  ComandaDetail,
   ConsumptionWarning,
   GuestAgeRange,
   GuestSex,
@@ -11,15 +12,17 @@ import type {
   OrderChannel,
   OrderGuest,
   OrderRound,
+  OrderTableUpdate,
   RoundStatus,
   KitchenRound,
+  KitchenRoundSummary,
 } from "@/lib/orders"
 import type {
   KitchenTicketHistoryEntry,
   KitchenTicketStatus,
 } from "@/lib/kitchen-tickets"
 
-const ORDER_PATHS = ["/pos", "/kitchen"]
+const KITCHEN_PATHS = ["/kitchen"]
 
 export interface RoundItemInput {
   itemId: string
@@ -74,7 +77,7 @@ export interface CreateOrderInput {
 export async function createOrder(
   input: CreateOrderInput
 ): Promise<ActionResult<Order>> {
-  return mutateApi<Order>("/orders", "POST", input, ORDER_PATHS)
+  return mutateApi<Order>("/orders", "POST", input, [])
 }
 
 /**
@@ -87,6 +90,18 @@ export async function getOrderDetail(
   orderId: string
 ): Promise<ActionResult<Order>> {
   return readApi<Order>(`/orders/${orderId}`)
+}
+
+/** Detalle ligero de la comanda: solo rondas y artículos. */
+export async function getComandaDetail(
+  orderId: string
+): Promise<ActionResult<ComandaDetail>> {
+  return readApi<ComandaDetail>(`/orders/${orderId}/comanda`)
+}
+
+/** Lista mínima de cuentas abiertas para actualizar el POS sin recargar la ruta. */
+export async function listOpenOrders(): Promise<ActionResult<Order[]>> {
+  return readApi<Order[]>("/orders?status=OPEN")
 }
 
 /**
@@ -109,7 +124,7 @@ export async function sendRound(
     `/orders/${orderId}/rounds`,
     "POST",
     input,
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -122,7 +137,7 @@ export async function releasePaymentRound(
     `/orders/${orderId}/rounds/${roundId}/release`,
     "POST",
     undefined,
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -130,12 +145,12 @@ export async function releasePaymentRound(
 export async function updateOrderTables(
   orderId: string,
   tableIds: string[]
-): Promise<ActionResult<Order>> {
-  return mutateApi<Order>(
+): Promise<ActionResult<OrderTableUpdate>> {
+  return mutateApi<OrderTableUpdate>(
     `/orders/${orderId}/tables`,
     "PATCH",
     { tableIds },
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -148,7 +163,7 @@ export async function mergeOrders(
     `/orders/${targetOrderId}/merge`,
     "POST",
     { sourceOrderId },
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -162,7 +177,46 @@ export async function transitionRound(
     `/orders/${orderId}/rounds/${roundId}/status`,
     "PATCH",
     { status, reason },
-    ORDER_PATHS
+    KITCHEN_PATHS
+  )
+}
+
+/** Marca una ronda para que cocina la atienda primero. */
+export async function prioritizeRound(
+  orderId: string,
+  roundId: string
+): Promise<ActionResult<OrderRound>> {
+  return mutateApi<OrderRound>(
+    `/orders/${orderId}/rounds/${roundId}/prioritize`,
+    "POST",
+    undefined,
+    KITCHEN_PATHS
+  )
+}
+
+/** Entrega una ronda desde el POS (modo General o Avanzado). */
+export async function deliverRoundFromPos(
+  orderId: string,
+  roundId: string
+): Promise<ActionResult<OrderRound>> {
+  return mutateApi<OrderRound>(
+    `/orders/${orderId}/rounds/${roundId}/deliver`,
+    "POST",
+    undefined,
+    KITCHEN_PATHS
+  )
+}
+
+/** Cancela una ronda desde el POS (modo General o Avanzado). */
+export async function cancelRoundFromPos(
+  orderId: string,
+  roundId: string
+): Promise<ActionResult<OrderRound>> {
+  return mutateApi<OrderRound>(
+    `/orders/${orderId}/rounds/${roundId}/cancel-round`,
+    "POST",
+    undefined,
+    KITCHEN_PATHS
   )
 }
 
@@ -174,7 +228,7 @@ export async function cancelOrder(
     `/orders/${orderId}/cancel`,
     "PATCH",
     { reason },
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -236,6 +290,26 @@ export async function getKitchenRounds(): Promise<ActionResult<KitchenRound[]>> 
   return readApi<KitchenRound[]>("/kitchen/rounds")
 }
 
+/** Contadores del POS sin artículos; el detalle se pide al abrir la bandeja. */
+export async function getKitchenRoundsSummary(): Promise<
+  ActionResult<KitchenRoundSummary[]>
+> {
+  return readApi<KitchenRoundSummary[]>("/kitchen/rounds?summary=1")
+}
+
+/** Ajusta el número de comensales y crea/elimina los que falten en lote. */
+export async function setOrderPartySize(
+  orderId: string,
+  partySize: number
+): Promise<ActionResult<OrderGuest[]>> {
+  return mutateApi<OrderGuest[]>(
+    `/orders/${orderId}/party-size`,
+    "PATCH",
+    { partySize },
+    []
+  )
+}
+
 /** Añade una persona (comensal) a la cuenta. */
 export async function addOrderGuest(
   orderId: string,
@@ -245,7 +319,7 @@ export async function addOrderGuest(
     `/orders/${orderId}/guests`,
     "POST",
     input,
-    ORDER_PATHS
+    []
   )
 }
 
@@ -259,7 +333,7 @@ export async function updateOrderGuest(
     `/orders/${orderId}/guests/${guestId}`,
     "PATCH",
     input,
-    ORDER_PATHS
+    KITCHEN_PATHS
   )
 }
 
@@ -272,6 +346,6 @@ export async function removeOrderGuest(
     `/orders/${orderId}/guests/${guestId}`,
     "DELETE",
     undefined,
-    ORDER_PATHS
+    []
   )
 }

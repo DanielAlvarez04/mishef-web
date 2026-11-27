@@ -57,6 +57,7 @@ export interface KitchenTicket {
     createdAt: string
     orderId: string
     estimatedMinutes: number | null
+    prioritizedAt?: string | null
     order: {
       id: string
       tableNumber: string | null

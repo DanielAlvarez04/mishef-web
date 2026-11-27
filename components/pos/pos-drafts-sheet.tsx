@@ -3,53 +3,83 @@
 import * as React from "react"
 import {
   ArchiveRestoreIcon,
-  Clock3Icon,
+  ChevronDownIcon,
   Loader2Icon,
+  PencilLineIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
+import {
   Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemFooter,
   ItemGroup,
-  ItemMedia,
-  ItemTitle,
+  ItemSeparator,
 } from "@/components/ui/item"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Sheet,
-  SheetContent,
+  SheetClose,
   SheetDescription,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { useMoney } from "@/lib/currency"
 import { ORDER_CHANNEL_LABELS } from "@/lib/orders"
 import {
   deletePosDraft,
-  listPosDrafts,
   resumePosDraft,
   type PosDraft,
 } from "@/lib/pos-drafts"
+import { groupDraftCart, type GroupedServiceItem } from "@/lib/pos-service"
+import { cn } from "@/lib/utils"
+import { PosChannelIcon } from "./pos-channel-icon"
+import { SwipeableSheetContent } from "./swipeable-sheet-content"
 
-function expiryLabel(expiresAt: string) {
-  return new Date(expiresAt).toLocaleTimeString("es-MX", {
-    hour: "2-digit",
-    minute: "2-digit",
-  })
+function draftLabel(draft: PosDraft) {
+  if (draft.channel === "DINE_IN") return "Mesa sin asignar"
+  return ORDER_CHANNEL_LABELS[draft.channel]
 }
 
-function draftTitle(draft: PosDraft) {
-  if (draft.customerName?.trim()) return draft.customerName.trim()
-  if (draft.tableNumber?.trim()) return `Mesa ${draft.tableNumber.trim()}`
+function DraftItemsCollapsible({
+  items,
+}: {
+  items: GroupedServiceItem[]
+}) {
+  const [open, setOpen] = React.useState(false)
 
-  return ORDER_CHANNEL_LABELS[draft.channel]
+  if (items.length === 0) return null
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <CollapsibleTrigger
+        type="button"
+        className="flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <ChevronDownIcon
+          className={cn(
+            "size-3.5 transition-transform",
+            open && "rotate-180"
+          )}
+        />
+        Artículos
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <ul className="flex flex-col gap-1 pt-2 text-xs text-muted-foreground">
+          {items.map((item) => (
+            <li key={item.key} className="truncate">
+              {item.quantity}× {item.name}
+            </li>
+          ))}
+        </ul>
+      </CollapsibleContent>
+    </Collapsible>
+  )
 }
 
 /**
@@ -62,43 +92,22 @@ export function PosDraftsSheet({
   open,
   onOpenChange,
   onResume,
-  onCountChange,
+  drafts,
+  onDraftsChange,
+  onRefresh,
+  side = "bottom",
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onResume: (draft: PosDraft) => void
-  onCountChange?: (count: number) => void
+  /** Lista ya cargada por el POS; se revalida en segundo plano. */
+  drafts: PosDraft[]
+  onDraftsChange: (drafts: PosDraft[]) => void
+  /** Vuelve a consultar la lista cuando una acción falla. */
+  onRefresh?: () => void
+  side?: "bottom" | "right"
 }) {
-  const money = useMoney()
-  const [drafts, setDrafts] = React.useState<PosDraft[]>([])
-  const [loading, setLoading] = React.useState(false)
   const [pendingId, setPendingId] = React.useState<string | null>(null)
-
-  const refresh = React.useCallback(async () => {
-    setLoading(true)
-
-    try {
-      const result = await listPosDrafts()
-
-      if (!result.ok || !result.data) {
-        toast.error(result.message ?? "No se pudieron cargar los borradores")
-        return
-      }
-
-      setDrafts(result.data)
-      onCountChange?.(result.data.length)
-    } finally {
-      setLoading(false)
-    }
-  }, [onCountChange])
-
-  React.useEffect(() => {
-    if (!open) return
-
-    const timer = window.setTimeout(() => void refresh(), 0)
-
-    return () => window.clearTimeout(timer)
-  }, [open, refresh])
 
   const handleResume = async (draft: PosDraft) => {
     setPendingId(draft.id)
@@ -108,7 +117,7 @@ export function PosDraftsSheet({
 
       if (!result.ok || !result.data) {
         toast.error(result.message ?? "No se pudo reanudar el borrador")
-        await refresh()
+        onRefresh?.()
         return
       }
 
@@ -127,14 +136,11 @@ export function PosDraftsSheet({
 
       if (!result.ok) {
         toast.error(result.message ?? "No se pudo eliminar el borrador")
+        onRefresh?.()
         return
       }
 
-      setDrafts((current) => {
-        const next = current.filter((entry) => entry.id !== draft.id)
-        onCountChange?.(next.length)
-        return next
-      })
+      onDraftsChange(drafts.filter((entry) => entry.id !== draft.id))
     } finally {
       setPendingId(null)
     }
@@ -142,81 +148,115 @@ export function PosDraftsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="bottom"
-        className="max-h-[80dvh] gap-0 overflow-hidden rounded-t-xl border-t p-0"
+      <SwipeableSheetContent
+        side={side}
+        showCloseButton={false}
+        onOpenChange={onOpenChange}
+        className={
+          side === "right"
+            ? "h-dvh gap-0 overflow-hidden rounded-none border-l p-0 sm:max-w-md"
+            : "max-h-[80dvh] gap-0 overflow-hidden rounded-t-xl border-t p-0"
+        }
       >
         <SheetHeader className="border-b">
-          <SheetTitle>Comandas guardadas</SheetTitle>
-          <SheetDescription>
-            Capturas sin enviar a cocina. Vencen a los 15 minutos y cualquier
-            persona del POS puede reanudarlas.
-          </SheetDescription>
+          <div className="flex items-start justify-between gap-2">
+            <div
+              data-sheet-drag-handle
+              className="flex min-w-0 touch-none flex-col gap-1"
+            >
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold text-primary-foreground tabular-nums">
+                  {drafts.length}
+                </span>
+                <SheetTitle>Comandas guardadas</SheetTitle>
+              </div>
+              <SheetDescription>
+                Capturas sin enviar a cocina. Vencen a los 15 minutos y
+                cualquier persona del POS puede reanudarlas.
+              </SheetDescription>
+            </div>
+            <SheetClose
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Cerrar"
+                />
+              }
+            >
+              <XIcon />
+            </SheetClose>
+          </div>
         </SheetHeader>
 
-        <ScrollArea className="max-h-[60dvh]">
-          <div className="p-4">
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <Loader2Icon className="size-4 animate-spin" />
-                Cargando comandas…
-              </div>
-            ) : drafts.length === 0 ? (
-              <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+        <ScrollArea
+          className={
+            side === "right"
+              ? "max-h-[calc(100dvh-8rem)]"
+              : "max-h-[60dvh]"
+          }
+        >
+          <div className="px-4 py-2">
+            {drafts.length === 0 ? (
+              <p className="my-4 rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
                 No hay comandas guardadas.
               </p>
             ) : (
-              <ItemGroup>
-                {drafts.map((draft) => {
+              <ItemGroup className="gap-0">
+                {drafts.map((draft, index) => {
                   const busy = pendingId === draft.id
-                  const expires = expiryLabel(draft.expiresAt)
+                  const items = groupDraftCart(draft.cart)
 
                   return (
-                    <Item key={draft.id} variant="outline">
-                      <ItemMedia variant="icon">
-                        <Clock3Icon />
-                      </ItemMedia>
-                      <ItemContent>
-                        <ItemTitle>{draftTitle(draft)}</ItemTitle>
-                        <ItemDescription>
-                          {ORDER_CHANNEL_LABELS[draft.channel]}
-                          {draft.tableNumber && draft.channel === "DINE_IN"
-                            ? ` · Mesa ${draft.tableNumber}`
-                            : ""}
-                          {` · ${draft.itemCount} artículo${
-                            draft.itemCount === 1 ? "" : "s"
-                          }`}
-                        </ItemDescription>
-                      </ItemContent>
-                      <ItemActions>
-                        <span className="font-medium tabular-nums">
-                          {money(Number(draft.total))}
-                        </span>
-                      </ItemActions>
-                      <ItemFooter className="flex-wrap">
-                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <Badge variant="outline">
-                            <Clock3Icon />
-                            Vence {expires}
-                          </Badge>
-                          {draft.createdByName ? (
-                            <span>Guardado por {draft.createdByName}</span>
-                          ) : null}
-                        </div>
-                        <div className="flex gap-2">
+                    <React.Fragment key={draft.id}>
+                      {index > 0 ? <ItemSeparator /> : null}
+                      <Item className="flex-col items-stretch gap-3 rounded-none border-0 p-0">
+                        <div className="flex w-full items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-center gap-1.5">
+                            <PosChannelIcon
+                              channel={draft.channel}
+                              className="size-4 shrink-0 text-muted-foreground"
+                            />
+                            <span className="truncate text-sm font-medium">
+                              {draftLabel(draft)}
+                            </span>
+                          </div>
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
+                            className="h-8 gap-1.5 px-2 text-xs"
+                            title="Ver comanda"
+                            disabled={busy}
+                            onClick={() => void handleResume(draft)}
+                          >
+                            <PencilLineIcon data-icon="inline-start" />
+                            Ver comanda
+                          </Button>
+                        </div>
+                        <DraftItemsCollapsible items={items} />
+                        <div className="flex w-full flex-col gap-2">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="w-full"
                             disabled={busy}
                             onClick={() => void handleDelete(draft)}
                           >
-                            <Trash2Icon data-icon="inline-start" />
+                            {busy ? (
+                              <Loader2Icon
+                                data-icon="inline-start"
+                                className="animate-spin"
+                              />
+                            ) : (
+                              <Trash2Icon data-icon="inline-start" />
+                            )}
                             Eliminar
                           </Button>
                           <Button
                             type="button"
-                            size="sm"
+                            className="w-full"
                             disabled={busy}
                             onClick={() => void handleResume(draft)}
                           >
@@ -231,15 +271,15 @@ export function PosDraftsSheet({
                             Reanudar
                           </Button>
                         </div>
-                      </ItemFooter>
-                    </Item>
+                      </Item>
+                    </React.Fragment>
                   )
                 })}
               </ItemGroup>
             )}
           </div>
         </ScrollArea>
-      </SheetContent>
+      </SwipeableSheetContent>
     </Sheet>
   )
 }

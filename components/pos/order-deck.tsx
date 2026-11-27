@@ -57,8 +57,8 @@ function useMobileSwipe(): boolean {
 /**
  * Deslizamiento horizontal entre comandas activas.
  *
- * La pila ya no se dibuja: en escritorio se cambia de cuenta con el selector
- * del encabezado y los atajos. En móvil se conserva el gesto de tarjeta para
+ * La pila ya no se dibuja: en escritorio se cambia de cuenta con el sheet
+ * de cuentas y los atajos. En móvil se conserva el gesto de tarjeta para
  * pasar a la comanda anterior o siguiente.
  *
  * Usa Pointer Events (dedo, mouse o lápiz), ignora los gestos que empiezan en

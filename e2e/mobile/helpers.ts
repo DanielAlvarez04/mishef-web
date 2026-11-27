@@ -35,6 +35,15 @@ export async function expectNoHorizontalOverflow(page: Page) {
 
 /** Abre una ruta y espera a que el shell esté listo. */
 export async function openRoute(page: Page, route: string) {
+  // El aviso de instalación PWA aparece a los 3 s y taparía los controles.
+  await page.addInitScript(() => {
+    try {
+      window.localStorage.setItem("pwa-install-dismissed", "1")
+    } catch {
+      // Sin localStorage (modo privado) el test sigue; puede aparecer el aviso.
+    }
+  })
+
   await page.goto(route)
   await page.waitForLoadState("domcontentloaded")
   await expect(page.locator('[data-slot="sidebar-inset"]')).toBeVisible()

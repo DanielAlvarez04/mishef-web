@@ -1,25 +1,21 @@
 "use client"
 
 import * as React from "react"
-import { useRouter } from "next/navigation"
 import {
-  AlertTriangleIcon,
   ArrowDownToLineIcon,
   ArrowUpDownIcon,
   BanknoteIcon,
   BanknoteXIcon,
   CakeIcon,
-  ChefHatIcon,
-  ClipboardClockIcon,
   ConciergeBellIcon,
   CopyIcon,
   CreditCardIcon,
-  FilePlusIcon,
   GroupIcon,
   LayoutGridIcon,
   Link2Icon,
   Loader2Icon,
   LockIcon,
+  MergeIcon,
   MinusIcon,
   MoreVerticalIcon,
   NotebookTextIcon,
@@ -27,6 +23,7 @@ import {
   PlusIcon,
   PrinterIcon,
   ReceiptTextIcon,
+  SaveCheckIcon,
   SaveIcon,
   SearchIcon,
   SparklesIcon,
@@ -66,6 +63,7 @@ import {
 } from "@/components/ui/dialog"
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
@@ -96,7 +94,6 @@ import { Switch } from "@/components/ui/switch"
 import {
   Sheet,
   SheetClose,
-  SheetContent,
   SheetDescription,
   SheetTitle,
 } from "@/components/ui/sheet"
@@ -123,14 +120,20 @@ import {
 import { useMoney } from "@/lib/currency"
 
 import {
-  addOrderGuest,
+  cancelRoundFromPos,
   createOrder,
+  deliverRoundFromPos,
   getChargeSummary,
+  getComandaDetail,
   getKitchenRounds,
+  getKitchenRoundsSummary,
+  listOpenOrders,
   mergeOrders,
+  prioritizeRound,
   releasePaymentRound,
   removeOrderGuest,
   sendRound,
+  setOrderPartySize,
   updateOrderGuest,
   updateOrderTables,
   type RoundItemInput,
@@ -139,8 +142,10 @@ import { API_BASE_URL } from "@/lib/api-base"
 import type { CashSessionPayload } from "@/lib/cash"
 import type { Menu, MenuTrendingItem } from "@/lib/menus"
 import { printOrderReceipt } from "@/lib/mercadopago-actions"
+import { closeOrder } from "@/lib/payment-actions"
 import { cancelOrderSplits } from "@/lib/split-actions"
 import type { MercadoPagoPointConfig } from "@/lib/mercadopago"
+import { isPdvTerminal } from "@/lib/mercadopago"
 import type { PosDisplayInfo, PosDisplayState } from "@/lib/pos-display"
 import type { DiningTable } from "@/lib/tables"
 import {
@@ -149,18 +154,31 @@ import {
   GUEST_SEXES,
   GUEST_SEX_LABELS,
   ORDER_CHANNEL_LABELS,
+  ROUND_STATUS_LABELS,
   orderLabel,
   ticketCode,
   type ChargeSummary,
+  type ComandaDetail,
+  type ComandaItem,
+  type ComandaRound,
   type GuestAgeRange,
   type GuestSex,
   type KitchenRound,
+  type KitchenRoundSummary,
   type Order,
   type OrderChannel,
   type OrderGuest,
+  type OrderRound,
+  type RoundStatus,
 } from "@/lib/orders"
 import { createPosDraft, listPosDrafts, type PosDraft } from "@/lib/pos-drafts"
-import { pendingPaymentOrders, splitServiceRounds } from "@/lib/pos-service"
+import { openAccountOrders, splitServiceRounds } from "@/lib/pos-service"
+import {
+  appendComandaRound,
+  comandaDetailKey,
+  mergeComandaRounds,
+} from "@/lib/pos-comanda"
+import { startPosPerf } from "@/lib/pos-perf"
 import { trackEvent } from "@/lib/analytics"
 import { jalapenoChipClass } from "@/lib/chips"
 import { cn } from "@/lib/utils"
@@ -171,15 +189,20 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { PosCatalog } from "@/components/pos/pos-catalog"
+import { PosRenderProfiler } from "@/components/pos/pos-render-profiler"
 
 import { CashSessionActions, CashSessionDialog, type CashSessionAction } from "./cash-session"
 import { ChargeDialog } from "./charge-dialog"
 import { OfflineCheckoutDialog } from "./offline-checkout-dialog"
 import { PosDraftsSheet } from "./pos-drafts-sheet"
 import { PosServiceQueueSheet, type ServiceQueueMode } from "./pos-service-queue-sheet"
+import { SwipeableSheetContent } from "./swipeable-sheet-content"
 import { TablePicker, type TablePickerMode } from "./table-picker"
 
 const CHANNELS: OrderChannel[] = ["DINE_IN", "COUNTER", "PHONE", "DELIVERY"]
+
+/** Clave de la vista «Todos» en la comanda cuando hay varios clientes. */
+const ALL_GUESTS_KEY = "__all__"
 
 /** Escalas de texto de las cards del catálogo (1 = chico, 4 = extra grande). */
 const CARD_TEXT_SCALES = ["md", "lg", "xl", "2xl"] as const
@@ -217,8 +240,8 @@ interface CartOption {
 }
 
 /** Agrupa las opciones de una línea por su grupo, conservando el orden. */
-function groupCartOptions(options: CartOption[]) {
-  const groups = new Map<string, CartOption[]>()
+function groupCartOptions<T extends { groupName: string }>(options: T[]) {
+  const groups = new Map<string, T[]>()
 
   for (const option of options) {
     const list = groups.get(option.groupName) ?? []
@@ -291,6 +314,105 @@ function newGuestKey() {
 
 function cartLineTotal(line: CartLine): number {
   return line.unitPrice * line.quantity
+}
+
+interface ComandaOption {
+  itemOptionValueId: string | null
+  groupName: string
+  name: string
+  price: number
+}
+
+/** Línea unificada para pintar captura y rondas enviadas. */
+interface ComandaLine {
+  key: string
+  itemId: string
+  itemName: string
+  variantId: string | null
+  variantName: string | null
+  quantity: number
+  total: number
+  notes: string | null
+  extras: CartExtra[]
+  options: ComandaOption[]
+  excludedNames: string[]
+  guestKey: string | null
+  guestName: string | null
+  sent: boolean
+  roundId?: string
+  roundNumber?: number
+  roundStatus?: RoundStatus
+}
+
+function cartLineToComandaLine(line: CartLine): ComandaLine {
+  return {
+    key: line.key,
+    itemId: line.itemId,
+    itemName: line.itemName,
+    variantId: line.variantId ?? null,
+    variantName: line.variantName ?? null,
+    quantity: line.quantity,
+    total: cartLineTotal(line),
+    notes: line.notes?.trim() || null,
+    extras: line.extras,
+    options: line.options.map((option) => ({
+      itemOptionValueId: option.itemOptionValueId,
+      groupName: option.groupName,
+      name: option.name,
+      price: option.price,
+    })),
+    excludedNames: line.excludedNames,
+    guestKey: line.guestKey ?? null,
+    guestName: null,
+    sent: false,
+  }
+}
+
+function orderItemToComandaLine(
+  item: ComandaItem,
+  round: ComandaRound,
+  roundNumber: number
+): ComandaLine {
+  return {
+    key: item.id,
+    itemId: item.itemId,
+    itemName: item.itemName,
+    variantId: item.itemVariantId,
+    variantName: item.variantName,
+    quantity: item.quantity,
+    total: Number(item.subtotal),
+    notes: item.notes?.trim() || null,
+    extras: item.extras.map((extra) => ({
+      id: extra.id,
+      name: extra.extraName,
+      price: Number(extra.extraPrice),
+    })),
+    options: item.options.map((option) => ({
+      itemOptionValueId: option.itemOptionValueId,
+      groupName: option.groupName,
+      name: option.optionName,
+      price: Number(option.priceDelta),
+    })),
+    excludedNames: item.exclusions.map(
+      (exclusion) => exclusion.ingredient.name
+    ),
+    guestKey: item.guestId ?? null,
+    guestName: item.guestName ?? null,
+    sent: true,
+    roundId: round.id,
+    roundNumber,
+    roundStatus: round.status,
+  }
+}
+
+function roundTimeLabel(round: Pick<OrderRound, "sentAt" | "createdAt">): string {
+  const value = round.sentAt ?? round.createdAt
+  if (!value) return ""
+
+  return new Date(value).toLocaleTimeString("es-MX", {
+    hour: "2-digit",
+    minute: "2-digit",
+  })
 }
 
 /** Firma del resumen de cobro para invalidar el caché cuando cambia la cuenta. */
@@ -444,37 +566,165 @@ function lineToInput(line: CartLine): RoundItemInput {
 }
 
 /**
- * Etiqueta corta de una cuenta para el selector del POS.
- *
- * Mesas: «Mesa 4». Mostrador: nombre del cliente o el consecutivo del ticket.
- */
-function orderSelectLabel(
-  order: Pick<
-    Order,
-    "tableNumber" | "isTakeaway" | "channel" | "customerName" | "ticketNumber"
-  >
-): string {
-  const channel = order.channel
-  const isCounter = channel === "COUNTER" || (!channel && order.isTakeaway)
-  const ticket = ticketCode(order.ticketNumber)
-  let label: string
-
-  if (isCounter) {
-    label = order.customerName?.trim() || "Mostrador"
-  } else {
-    label = orderLabel(order)
-  }
-
-  return ticket ? `${ticket} · ${label}` : label
-}
-
-/**
  * Tarjeta del catálogo del POS.
  *
  * Está memoizada porque el POS re-renderiza toda la grilla con cada cambio del
  * carrito o del buscador; sin esto se reconcilian cientos de tarjetas aunque
  * solo cambie una.
  */
+type SetNumberValue = (
+  value: number | ((current: number) => number)
+) => void
+type SetBooleanValue = (
+  value: boolean | ((current: boolean) => boolean)
+) => void
+
+/**
+ * Controles del popover «Vista».
+ *
+ * Primera fila: ancho y altura de tarjetas. Segunda fila: tamaño del texto e
+ * imágenes. Se comparte entre escritorio y tablet para que no diverjan.
+ */
+function PosViewFields({
+  cardColumns,
+  setCardColumns,
+  cardTextSize,
+  setCardTextSize,
+  squareCards,
+  setSquareCards,
+  showImages,
+  setShowImages,
+}: {
+  cardColumns: number
+  setCardColumns: SetNumberValue
+  cardTextSize: number
+  setCardTextSize: SetNumberValue
+  squareCards: boolean
+  setSquareCards: SetBooleanValue
+  showImages: boolean
+  setShowImages: SetBooleanValue
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Ancho de tarjetas
+          </span>
+          <ButtonGroup aria-label="Ancho de las tarjetas">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Tarjetas más pequeñas"
+              title="Tarjetas más pequeñas"
+              disabled={cardColumns >= 7}
+              onClick={() =>
+                setCardColumns((current) => Math.min(7, current + 1))
+              }
+            >
+              <MinusIcon className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Tarjetas más grandes"
+              title="Tarjetas más grandes"
+              disabled={cardColumns <= 4}
+              onClick={() =>
+                setCardColumns((current) => Math.max(4, current - 1))
+              }
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </ButtonGroup>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Altura de tarjetas
+          </span>
+          <ButtonGroup aria-label="Altura de las tarjetas">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Tarjetas más bajas"
+              title="Tarjetas más bajas"
+              disabled={!squareCards}
+              onClick={() => setSquareCards(false)}
+            >
+              <MinusIcon className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Tarjetas más altas"
+              title="Tarjetas más altas"
+              disabled={squareCards}
+              onClick={() => setSquareCards(true)}
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </ButtonGroup>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Tamaño del texto
+          </span>
+          <ButtonGroup aria-label="Tamaño del texto de las tarjetas">
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Texto más pequeño"
+              title="Texto más pequeño"
+              disabled={cardTextSize <= 1}
+              onClick={() =>
+                setCardTextSize((current) => Math.max(1, current - 1))
+              }
+            >
+              <MinusIcon className="size-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-sm"
+              aria-label="Texto más grande"
+              title="Texto más grande"
+              disabled={cardTextSize >= 4}
+              onClick={() =>
+                setCardTextSize((current) => Math.min(4, current + 1))
+              }
+            >
+              <PlusIcon className="size-4" />
+            </Button>
+          </ButtonGroup>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">
+            Imágenes
+          </span>
+          <div className="flex h-8 items-center justify-between gap-2">
+            <span className="text-sm">Mostrar</span>
+            <Switch
+              aria-label="Mostrar imágenes en las tarjetas"
+              checked={showImages}
+              onCheckedChange={setShowImages}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export function PosView({
   products,
   orders,
@@ -491,8 +741,8 @@ export function PosView({
   taxRate,
   kitchenAdvanced = false,
   diningTables = [],
-  initialServiceRounds = [],
-  initialDraftCount = 0,
+  initialServiceRoundSummary = [],
+  initialDrafts = [],
 }: {
   products: ItemListItem[]
   orders: Order[]
@@ -517,12 +767,11 @@ export function PosView({
   kitchenAdvanced?: boolean
   /** Mesas configuradas de la sucursal. */
   diningTables?: DiningTable[]
-  /** Rondas activas de cocina para la barra móvil. */
-  initialServiceRounds?: KitchenRound[]
+  /** Contadores de rondas activas de cocina para la barra móvil. */
+  initialServiceRoundSummary?: KitchenRoundSummary[]
   /** Borradores activos al cargar la página. */
-  initialDraftCount?: number
+  initialDrafts?: PosDraft[]
 }) {
-  const router = useRouter()
   useWakeLock()
   const money = useMoney()
   const offline = useOfflineSync()
@@ -563,6 +812,11 @@ export function PosView({
     "pos-card-square",
     true
   )
+  /** Mostrar imágenes en las cards del catálogo. */
+  const [showImages, setShowImages] = usePersistentBoolean(
+    "pos-card-images",
+    true
+  )
   // Diálogos de caja abiertos desde el menú móvil de tres puntos.
   const [cashAction, setCashAction] =
     React.useState<CashSessionAction | null>(null)
@@ -597,8 +851,14 @@ export function PosView({
   } | null>(null)
 
   const [orderId, setOrderId] = React.useState("")
-  /** Cuenta recién creada que el refresh aún no incluye en `orders`. */
+  /**
+   * Copia viva de las cuentas abiertas. `orders` solo la inicializa: las
+   * acciones del POS actualizan esta copia sin recargar la ruta completa.
+   */
+  const [liveOrders, setLiveOrders] = React.useState<Order[]>(orders)
+  /** Cuenta recién creada que la lista viva aún no incluye. */
   const [pendingOrder, setPendingOrder] = React.useState<Order | null>(null)
+
   const [offlineCharging, setOfflineCharging] = React.useState(false)
   // Canal preferido del dispositivo: se recuerda entre sesiones y se usa como
   // punto de partida de cada comanda nueva. El borrador abierto puede diferir
@@ -634,6 +894,9 @@ export function PosView({
     initialFreeTable?.number ?? "1"
   )
   const [tableId, setTableId] = React.useState(initialFreeTable?.id ?? "")
+  const [draftTableIds, setDraftTableIds] = React.useState<string[]>(
+    initialFreeTable ? [initialFreeTable.id] : []
+  )
   const [tablePickerOpen, setTablePickerOpen] = React.useState(false)
   const [tablePickerMode, setTablePickerMode] =
     React.useState<TablePickerMode>("select")
@@ -655,6 +918,24 @@ export function PosView({
     null
   )
   const [guestBusy, setGuestBusy] = React.useState(false)
+  const guestBusyRef = React.useRef(false)
+  const guestBusyOrderRef = React.useRef<string | null>(null)
+
+  React.useEffect(() => {
+    guestBusyRef.current = guestBusy
+  }, [guestBusy])
+
+  const beginGuestBusy = React.useCallback((targetOrderId: string) => {
+    guestBusyRef.current = true
+    guestBusyOrderRef.current = targetOrderId
+    setGuestBusy(true)
+  }, [])
+
+  const endGuestBusy = React.useCallback(() => {
+    guestBusyRef.current = false
+    guestBusyOrderRef.current = null
+    setGuestBusy(false)
+  }, [])
   const [displayId, setDisplayId] = React.useState(displays[0]?.id ?? "")
   const [displayState, setDisplayState] =
     React.useState<PosDisplayState | null>(null)
@@ -662,7 +943,10 @@ export function PosView({
   const [sending, setSending] = React.useState(false)
   const [savingDraft, setSavingDraft] = React.useState(false)
   const [draftsOpen, setDraftsOpen] = React.useState(false)
-  const [draftCount, setDraftCount] = React.useState(initialDraftCount)
+  /** Lista compartida con el sheet: abrir no vuelve a consultar la API. */
+  const [serviceDrafts, setServiceDrafts] =
+    React.useState<PosDraft[]>(initialDrafts)
+  const draftCount = serviceDrafts.length
   const [holdRound, setHoldRound] = React.useState(false)
 
   /** Borradores por cuenta: no se pierden al revisar otra mesa. */
@@ -698,26 +982,84 @@ export function PosView({
     [offline.operations]
   )
 
-  const visibleOrders = React.useMemo(
-    () => orders.filter((order) => !offlinePaidOrderIds.has(order.id)),
-    [offlinePaidOrderIds, orders]
+  const visibleOrders = React.useMemo(() => {
+    const base =
+      pendingOrder && !liveOrders.some((order) => order.id === pendingOrder.id)
+        ? [pendingOrder, ...liveOrders]
+        : liveOrders
+
+    return base.filter((order) => !offlinePaidOrderIds.has(order.id))
+  }, [liveOrders, offlinePaidOrderIds, pendingOrder])
+
+  /** Recarga solo las cuentas abiertas; no vuelve a pedir catálogo ni menús. */
+  const refreshOrders = React.useCallback(async () => {
+    const endPerf = startPosPerf("orders.refresh")
+    const result = await listOpenOrders()
+
+    if (result.ok && result.data) {
+      setLiveOrders(result.data)
+    }
+
+    endPerf({ orders: result.data?.length ?? 0 })
+    return result
+  }, [])
+
+  const patchOrderLocal = React.useCallback(
+    (targetOrderId: string, patch: Partial<Order>) => {
+      setLiveOrders((current) =>
+        current.map((order) =>
+          order.id === targetOrderId ? { ...order, ...patch } : order
+        )
+      )
+      setPendingOrder((current) =>
+        current && current.id === targetOrderId
+          ? { ...current, ...patch }
+          : current
+      )
+    },
+    []
   )
 
   // Incluye la cuenta recién creada aunque el refresh todavía no la traiga.
   const selectOrders = React.useMemo(() => {
-    if (!pendingOrder) return orders
-    if (orders.some((order) => order.id === pendingOrder.id)) return orders
+    if (!pendingOrder) return liveOrders
+    if (liveOrders.some((order) => order.id === pendingOrder.id)) return liveOrders
 
-    return [pendingOrder, ...orders]
-  }, [orders, pendingOrder])
+    return [pendingOrder, ...liveOrders]
+  }, [liveOrders, pendingOrder])
+
+  /** Ocupación local: se actualiza al mover mesas sin esperar al servidor. */
+  const tablePickerTables = React.useMemo(
+    () =>
+      diningTables.map((table) => ({
+        ...table,
+        activeOrders: selectOrders
+          .filter(
+            (order) =>
+              !offlinePaidOrderIds.has(order.id) &&
+              (order.tables ?? []).some((row) => row.table.id === table.id)
+          )
+          .map((order) => ({
+            id: order.id,
+            status: order.status,
+            channel: order.channel ?? "DINE_IN",
+            tableNumber: order.tableNumber,
+            customerName: order.customerName ?? null,
+            partySize: order.partySize,
+            total: order.total,
+            createdAt: order.createdAt,
+          })),
+      })),
+    [diningTables, offlinePaidOrderIds, selectOrders]
+  )
 
   /* eslint-disable react-hooks/set-state-in-effect */
   React.useEffect(() => {
     if (!pendingOrder) return
-    if (orders.some((order) => order.id === pendingOrder.id)) {
+    if (liveOrders.some((order) => order.id === pendingOrder.id)) {
       setPendingOrder(null)
     }
-  }, [orders, pendingOrder])
+  }, [liveOrders, pendingOrder])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   /** Cuentas abiertas de la más antigua a la más reciente (prioridad). */
@@ -755,6 +1097,8 @@ export function PosView({
     ? offline.hasPendingCashClose(cash.session.id)
     : false
   const chargeSnapshot = React.useRef(new Map<string, ChargeSummary>())
+  /** El cobro se abrió desde la lista de cuentas por cobrar, no del POS. */
+  const queueChargeRef = React.useRef(false)
 
   const activePayments = activeOrder?.payments ?? []
   const activePendingTotal = activePayments
@@ -788,6 +1132,85 @@ export function PosView({
     }
   }, [activeOrderId, activeSummaryKey])
 
+  /**
+   * La lista de cuentas trae rondas resumidas; al abrir una comanda se pide
+   * solo el detalle de artículos. La firma excluye estados de ronda: cocina
+   * puede avanzar sin invalidar los artículos ya cacheados.
+   */
+  const orderDetailCache = React.useRef(new Map<string, ComandaDetail>())
+  const [orderDetail, setOrderDetail] = React.useState<{
+    key: string
+    detail: ComandaDetail
+  } | null>(null)
+  const [orderDetailErrorKey, setOrderDetailErrorKey] = React.useState<
+    string | null
+  >(null)
+  const [orderDetailRetry, setOrderDetailRetry] = React.useState(0)
+  const orderDetailKey = React.useMemo(
+    () =>
+      activeOrder
+        ? comandaDetailKey(activeOrder.id, activeOrder.rounds)
+        : null,
+    [activeOrder]
+  )
+  const activeOrderDetail =
+    orderDetail && orderDetail.detail.id === activeOrderId
+      ? orderDetail.detail
+      : null
+  const detailRoundIds = React.useMemo(
+    () => new Set(activeOrderDetail?.rounds.map((round) => round.id) ?? []),
+    [activeOrderDetail]
+  )
+  const detailComplete = React.useMemo(() => {
+    if (!activeOrder || !activeOrderDetail) return false
+
+    return activeOrder.rounds
+      .filter((round) => round.status !== "CANCELLED")
+      .every((round) => detailRoundIds.has(round.id))
+  }, [activeOrder, activeOrderDetail, detailRoundIds])
+
+  React.useEffect(() => {
+    if (!activeOrderId || !orderDetailKey) return
+
+    if (orderDetail?.detail.id === activeOrderId && detailComplete) {
+      return
+    }
+
+    const cached = orderDetailCache.current.get(orderDetailKey)
+
+    if (cached) {
+      setOrderDetail({ key: orderDetailKey, detail: cached })
+      setOrderDetailErrorKey(null)
+      return
+    }
+
+    let cancelled = false
+    setOrderDetailErrorKey(null)
+
+    getComandaDetail(activeOrderId).then((result) => {
+      if (cancelled) return
+
+      if (!result.ok || !result.data) {
+        setOrderDetailErrorKey(orderDetailKey)
+        return
+      }
+
+      orderDetailCache.current.set(orderDetailKey, result.data)
+      setOrderDetail({ key: orderDetailKey, detail: result.data })
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeOrderId,
+    detailComplete,
+    orderDetail?.detail.id,
+    orderDetail?.key,
+    orderDetailKey,
+    orderDetailRetry,
+  ])
+
   const activeGuest =
     activeGuestKey === null
       ? null
@@ -804,19 +1227,31 @@ export function PosView({
   const dialogOrder = chargeOrder ?? activeOrder
   const activeTableIds =
     activeOrder?.tables?.map((row) => row.table.id) ??
-    (tableNumber ? diningTables.filter((t) => t.number === tableNumber).map((t) => t.id) : [])
+    (draftTableIds.length > 0
+      ? draftTableIds
+      : tableNumber
+        ? diningTables.filter((t) => t.number === tableNumber).map((t) => t.id)
+        : [])
   const payFirstAmount =
     Math.max(Number(activeOrder?.balance ?? 0), 0) + total
 
   // La comanda se muestra como columna solo cuando hay ancho suficiente para
   // catálogo + panel (xl). En tablet horizontal y teléfono se usa el sheet.
   const showComandaColumn = useMediaQuery("(min-width: 1280px)", true)
+  const isDesktopClient = useMediaQuery("(min-width: 1280px)", false)
+  const isPhone = useMediaQuery("(max-width: 767px)", true)
   const [comandaOpen, setComandaOpen] = React.useState(false)
-  const [confirmNewComanda, setConfirmNewComanda] = React.useState(false)
-  const [serviceRounds, setServiceRounds] =
-    React.useState<KitchenRound[]>(initialServiceRounds)
+  const [serviceRoundSummary, setServiceRoundSummary] =
+    React.useState<KitchenRoundSummary[]>(initialServiceRoundSummary)
+  const [serviceRounds, setServiceRounds] = React.useState<KitchenRound[]>([])
+  const [serviceRoundsLoading, setServiceRoundsLoading] = React.useState(false)
   const [serviceQueueMode, setServiceQueueMode] =
     React.useState<ServiceQueueMode | null>(null)
+  const serviceQueueModeRef = React.useRef<ServiceQueueMode | null>(null)
+
+  React.useEffect(() => {
+    serviceQueueModeRef.current = serviceQueueMode
+  }, [serviceQueueMode])
 
   const comandaUnits =
     cart.reduce((count, line) => count + line.quantity, 0) +
@@ -833,10 +1268,19 @@ export function PosView({
       return count + (round._count?.items ?? 0)
     }, 0)
 
-  const { kitchen: kitchenQueueRounds, ready: readyQueueRounds } =
-    React.useMemo(() => splitServiceRounds(serviceRounds), [serviceRounds])
-  const pendingQueueOrders = React.useMemo(
-    () => pendingPaymentOrders(carouselOrders),
+  /** Unidades del borrador nuevo, aunque el usuario esté viendo otra cuenta. */
+  const newDraftUnits = React.useMemo(() => {
+    const lines = orderId ? (draftsRef.current.get("")?.cart ?? []) : cart
+
+    return lines.reduce((count, line) => count + line.quantity, 0)
+  }, [cart, orderId])
+
+  const { ready: readyQueueRounds } = React.useMemo(
+    () => splitServiceRounds(serviceRoundSummary),
+    [serviceRoundSummary]
+  )
+  const openAccounts = React.useMemo(
+    () => openAccountOrders(carouselOrders),
     [carouselOrders]
   )
 
@@ -869,11 +1313,29 @@ export function PosView({
     return { subtotal: Math.round((total - tax) * 100) / 100, tax }
   }, [cart, products, taxRate, total])
 
+  // Totales visibles: lo ya enviado en la cuenta + la captura sin enviar.
+  const sentSubtotal = Number(activeOrder?.subtotal ?? 0)
+  const sentTax = Number(activeOrder?.taxTotal ?? 0)
+  const sentTotal = Number(activeOrder?.total ?? 0)
+  const comandaSubtotal =
+    Math.round((sentSubtotal + taxBreakdown.subtotal) * 100) / 100
+  const comandaTax = Math.round((sentTax + taxBreakdown.tax) * 100) / 100
+  const comandaTotal = Math.round((sentTotal + total) * 100) / 100
+  const saldoConCaptura =
+    Math.round(
+      (Math.max(Number(activeOrder?.balance ?? 0), 0) + total) * 100
+    ) / 100
+
   // Sincroniza los clientes con la cuenta seleccionada. En un borrador nuevo
   // siempre existe al menos Cliente 1.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  const activeOrderSyncRef = React.useRef<Order | null>(activeOrder)
   React.useEffect(() => {
-    if (!activeOrder) {
+    activeOrderSyncRef.current = activeOrder
+  })
+  React.useEffect(() => {
+    const orderForSync = activeOrderSyncRef.current
+
+    if (!orderForSync) {
       restoringRef.current = null
       setGuests((current) =>
         current.length > 0
@@ -886,45 +1348,49 @@ export function PosView({
 
     // Al volver a una comanda con borrador, el estado restaurado manda sobre
     // el que viene del servidor (que puede ser más viejo).
-    if (restoringRef.current === activeOrder.id) {
+    if (restoringRef.current === orderForSync.id) {
       restoringRef.current = null
       return
     }
 
-    const serverGuests = activeOrder.guests ?? []
+    const serverGuests = orderForSync.guests ?? []
+    const skipGuestSync =
+      guestBusyRef.current && guestBusyOrderRef.current === orderForSync.id
 
-    setChannel(activeOrder.channel ?? "DINE_IN")
-    setTableNumber(activeOrder.tableNumber ?? "1")
+    setChannel(orderForSync.channel ?? "DINE_IN")
+    setTableNumber(orderForSync.tableNumber ?? "1")
     // Los datos de contacto no deben arrastrarse de otra cuenta.
-    setCustomerName(activeOrder.customerName ?? "")
-    setCustomerPhone(activeOrder.customerPhone ?? "")
-    setDeliveryAddress(activeOrder.deliveryAddress ?? "")
-    setDeliveryFee(activeOrder.deliveryFee ?? "0")
-    setGuests(
-      serverGuests.map((guest) => ({
-        key: guest.id,
-        id: guest.id,
-        name: guest.name,
-        savedName: guest.name,
-        sex: guest.sex ?? null,
-        ageRange: guest.ageRange ?? null,
-      }))
-    )
-    setPartySize(
-      Math.min(20, activeOrder.partySize ?? Math.max(1, serverGuests.length))
-    )
-    setActiveGuestKey((current) =>
-      current && serverGuests.some((guest) => guest.id === current)
-        ? current
-        : (serverGuests[0]?.id ?? null)
-    )
+    setCustomerName(orderForSync.customerName ?? "")
+    setCustomerPhone(orderForSync.customerPhone ?? "")
+    setDeliveryAddress(orderForSync.deliveryAddress ?? "")
+    setDeliveryFee(orderForSync.deliveryFee ?? "0")
 
-    if ((activeOrder.channel ?? "DINE_IN") !== "DINE_IN") {
-      setCustomerSex(serverGuests[0]?.sex ?? null)
-      setCustomerAgeRange(serverGuests[0]?.ageRange ?? null)
+    if (!skipGuestSync) {
+      setGuests(
+        serverGuests.map((guest) => ({
+          key: guest.id,
+          id: guest.id,
+          name: guest.name,
+          savedName: guest.name,
+          sex: guest.sex ?? null,
+          ageRange: guest.ageRange ?? null,
+        }))
+      )
+      setPartySize(
+        Math.min(20, orderForSync.partySize ?? Math.max(1, serverGuests.length))
+      )
+      setActiveGuestKey((current) =>
+        current && serverGuests.some((guest) => guest.id === current)
+          ? current
+          : (serverGuests[0]?.id ?? null)
+      )
+
+      if ((orderForSync.channel ?? "DINE_IN") !== "DINE_IN") {
+        setCustomerSex(serverGuests[0]?.sex ?? null)
+        setCustomerAgeRange(serverGuests[0]?.ageRange ?? null)
+      }
     }
-  }, [activeOrder, setChannel])
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [activeOrder?.id, activeOrder?.updatedAt, setChannel])
 
   /* eslint-disable react-hooks/set-state-in-effect */
   React.useEffect(() => {
@@ -938,12 +1404,12 @@ export function PosView({
   const knownOrderIds = React.useRef(new Set<string>())
 
   React.useEffect(() => {
-    for (const order of orders) knownOrderIds.current.add(order.id)
-  }, [orders])
+    for (const order of liveOrders) knownOrderIds.current.add(order.id)
+  }, [liveOrders])
 
   React.useEffect(() => {
     if (!orderId) return
-    if (orders.some((order) => order.id === orderId)) return
+    if (liveOrders.some((order) => order.id === orderId)) return
     if (!knownOrderIds.current.has(orderId)) return
 
     knownOrderIds.current.delete(orderId)
@@ -966,7 +1432,7 @@ export function PosView({
     setPendingProductId(null)
     dismissComboNotice()
     setComboConflict(null)
-  }, [orders, orderId, resetChannel])
+  }, [liveOrders, orderId, resetChannel])
 
   // Sin «General»: en mesa siempre hay un cliente activo. Si el cliente
   // seleccionado desaparece, se toma el primero de la lista. En mostrador no
@@ -975,6 +1441,7 @@ export function PosView({
   React.useEffect(() => {
     setActiveGuestKey((current) => {
       if (!isDineIn || guests.length === 0) return null
+      if (current === ALL_GUESTS_KEY && guests.length > 1) return current
       if (current && guests.some((guest) => guest.key === current)) {
         return current
       }
@@ -1384,7 +1851,11 @@ export function PosView({
     () =>
       new Set(
         cart
-          .filter((line) => (line.guestKey ?? null) === activeGuestKey)
+          .filter(
+            (line) =>
+              activeGuestKey === ALL_GUESTS_KEY ||
+              (line.guestKey ?? null) === activeGuestKey
+          )
           .map((line) => line.itemId)
       ),
     [cart, activeGuestKey]
@@ -1633,6 +2104,8 @@ export function PosView({
       setPartySize(1)
       resetChannel()
       setTableNumber("1")
+      setTableId("")
+      setDraftTableIds([])
       setCustomerName("")
       setCustomerSex(null)
       setCustomerAgeRange(null)
@@ -1662,6 +2135,8 @@ export function PosView({
     setActiveGuestKey(null)
     resetChannel()
     setTableNumber("1")
+    setTableId("")
+    setDraftTableIds([])
     setCustomerName("")
     setCustomerSex(null)
     setCustomerAgeRange(null)
@@ -1678,58 +2153,152 @@ export function PosView({
    * Refresca los contadores de la barra móvil: rondas de cocina y borradores.
    */
   const refreshServiceData = React.useCallback(async () => {
+    const endPerf = startPosPerf("service.summary")
     const [roundsResult, draftsResult] = await Promise.all([
-      getKitchenRounds(),
+      getKitchenRoundsSummary(),
       listPosDrafts(),
     ])
 
     if (roundsResult.ok && roundsResult.data) {
-      setServiceRounds(roundsResult.data)
+      setServiceRoundSummary(roundsResult.data)
     }
 
     if (draftsResult.ok && draftsResult.data) {
-      setDraftCount(draftsResult.data.length)
+      setServiceDrafts(draftsResult.data)
+    }
+
+    endPerf({
+      rounds: roundsResult.data?.length ?? 0,
+      drafts: draftsResult.data?.length ?? 0,
+    })
+  }, [])
+
+  const refreshFullServiceRounds = React.useCallback(async () => {
+    const endPerf = startPosPerf("service.full-rounds")
+    setServiceRoundsLoading(true)
+
+    try {
+      const result = await getKitchenRounds()
+
+      if (result.ok && result.data) {
+        setServiceRounds(result.data)
+      }
+
+      endPerf({ rounds: result.data?.length ?? 0 })
+    } finally {
+      setServiceRoundsLoading(false)
     }
   }, [])
 
-  /**
-   * «Pedido» del POS móvil: abre la comanda actual sin crear ni borrar nada.
-   *
-   * Si la cuenta actual ya está guardada, su borrador queda en `draftsRef` y
-   * se recupera al volver a seleccionarla.
-   */
-  function startNewComanda() {
-    posCapture.noteComandaInteraction()
+  function openServiceQueue(mode: ServiceQueueMode) {
+    setServiceQueueMode(mode)
+    void refreshOrders()
+    void refreshServiceData()
 
-    if (orderId) {
-      selectOrder("")
+    if (mode !== "pending") {
+      void refreshFullServiceRounds()
     }
-
-    setComandaOpen(true)
   }
 
-  function handleNewComanda() {
-    if (!orderId && comandaUnits > 0) {
-      setConfirmNewComanda(true)
+  const canPrintReceipt = mercadoPago.terminals.some(isPdvTerminal)
+
+  async function handlePrintQueueOrder(orderId: string) {
+    const result = await printOrderReceipt(orderId)
+
+    if (!result.ok || !result.data) {
+      toast.error(result.message ?? "No se pudo imprimir la cuenta")
       return
     }
 
-    startNewComanda()
+    toast.success("Ticket enviado a la terminal")
   }
 
-  function confirmStartNewComanda() {
-    resetNewDraft()
-    setConfirmNewComanda(false)
-    setComandaOpen(true)
+  function handleChargeQueueOrder(order: Order) {
+    queueChargeRef.current = true
+    setServiceQueueMode(null)
+    setChargeOrder(order)
+    setCharging(true)
   }
 
-  function openServiceQueue(mode: ServiceQueueMode) {
-    setServiceQueueMode(mode)
-    void refreshServiceData()
+  async function handleCloseQueueOrder(orderId: string) {
+    const result = await closeOrder(orderId)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudo cerrar la cuenta")
+      return
+    }
+
+    toast.success("Cuenta cerrada")
+    await Promise.all([refreshOrders(), refreshServiceData()])
+
+    if (serviceQueueMode && serviceQueueMode !== "pending") {
+      void refreshFullServiceRounds()
+    }
   }
 
-  function handleSelectQueueOrder(id: string) {
-    selectOrder(id)
+  async function handleDeliverQueueRound(round: KitchenRound) {
+    const result = await deliverRoundFromPos(round.order.id, round.id)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudo entregar la ronda")
+      return
+    }
+
+    toast.success("Ronda entregada")
+    await Promise.all([refreshOrders(), refreshServiceData()])
+
+    if (serviceQueueMode !== null) {
+      void refreshFullServiceRounds()
+    }
+  }
+
+  async function handleCancelQueueRound(round: KitchenRound) {
+    const result = await cancelRoundFromPos(round.order.id, round.id)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudo cancelar la ronda")
+      return
+    }
+
+    toast.success("Ronda cancelada")
+    setServiceQueueMode(null)
+
+    if (orderId === round.order.id) {
+      resetNewDraft()
+      setPendingOrder(null)
+      setComandaOpen(false)
+    }
+
+    await Promise.all([refreshOrders(), refreshServiceData()])
+
+    if (serviceQueueMode !== null) {
+      void refreshFullServiceRounds()
+    }
+  }
+
+  async function handlePrioritizeQueueRound(round: KitchenRound) {
+    const result = await prioritizeRound(round.order.id, round.id)
+
+    if (!result.ok) {
+      toast.error(result.message ?? "No se pudo priorizar la ronda")
+      return
+    }
+
+    toast.success("Prioridad enviada a cocina")
+    await refreshServiceData()
+
+    if (serviceQueueMode !== null) {
+      void refreshFullServiceRounds()
+    }
+  }
+
+  function handleEditQueueOrder(orderId: string) {
+    if (!selectOrders.some((order) => order.id === orderId)) {
+      toast.error("La cuenta ya no está disponible para editar")
+      return
+    }
+
+    selectOrder(orderId)
     setServiceQueueMode(null)
     setComandaOpen(true)
   }
@@ -1752,6 +2321,7 @@ export function PosView({
     resetChannel()
     setTableNumber("1")
     setTableId("")
+    setDraftTableIds([])
     setCustomerName("")
     setCustomerSex(null)
     setCustomerAgeRange(null)
@@ -1771,14 +2341,23 @@ export function PosView({
   React.useEffect(() => {
     const initial = window.setTimeout(() => void refreshServiceData(), 0)
     const timer = window.setInterval(() => {
-      if (!document.hidden) void refreshServiceData()
+      if (document.hidden) return
+
+      void refreshServiceData()
+
+      if (
+        serviceQueueModeRef.current &&
+        serviceQueueModeRef.current !== "pending"
+      ) {
+        void refreshFullServiceRounds()
+      }
     }, 30_000)
 
     return () => {
       window.clearTimeout(initial)
       window.clearInterval(timer)
     }
-  }, [refreshServiceData])
+  }, [refreshFullServiceRounds, refreshServiceData])
 
   /**
    * Guarda la captura en el servidor sin abrir cuenta.
@@ -1828,7 +2407,12 @@ export function PosView({
       setOrderId("")
       setPendingOrder(null)
       clearDraftCapture()
-      setDraftCount((current) => current + 1)
+      setComandaOpen(false)
+      const savedDraft = result.data
+      setServiceDrafts((current) => [
+        savedDraft,
+        ...current.filter((entry) => entry.id !== savedDraft.id),
+      ])
       toast.success("Borrador guardado", {
         description:
           "Vence en 15 minutos y cualquier persona del POS puede reanudarlo.",
@@ -1840,8 +2424,12 @@ export function PosView({
 
   /** Restaura una captura guardada; el borrador ya quedó consumido. */
   const handleResumeDraft = (draft: PosDraft) => {
+    setServiceDrafts((current) =>
+      current.filter((entry) => entry.id !== draft.id)
+    )
+
     const targetOrderId =
-      draft.orderId && orders.some((order) => order.id === draft.orderId)
+      draft.orderId && liveOrders.some((order) => order.id === draft.orderId)
         ? draft.orderId
         : ""
 
@@ -1855,6 +2443,7 @@ export function PosView({
     setChannel(draft.channel)
     setTableNumber(draft.tableNumber ?? "1")
     setTableId(draft.tableId ?? "")
+    setDraftTableIds(draft.tableId ? [draft.tableId] : [])
     setCustomerName(draft.customerName ?? "")
     setCustomerSex(draft.customerSex)
     setCustomerAgeRange(draft.customerAgeRange)
@@ -1985,7 +2574,10 @@ export function PosView({
         channel,
         offline: true,
       })
+      setOrderId("")
+      setPendingOrder(null)
       clearDraftCapture()
+      setComandaOpen(false)
     }
 
     if (!offline.isOnline) {
@@ -1994,6 +2586,7 @@ export function PosView({
     }
 
     setSending(true)
+    const endSendPerf = startPosPerf("round.send")
 
     try {
       let targetId = orderId
@@ -2008,7 +2601,11 @@ export function PosView({
               ? tableNumber.trim() || "1"
               : undefined,
           tableIds:
-            channel === "DINE_IN" && tableId ? [tableId] : undefined,
+            channel === "DINE_IN" && draftTableIds.length > 0
+              ? draftTableIds
+              : channel === "DINE_IN" && tableId
+                ? [tableId]
+                : undefined,
           partySize: channel === "DINE_IN" ? partySize : 1,
           customerName: customerName.trim() || undefined,
           customerPhone: customerPhone.trim() || undefined,
@@ -2128,6 +2725,19 @@ export function PosView({
         return
       }
 
+      if (result.data) {
+        const seededRound: ComandaRound = result.data
+
+        setOrderDetail((current) => ({
+          key: current?.key ?? "",
+          detail: appendComandaRound(
+            current?.detail ?? null,
+            targetId,
+            seededRound
+          ),
+        }))
+      }
+
       if (payFirst) {
         setPayFirstRoundId(result.data?.id ?? null)
         const baseOrder = activeOrder ?? createdOrder
@@ -2145,6 +2755,7 @@ export function PosView({
         }
 
         setCharging(true)
+        setComandaOpen(false)
         toast.success("Pedido guardado · cobra para enviarlo a cocina")
       } else {
         toast.success(
@@ -2172,9 +2783,17 @@ export function PosView({
       })
       draftsRef.current.delete(targetId)
       draftsRef.current.delete("")
+      setOrderId("")
+      setPendingOrder(null)
       clearDraftCapture()
-      router.refresh()
-      void refreshServiceData()
+      setComandaOpen(false)
+
+      // En cobro anticipado el diálogo refresca al cerrarse; no competir con
+      // la carga del resumen de cobro.
+      if (!payFirst) {
+        void refreshOrders()
+        void refreshServiceData()
+      }
     } catch {
       if (!navigator.onLine) {
         await queueOffline(orderId || undefined)
@@ -2183,12 +2802,26 @@ export function PosView({
       }
     } finally {
       setSending(false)
+      endSendPerf({ payFirst })
     }
   }
 
   /** Etiqueta visible de un cliente según su posición. */
   const guestDisplayName = (guest: GuestDraft, index: number) =>
     guest.name.trim() || `Cliente ${index + 1}`
+
+  /**
+   * Rondas de la comanda: estados y horas frescos del listado, artículos del
+   * detalle cacheado. Los cambios de cocina no invalidan los artículos.
+   */
+  const comandaRounds = React.useMemo<ComandaRound[]>(
+    () =>
+      mergeComandaRounds(
+        activeOrder?.rounds ?? [],
+        activeOrderDetail?.rounds
+      ),
+    [activeOrder, activeOrderDetail]
+  )
 
   /**
    * Unidades por cliente: lo que está en la comanda sin enviar y lo que ya
@@ -2204,21 +2837,114 @@ export function PosView({
 
     for (const line of cart) add(line.guestKey, line.quantity)
 
-    for (const round of activeOrder?.rounds ?? []) {
-      if (round.status === "CANCELLED") continue
-      if (!("items" in round)) continue
-
+    for (const round of comandaRounds) {
       for (const item of round.items) add(item.guestId, item.quantity)
     }
 
     return units
-  }, [cart, activeOrder])
+  }, [cart, comandaRounds])
 
   const visibleCart = React.useMemo(
     () =>
-      cart.filter((line) => (line.guestKey ?? null) === activeGuestKey),
+      activeGuestKey === ALL_GUESTS_KEY
+        ? cart
+        : cart.filter((line) => (line.guestKey ?? null) === activeGuestKey),
     [cart, activeGuestKey]
   )
+
+  /** Rondas enviadas, con sus artículos completos cuando ya llegó el detalle. */
+  const sentRounds = React.useMemo(() => {
+    const groups: Array<{
+      round: ComandaRound
+      number: number
+      lines: ComandaLine[]
+    }> = []
+
+    comandaRounds.forEach((round, index) => {
+      if (round.items.length === 0) return
+
+      groups.push({
+        round,
+        number: index + 1,
+        lines: round.items.map((item) =>
+          orderItemToComandaLine(item, round, index + 1)
+        ),
+      })
+    })
+
+    return groups
+  }, [comandaRounds])
+
+  const hasSentRounds = (activeOrder?.rounds ?? []).some(
+    (round) => round.status !== "CANCELLED"
+  )
+  const itemsLoading =
+    Boolean(activeOrder && hasSentRounds) &&
+    !activeOrderDetail &&
+    orderDetailErrorKey !== orderDetailKey
+  const itemsUpdating =
+    Boolean(activeOrder && hasSentRounds && activeOrderDetail) &&
+    !detailComplete &&
+    orderDetailErrorKey !== orderDetailKey
+  const itemsError =
+    Boolean(activeOrder && hasSentRounds && orderDetailKey) &&
+    orderDetailErrorKey === orderDetailKey
+
+  const visibleSentRounds = React.useMemo(() => {
+    if (activeGuestKey === ALL_GUESTS_KEY) return sentRounds
+
+    return sentRounds
+      .map((group) => ({
+        ...group,
+        lines: group.lines.filter(
+          (line) => (line.guestKey ?? null) === activeGuestKey
+        ),
+      }))
+      .filter((group) => group.lines.length > 0)
+  }, [sentRounds, activeGuestKey])
+
+  const sentLines = React.useMemo(
+    () => sentRounds.flatMap((group) => group.lines),
+    [sentRounds]
+  )
+
+  const allComandaGroups = React.useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        key: string
+        name: string
+        quantity: number
+        total: number
+        lines: ComandaLine[]
+      }
+    >()
+    const lines = [...sentLines, ...cart.map(cartLineToComandaLine)]
+
+    for (const line of lines) {
+      const key = `${line.itemId}::${line.variantId ?? ""}`
+      const name = line.variantName
+        ? `${line.itemName} ${line.variantName}`
+        : line.itemName
+      const current = groups.get(key)
+
+      if (current) {
+        current.quantity += line.quantity
+        current.total += line.total
+        current.lines.push(line)
+      } else {
+        groups.set(key, {
+          key,
+          name,
+          quantity: line.quantity,
+          total: line.total,
+          lines: [line],
+        })
+      }
+    }
+
+    return [...groups.values()]
+  }, [cart, sentLines])
 
   const setGuestNameLocal = (guest: GuestDraft, name: string) => {
     posCapture.noteComandaActivity()
@@ -2264,14 +2990,25 @@ export function PosView({
       return
     }
 
-    setGuestBusy(true)
+    beginGuestBusy(orderId)
 
     try {
       const result = await updateOrderGuest(orderId, guest.id, changes)
 
       if (!result.ok) {
+        setGuests((current) =>
+          current.map((entry) =>
+            entry.key === guest.key
+              ? {
+                  ...entry,
+                  name: guest.name,
+                  sex: guest.sex,
+                  ageRange: guest.ageRange,
+                }
+              : entry
+          )
+        )
         toast.error(result.message ?? "No se pudo actualizar el cliente")
-        router.refresh()
         return
       }
 
@@ -2284,110 +3021,122 @@ export function PosView({
           )
         )
       }
+
+      patchOrderLocal(orderId, {
+        guests: (activeOrder?.guests ?? []).map((entry) =>
+          entry.id === guest.id
+            ? {
+                ...entry,
+                ...(changes.name === undefined ? {} : { name: changes.name }),
+                ...(changes.sex === undefined ? {} : { sex: changes.sex }),
+                ...(changes.ageRange === undefined
+                  ? {}
+                  : { ageRange: changes.ageRange }),
+              }
+            : entry
+        ),
+      })
     } finally {
-      setGuestBusy(false)
+      endGuestBusy()
     }
   }
 
-  /** Ajusta el número de clientes y sincroniza los chips. */
+  /** Ajusta el número de clientes de forma optimista y persiste en lote. */
   const changePartySize = async (next: number) => {
+    if (guestBusy) return
+
+    const endLocalPerf = startPosPerf("party-size.local")
     const target = Math.min(20, Math.max(1, next))
 
-    if (target === partySize) return
+    if (target === partySize && guests.length === target) return
 
     posCapture.noteComandaInteraction()
 
-    if (target > partySize) {
-      const additions = target - partySize
+    const previousGuests = guests
+    const previousPartySize = partySize
+    const currentCount = guests.length
 
-      if (orderId) {
-        setGuestBusy(true)
+    if (target > currentCount) {
+      const additions = target - currentCount
 
-        try {
-          for (let index = 0; index < additions; index += 1) {
-            const result = await addOrderGuest(orderId, {})
+      setGuests([
+        ...guests,
+        ...Array.from({ length: additions }, () => ({
+          key: newGuestKey(),
+          name: "",
+          savedName: "",
+          sex: null,
+          ageRange: null,
+        })),
+      ])
+    } else if (target < currentCount) {
+      const removed = guests.slice(target)
+      const fallbackGuestKey = guests[0]?.key ?? null
 
-            if (!result.ok || !result.data) {
-              toast.error(result.message ?? "No se pudo añadir el cliente")
-              break
-            }
-
-            const created = result.data
-
-            setGuests((current) => [
-              ...current,
-              {
-                key: created.id,
-                id: created.id,
-                name: created.name,
-                savedName: created.name,
-                sex: created.sex ?? null,
-                ageRange: created.ageRange ?? null,
-              },
-            ])
-          }
-
-          router.refresh()
-        } finally {
-          setGuestBusy(false)
-        }
-      } else {
-        setGuests((current) => [
-          ...current,
-          ...Array.from({ length: additions }, () => ({
-            key: newGuestKey(),
-            name: "",
-            savedName: "",
-            sex: null,
-            ageRange: null,
-          })),
-        ])
-      }
-
-      setPartySize(target)
-      return
-    }
-
-    const removals = partySize - target
-    const removed = guests.slice(-removals)
-
-    if (orderId) {
-      setGuestBusy(true)
-
-      try {
-        for (const guest of removed) {
-          if (!guest.id) continue
-
-          const result = await removeOrderGuest(orderId, guest.id)
-
-          if (!result.ok) {
-            toast.error(result.message ?? "No se pudo quitar el cliente")
-            break
-          }
-        }
-
-        router.refresh()
-      } finally {
-        setGuestBusy(false)
-      }
-    }
-
-    // Las líneas de los clientes eliminados pasan al primer cliente.
-    const fallbackGuestKey = guests[0]?.key ?? null
-
-    setCart((current) =>
-      current.map((line) =>
-        removed.some((guest) => guest.key === line.guestKey)
-          ? { ...line, guestKey: fallbackGuestKey }
-          : line
+      setCart((current) =>
+        current.map((line) =>
+          removed.some((guest) => guest.key === line.guestKey)
+            ? { ...line, guestKey: fallbackGuestKey }
+            : line
+        )
       )
-    )
+      setGuests(guests.slice(0, target))
 
-    setGuests((current) => current.slice(0, target))
+      if (
+        activeGuestKey &&
+        removed.some((guest) => guest.key === activeGuestKey)
+      ) {
+        setActiveGuestKey(fallbackGuestKey)
+      }
+    }
+
     setPartySize(target)
+    setPartySizeDraft(String(target))
+    endLocalPerf({ target, guests: guests.length })
 
-    if (activeGuestKey && removed.some((guest) => guest.key === activeGuestKey)) {
-      setActiveGuestKey(fallbackGuestKey)
+    if (!orderId) return
+
+    const endBatchPerf = startPosPerf("party-size.batch")
+    beginGuestBusy(orderId)
+
+    try {
+      const result = await setOrderPartySize(orderId, target)
+
+      if (!result.ok || !result.data) {
+        setGuests(previousGuests)
+        setPartySize(previousPartySize)
+        setPartySizeDraft(String(previousPartySize))
+        toast.error(result.message ?? "No se pudo ajustar el número de clientes")
+        return
+      }
+
+      const serverGuests = result.data
+
+      setGuests((current) =>
+        serverGuests.map((guest, index) => ({
+          key: current[index]?.key ?? guest.id,
+          id: guest.id,
+          name: guest.name,
+          savedName: guest.name,
+          sex: guest.sex ?? null,
+          ageRange: guest.ageRange ?? null,
+        }))
+      )
+
+      patchOrderLocal(orderId, {
+        partySize: target,
+        guests: serverGuests,
+      })
+      setPartySize(target)
+      setPartySizeDraft(String(target))
+    } catch {
+      setGuests(previousGuests)
+      setPartySize(previousPartySize)
+      setPartySizeDraft(String(previousPartySize))
+      toast.error("No se pudo ajustar el número de clientes")
+    } finally {
+      endGuestBusy()
+      endBatchPerf({ target })
     }
   }
 
@@ -2404,7 +3153,7 @@ export function PosView({
   const applyGuestRemove = async () => {
     if (!guestRemoving) return
 
-    setGuestBusy(true)
+    beginGuestBusy(orderId ?? "")
 
     try {
       if (orderId && guestRemoving.id) {
@@ -2414,13 +3163,12 @@ export function PosView({
           toast.error(result.message ?? "No se pudo quitar el cliente")
           return
         }
-
-        router.refresh()
       }
 
       const removedKey = guestRemoving.key
       const fallbackGuestKey =
         guests.find((guest) => guest.key !== removedKey)?.key ?? null
+      const nextPartySize = Math.max(1, partySize - 1)
 
       setCart((current) =>
         current.map((line) =>
@@ -2432,102 +3180,53 @@ export function PosView({
       setGuests((current) =>
         current.filter((guest) => guest.key !== removedKey)
       )
-      setPartySize((current) => Math.max(1, current - 1))
+      setPartySize(nextPartySize)
+      setPartySizeDraft(String(nextPartySize))
 
       if (activeGuestKey === removedKey) setActiveGuestKey(fallbackGuestKey)
 
+      if (orderId) {
+        patchOrderLocal(orderId, {
+          partySize: nextPartySize,
+          guests: (activeOrder?.guests ?? []).filter(
+            (guest) => guest.id !== guestRemoving.id
+          ),
+        })
+      }
+
+      setPartySize(nextPartySize)
+      setPartySizeDraft(String(nextPartySize))
       setGuestRemoving(null)
     } finally {
-      setGuestBusy(false)
+      endGuestBusy()
     }
   }
 
-  const draftsHeaderButton = (
-    <Button
-      type="button"
-      variant="outline"
-      size="icon-sm"
-      className="relative shrink-0"
-      aria-label={`Borradores (${draftCount})`}
-      title="Borradores guardados"
-      onClick={() => setDraftsOpen(true)}
-    >
-      <NotebookTextIcon />
-      {draftCount > 0 ? (
-        <span className="absolute -top-1.5 -right-1.5 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-          {draftCount > 9 ? "9+" : draftCount}
-        </span>
-      ) : null}
-    </Button>
-  )
-
   const comandaHeaderContent = (
     <>
-                <CardTitle className="flex items-center gap-2">
-                  <PencilLineIcon className="size-4" />
-                  Comanda
-                  {activeOrder?.ticketNumber ? (
-                    <span className="rounded border px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground">
-                      {ticketCode(activeOrder.ticketNumber)}
-                    </span>
-                  ) : null}
-                </CardTitle>
-                {showComandaColumn ? (
-                  <>
-                  <Select
-                    value={orderId || "new"}
-                    onValueChange={(value) =>
-                      selectOrder(value === "new" ? "" : (value ?? ""))
-                    }
-                    items={[
-                      { value: "new", label: "Nueva cuenta" },
-                      ...selectOrders.map((order) => ({
-                        value: order.id,
-                        label: orderSelectLabel(order),
-                      })),
-                    ]}
-                  >
-                    <SelectTrigger className="w-44" aria-label="Cuentas">
-                      <SelectValue placeholder="Nueva cuenta" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">Nueva cuenta</SelectItem>
-                      {selectOrders.map((order) => (
-                        <SelectItem key={order.id} value={order.id}>
-                          {orderSelectLabel(order)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {draftsHeaderButton}
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      aria-label="Empezar comanda nueva"
-                      title="Empezar comanda nueva"
-                      onClick={handleNewComanda}
-                    >
-                      <FilePlusIcon />
-                    </Button>
-                    {draftsHeaderButton}
-                    <SheetClose
-                      render={
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label="Cerrar comanda"
-                        />
-                      }
-                    >
-                      <XIcon />
-                    </SheetClose>
-                  </>
-                )}
+      <CardTitle className="flex items-center gap-2">
+        <PencilLineIcon className="size-4" />
+        Comanda
+        {activeOrder?.ticketNumber ? (
+          <Badge variant="secondary" size="sm">
+            {ticketCode(activeOrder.ticketNumber)}
+          </Badge>
+        ) : null}
+      </CardTitle>
+      {!showComandaColumn ? (
+        <SheetClose
+          render={
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Cerrar comanda"
+            />
+          }
+        >
+          <XIcon />
+        </SheetClose>
+      ) : null}
     </>
   )
 
@@ -2536,10 +3235,34 @@ export function PosView({
       {comandaHeaderContent}
     </CardHeader>
   ) : (
-    <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3">
+    <div
+      data-sheet-drag-handle
+      className="flex shrink-0 items-center justify-between gap-2 border-b px-4 py-3"
+    >
       {comandaHeaderContent}
     </div>
   )
+
+  const comandaItemsError = itemsError ? (
+    <div className="flex flex-col items-start gap-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+      <span>No se pudieron cargar los artículos de la cuenta.</span>
+      <Button
+        type="button"
+        variant="outline"
+        size="xs"
+        onClick={() => setOrderDetailRetry((current) => current + 1)}
+      >
+        Reintentar
+      </Button>
+    </div>
+  ) : null
+
+  const comandaItemsUpdating = itemsUpdating ? (
+    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+      <Loader2Icon className="size-3.5 animate-spin" />
+      Actualizando comanda…
+    </p>
+  ) : null
 
   const comandaBody = (
     <>
@@ -2579,51 +3302,57 @@ export function PosView({
                     <div className="grid grid-cols-2 items-end gap-2">
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="pos-table">Mesa</Label>
-                        <Button
-                          id="pos-table"
-                          type="button"
-                          variant="outline"
-                          className="w-full justify-between gap-2"
-                          onClick={() => {
-                            if (activeOrder && activeTableIds.length === 0) {
-                              toast.error("La cuenta no tiene mesas asignadas")
-                              return
-                            }
-                            posCapture.noteComandaInteraction()
-                            setTablePickerMode(activeOrder ? "change" : "select")
-                            setTablePickerOpen(true)
-                          }}
-                        >
-                          <span className="truncate">
-                            {activeOrder
-                              ? activeOrder.tables?.length
-                                ? activeOrder.tables
-                                    .map((row) => `Mesa ${row.table.number}`)
-                                    .join(" + ")
-                                : `Mesa ${activeOrder.tableNumber ?? "—"}`
-                              : diningTables.find((table) => table.id === tableId)
-                                  ? `Mesa ${diningTables.find((table) => table.id === tableId)?.number}`
+                        <ButtonGroup className="w-full">
+                          <Button
+                            id="pos-table"
+                            type="button"
+                            variant="outline"
+                            className="min-w-0 flex-1 justify-between gap-2"
+                            onClick={() => {
+                              if (activeOrder && activeTableIds.length === 0) {
+                                toast.error("La cuenta no tiene mesas asignadas")
+                                return
+                              }
+                              posCapture.noteComandaInteraction()
+                              setTablePickerMode(activeOrder ? "change" : "select")
+                              setTablePickerOpen(true)
+                            }}
+                          >
+                            <span className="truncate">
+                              {activeOrder
+                                ? activeOrder.tables?.length
+                                  ? activeOrder.tables
+                                      .map((row) => `Mesa ${row.table.number}`)
+                                      .join(" + ")
+                                  : `Mesa ${activeOrder.tableNumber ?? "—"}`
+                                : draftTableIds.length > 0
+                                  ? draftTableIds
+                                      .map(
+                                        (id) =>
+                                          `Mesa ${
+                                            diningTables.find((table) => table.id === id)
+                                              ?.number ?? "—"
+                                          }`
+                                      )
+                                      .join(" + ")
                                   : `Mesa ${tableNumber}`}
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {activeOrder ? "Cambiar" : "Elegir"}
-                          </span>
-                        </Button>
-                        {activeOrder ? (
+                            </span>
+                          </Button>
                           <Button
                             type="button"
                             variant="outline"
-                            size="sm"
+                            size="icon"
+                            aria-label="Juntar mesas"
+                            title="Juntar mesas"
                             onClick={() => {
                               posCapture.noteComandaInteraction()
                               setTablePickerMode("merge")
                               setTablePickerOpen(true)
                             }}
                           >
-                            <Link2Icon />
-                            Juntar mesas
+                            <MergeIcon />
                           </Button>
-                        ) : null}
+                        </ButtonGroup>
                       </div>
 
                       <div className="flex flex-col gap-2">
@@ -2680,6 +3409,22 @@ export function PosView({
                       </legend>
 
                       <div className="flex flex-wrap items-center gap-1.5">
+                        {guests.length > 1 ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            className={cn(
+                              "h-7 rounded-full px-2.5 text-xs",
+                              activeGuestKey === ALL_GUESTS_KEY &&
+                                "ring-2 ring-ring/30"
+                            )}
+                            aria-pressed={activeGuestKey === ALL_GUESTS_KEY}
+                            onClick={() => setActiveGuestKey(ALL_GUESTS_KEY)}
+                          >
+                            Todos
+                          </Button>
+                        ) : null}
                         {guests.map((guest, index) => (
                           <div key={guest.key} className="flex items-center">
                             <Button
@@ -2854,149 +3599,277 @@ export function PosView({
                 </Alert>
               ) : null}
 
-              {visibleCart.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {cart.length === 0
-                    ? "Elige artículos del catálogo para armar la ronda."
-                    : "Este cliente no tiene artículos en la comanda."}
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {visibleCart.map((line, index) => (
-                    <li
-                      key={line.key}
-                      className={cn(
-                        "flex flex-col gap-1",
-                        index > 0 && "border-t border-dashed pt-2"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium">
-                            {line.itemName}
-                            {line.variantName ? ` ${line.variantName}` : ""}
-                          </p>
-                          {line.extras.length > 0 ? (
-                            <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                              <span className="font-medium">Extras:</span>
-                              {line.extras.map((extra) => (
+              {activeGuestKey === ALL_GUESTS_KEY ? (
+                <>
+                  {itemsLoading ? <ComandaItemsSkeleton /> : null}
+                  {comandaItemsError}
+                  {comandaItemsUpdating}
+                  {allComandaGroups.length === 0 &&
+                  !itemsLoading &&
+                  !itemsError ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      No hay artículos en la comanda.
+                    </p>
+                  ) : allComandaGroups.length > 0 ? (
+                    <ul className="flex flex-col gap-2">
+                      {allComandaGroups.map((group) => (
+                        <li
+                          key={group.key}
+                          className="flex flex-col gap-1 rounded-lg border p-2"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="min-w-0 truncate text-xs font-medium">
+                              {group.quantity}× {group.name}
+                            </p>
+                            <span className="shrink-0 text-xs font-medium tabular-nums">
+                              {money(group.total)}
+                            </span>
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            {group.lines.map((line) => {
+                              const guestIndex = guests.findIndex(
+                                (guest) => guest.key === line.guestKey
+                              )
+                              const guestName =
+                                guestIndex >= 0
+                                  ? guestDisplayName(
+                                      guests[guestIndex],
+                                      guestIndex
+                                    )
+                                  : line.guestName?.trim() || "General"
+                              const details = [
+                                ...line.options.map((option) => option.name),
+                                ...line.extras.map((extra) => `+ ${extra.name}`),
+                                ...line.excludedNames.map(
+                                  (name) => `sin ${name}`
+                                ),
+                                line.notes ? `“${line.notes}”` : null,
+                              ].filter(Boolean)
+
+                              return (
                                 <div
-                                  key={extra.id}
-                                  className="flex items-baseline justify-between gap-3"
+                                  key={line.key}
+                                  className={cn(
+                                    "border-t border-dashed pt-1 text-[10px] text-muted-foreground first:border-0 first:pt-0",
+                                    line.sent && "opacity-70"
+                                  )}
                                 >
-                                  <span className="min-w-0 truncate">
-                                    - {extra.name}
-                                  </span>
-                                  {extra.price !== 0 ? (
-                                    <span className="shrink-0 tabular-nums">
-                                      {extra.price > 0 ? "+" : "−"}
-                                      {money(Math.abs(extra.price))}
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="min-w-0 truncate font-medium text-foreground">
+                                      {guestName} · {line.quantity}×
+                                      {line.sent && line.roundNumber
+                                        ? ` · Ronda ${line.roundNumber}`
+                                        : ""}
                                     </span>
+                                    <span className="shrink-0 tabular-nums">
+                                      {money(line.total)}
+                                    </span>
+                                  </div>
+                                  {details.length > 0 ? (
+                                    <p className="truncate">
+                                      {details.join(" · ")}
+                                    </p>
                                   ) : null}
                                 </div>
-                              ))}
-                            </div>
-                          ) : null}
-                          {groupCartOptions(line.options).map(
-                            ([groupName, options]) => (
-                              <div
-                                key={groupName}
-                                className="flex flex-col gap-0.5 text-xs text-muted-foreground"
-                              >
-                                <span className="font-medium">
-                                  {groupName}:
-                                </span>
-                                {options.map((option) => (
-                                  <div
-                                    key={`${groupName}-${option.itemOptionValueId}`}
-                                    className="flex items-baseline justify-between gap-3"
-                                  >
-                                    <span className="min-w-0 truncate">
-                                      - {option.name}
-                                    </span>
-                                    {option.price !== 0 ? (
-                                      <span className="shrink-0 tabular-nums">
-                                        {option.price > 0 ? "+" : "−"}
-                                        {money(Math.abs(option.price))}
-                                      </span>
-                                    ) : null}
-                                  </div>
-                                ))}
-                              </div>
-                            )
-                          )}
-                          {line.excludedNames.length > 0 ? (
-                            <div className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                              <span className="font-medium">Sin:</span>
-                              {line.excludedNames.map((name) => (
-                                <span key={name} className="min-w-0 truncate">
-                                  - {name}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {line.notes ? (
-                            <p className="text-xs italic text-muted-foreground">
-                              “{line.notes}”
-                            </p>
-                          ) : null}
-                        </div>
-                        <span className="text-sm font-medium tabular-nums">
-                          {money(cartLineTotal(line))}
+                              )
+                            })}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {itemsLoading ? <ComandaItemsSkeleton /> : null}
+                  {comandaItemsError}
+                  {comandaItemsUpdating}
+
+                  {visibleSentRounds.map(({ round, number, lines }) => (
+                    <div key={round.id} className="flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                        <span>Ronda {number}</span>
+                        <span>
+                          {ROUND_STATUS_LABELS[round.status]} ·{" "}
+                          {roundTimeLabel(round)}
                         </span>
                       </div>
-
-                      <div className="flex items-center gap-1">
-                        <ButtonGroup aria-label={`Cantidad de ${line.itemName}`}>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label={`Quitar una unidad de ${line.itemName}`}
-                            onClick={() => changeQuantity(line.key, -1)}
-                          >
-                            <MinusIcon />
-                          </Button>
-                          <Input
-                            aria-label={`Cantidad de ${line.itemName}`}
-                            readOnly
-                            tabIndex={-1}
-                            value={line.quantity}
-                            className="h-8 w-10 min-w-10 text-center text-sm tabular-nums"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label={`Añadir una unidad de ${line.itemName}`}
-                            onClick={() => changeQuantity(line.key, 1)}
-                          >
-                            <PlusIcon />
-                          </Button>
-                        </ButtonGroup>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          className="ml-auto"
-                          aria-label={`Editar opciones de ${line.itemName}`}
-                          onClick={() => openCartLineEditor(line)}
-                        >
-                          <PencilLineIcon />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          aria-label={`Quitar ${line.itemName} de la comanda`}
-                          onClick={() => removeLineWithUndo(line)}
-                        >
-                          <Trash2Icon />
-                        </Button>
-                      </div>
-                    </li>
+                      <ul className="flex flex-col gap-1.5">
+                        {lines.map((line) => (
+                          <SentComandaLine key={line.key} line={line} />
+                        ))}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
+
+                  {visibleCart.length > 0 &&
+                  (visibleSentRounds.length > 0 ||
+                    itemsLoading ||
+                    itemsError) ? (
+                    <div className="flex items-center gap-2 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      <span className="h-px flex-1 bg-border" />
+                      Por enviar
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                  ) : null}
+
+                  {visibleCart.length > 0 ? (
+                    <ul className="flex flex-col gap-1.5">
+                      {visibleCart.map((line, index) => (
+                        <li
+                          key={line.key}
+                          className={cn(
+                            "flex flex-col gap-0.5",
+                            index > 0 && "border-t border-dashed pt-1.5"
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-xs font-medium">
+                                {line.quantity}× {line.itemName}
+                                {line.variantName
+                                  ? ` ${line.variantName}`
+                                  : ""}
+                              </p>
+                              {line.extras.length > 0 ? (
+                                <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
+                                  <span className="font-medium">Extras:</span>
+                                  {line.extras.map((extra) => (
+                                    <div
+                                      key={extra.id}
+                                      className="flex items-baseline justify-between gap-3"
+                                    >
+                                      <span className="min-w-0 truncate">
+                                        - {extra.name}
+                                      </span>
+                                      {extra.price !== 0 ? (
+                                        <span className="shrink-0 tabular-nums">
+                                          {extra.price > 0 ? "+" : "−"}
+                                          {money(Math.abs(extra.price))}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {groupCartOptions(line.options).map(
+                                ([groupName, options]) => (
+                                  <div
+                                    key={groupName}
+                                    className="flex flex-col gap-0.5 text-[10px] text-muted-foreground"
+                                  >
+                                    <span className="font-medium">
+                                      {groupName}:
+                                    </span>
+                                    {options.map((option) => (
+                                      <div
+                                        key={`${groupName}-${option.itemOptionValueId}`}
+                                        className="flex items-baseline justify-between gap-3"
+                                      >
+                                        <span className="min-w-0 truncate">
+                                          - {option.name}
+                                        </span>
+                                        {option.price !== 0 ? (
+                                          <span className="shrink-0 tabular-nums">
+                                            {option.price > 0 ? "+" : "−"}
+                                            {money(Math.abs(option.price))}
+                                          </span>
+                                        ) : null}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )
+                              )}
+                              {line.excludedNames.length > 0 ? (
+                                <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
+                                  <span className="font-medium">Sin:</span>
+                                  {line.excludedNames.map((name) => (
+                                    <span
+                                      key={name}
+                                      className="min-w-0 truncate"
+                                    >
+                                      - {name}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : null}
+                              {line.notes ? (
+                                <p className="text-[10px] italic text-muted-foreground">
+                                  “{line.notes}”
+                                </p>
+                              ) : null}
+                            </div>
+                            <span className="text-xs font-medium tabular-nums">
+                              {money(cartLineTotal(line))}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center gap-1">
+                            <ButtonGroup
+                              aria-label={`Cantidad de ${line.itemName}`}
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                aria-label={`Quitar una unidad de ${line.itemName}`}
+                                onClick={() => changeQuantity(line.key, -1)}
+                              >
+                                <MinusIcon />
+                              </Button>
+                              <Input
+                                aria-label={`Cantidad de ${line.itemName}`}
+                                readOnly
+                                tabIndex={-1}
+                                value={line.quantity}
+                                className="h-6 w-8 min-w-8 text-center text-xs tabular-nums"
+                              />
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon-xs"
+                                aria-label={`Añadir una unidad de ${line.itemName}`}
+                                onClick={() => changeQuantity(line.key, 1)}
+                              >
+                                <PlusIcon />
+                              </Button>
+                            </ButtonGroup>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              className="ml-auto"
+                              aria-label={`Editar opciones de ${line.itemName}`}
+                              onClick={() => openCartLineEditor(line)}
+                            >
+                              <PencilLineIcon />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Quitar ${line.itemName} de la comanda`}
+                              onClick={() => removeLineWithUndo(line)}
+                            >
+                              <Trash2Icon />
+                            </Button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+
+                  {!itemsLoading &&
+                  !itemsError &&
+                  visibleSentRounds.length === 0 &&
+                  visibleCart.length === 0 ? (
+                    <p className="py-6 text-center text-sm text-muted-foreground">
+                      {cart.length === 0 && sentLines.length === 0
+                        ? "Elige artículos del catálogo para armar la ronda."
+                        : "Este cliente no tiene artículos en la comanda."}
+                    </p>
+                  ) : null}
+                </>
               )}
     </>
   )
@@ -3007,19 +3880,24 @@ export function PosView({
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums">
-                    {money(taxBreakdown.subtotal)}
+                    {money(comandaSubtotal)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">IVA</span>
-                  <span className="tabular-nums">{money(taxBreakdown.tax)}</span>
+                  <span className="tabular-nums">{money(comandaTax)}</span>
                 </div>
                 <div className="flex items-center justify-between border-t pt-1">
                   <span className="font-medium">Total</span>
                   <span className="text-base font-semibold tabular-nums">
-                    {money(total)}
+                    {money(comandaTotal)}
                   </span>
                 </div>
+                {activeOrder && cart.length > 0 ? (
+                  <p className="text-[10px] text-muted-foreground">
+                    Incluye {money(total)} de la nueva ronda sin enviar.
+                  </p>
+                ) : null}
               </div>
 
               {activeOrder ? (
@@ -3032,7 +3910,7 @@ export function PosView({
                         : ""}
                     </span>
                     <span className="font-medium text-foreground tabular-nums">
-                      Saldo {money(Math.max(Number(activeOrder.balance ?? 0), 0))}
+                      Saldo {money(saldoConCaptura)}
                     </span>
                   </div>
                   {activePendingTotal > 0 ? (
@@ -3052,27 +3930,76 @@ export function PosView({
     if (ids.length === 0) return
 
     if (!activeOrder) {
-      const table = diningTables.find((entry) => entry.id === ids[0])
+      const nextIds = tablePickerMode === "merge" ? ids : ids.slice(0, 1)
+      const table = diningTables.find((entry) => entry.id === nextIds[0])
       if (!table) return
+      setDraftTableIds(nextIds)
       setTableId(table.id)
       setTableNumber(table.number)
       return
     }
 
     const nextIds = tablePickerMode === "change" ? ids.slice(0, 1) : ids
+    const selectedTables = diningTables.filter((table) =>
+      nextIds.includes(table.id)
+    )
+    const primary = selectedTables[0]
+
+    if (!primary) return
+
+    const orderBeingChanged = activeOrder
+    const previousNumber = orderBeingChanged.tableNumber
+    const previousTables = orderBeingChanged.tables
+    const endLocalPerf = startPosPerf("table-change.local")
+
+    // La cabecera y el deck cambian al instante; la API confirma después.
+    patchOrderLocal(orderBeingChanged.id, {
+      tableNumber: primary.number,
+      tables: selectedTables.map((table, index) => ({
+        id: `local-${table.id}`,
+        isPrimary: index === 0,
+        table,
+      })),
+    })
+    setTableNumber(primary.number)
+    endLocalPerf({ tables: selectedTables.length })
 
     void (async () => {
-      const result = await updateOrderTables(activeOrder.id, nextIds)
+      const endApiPerf = startPosPerf("table-change.api")
 
-      if (!result.ok) {
-        toast.error(result.message ?? "No se pudieron actualizar las mesas")
-        return
+      try {
+        const result = await updateOrderTables(orderBeingChanged.id, nextIds)
+
+        if (!result.ok || !result.data) {
+          patchOrderLocal(orderBeingChanged.id, {
+            tableNumber: previousNumber,
+            tables: previousTables,
+          })
+          setTableNumber(previousNumber ?? "1")
+          toast.error(result.message ?? "No se pudieron actualizar las mesas")
+          return
+        }
+
+        patchOrderLocal(orderBeingChanged.id, {
+          tableNumber: result.data.tableNumber,
+          tables: result.data.tables,
+          updatedAt: result.data.updatedAt,
+        })
+        setTableNumber(result.data.tableNumber ?? "1")
+
+        toast.success(
+          tablePickerMode === "change" ? "Mesa cambiada" : "Mesas juntadas"
+        )
+      } catch {
+        patchOrderLocal(orderBeingChanged.id, {
+          tableNumber: previousNumber,
+          tables: previousTables,
+        })
+        setTableNumber(previousNumber ?? "1")
+        toast.error("No se pudieron actualizar las mesas")
+      } finally {
+        endApiPerf({ tables: nextIds.length })
       }
-
-      toast.success(
-        tablePickerMode === "change" ? "Mesa cambiada" : "Mesas juntadas"
-      )
-      router.refresh()
     })()
   }
 
@@ -3093,7 +4020,7 @@ export function PosView({
 
     toast.success("Cuentas juntadas · puedes cobrar todo o por cuenta")
     setMergeAccountOrderId(null)
-    router.refresh()
+    void refreshOrders()
   }
 
   const openPendingPayment = () => {
@@ -3139,7 +4066,7 @@ export function PosView({
           result.message ??
             "El pago se confirmó, pero no se pudo enviar a cocina. Usa Cobrar pendiente."
         )
-        router.refresh()
+        void refreshOrders()
         void refreshServiceData()
         return
       }
@@ -3147,12 +4074,20 @@ export function PosView({
 
     toast.success("Pago confirmado · pedido enviado a cocina")
     setPayFirstRoundId(null)
-    router.refresh()
+    void refreshOrders()
     void refreshServiceData()
   }
 
   const handleChargeAllMerged = async () => {
     if (!activeOrder) return
+
+    if (cart.length > 0) {
+      toast.info("Envía la nueva ronda antes de cobrar.", {
+        description:
+          "El cobro se genera con los artículos ya guardados en la cuenta.",
+      })
+      return
+    }
 
     const result = await cancelOrderSplits(activeOrder.id)
 
@@ -3204,33 +4139,37 @@ export function PosView({
     !activeOrder?.isTakeaway &&
     (activeOrder?.channel ?? "DINE_IN") === "DINE_IN"
   const canPrintAccount =
-    Boolean(activeOrder) && (hasConfirmedPayments || isTableServiceOrder)
+    canPrintReceipt &&
+    Boolean(activeOrder) &&
+    (hasConfirmedPayments || isTableServiceOrder)
 
   const comandaActions = (
-    <>
+    <div className="flex flex-col gap-2">
       {canSend ? (
                 <>
                   {displayChannel === "COUNTER" ? (
                     <>
                       <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={
-                            sending ||
-                            savingDraft ||
-                            !offline.isOnline ||
-                            cart.length === 0
-                          }
-                          onClick={() => void handleSaveDraft()}
-                        >
-                          {savingDraft ? (
-                            <Loader2Icon className="animate-spin" />
-                          ) : (
-                            <SaveIcon />
-                          )}
-                          Guardar
-                        </Button>
+                        {!orderId ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={
+                              sending ||
+                              savingDraft ||
+                              !offline.isOnline ||
+                              cart.length === 0
+                            }
+                            onClick={() => void handleSaveDraft()}
+                          >
+                            {savingDraft ? (
+                              <Loader2Icon className="animate-spin" />
+                            ) : (
+                              <SaveIcon />
+                            )}
+                            Guardar
+                          </Button>
+                        ) : null}
                         <Button
                           type="button"
                           className="min-w-0 flex-1 justify-center gap-3"
@@ -3277,7 +4216,7 @@ export function PosView({
                   ) : (
                     <>
                       <div className="flex gap-2">
-                        {offline.isOnline ? (
+                        {!orderId && offline.isOnline ? (
                           <Button
                             type="button"
                             variant="outline"
@@ -3295,6 +4234,7 @@ export function PosView({
                           </Button>
                         ) : null}
                         <Button
+                          variant={orderId ? "secondary" : "default"}
                           className="min-w-0 flex-1"
                           onClick={() => void handleSend(false)}
                           disabled={sending || cart.length === 0}
@@ -3339,7 +4279,7 @@ export function PosView({
                 {activeOrder && canRegister ? (
                   <>
                     <Button
-                      variant="outline"
+                      variant="default"
                       disabled={
                         !cash.session ||
                         cashClosePending ||
@@ -3355,6 +4295,17 @@ export function PosView({
                               : undefined
                       }
                       onClick={() => {
+                        if (cart.length > 0) {
+                          toast.info(
+                            "Envía la nueva ronda antes de cobrar.",
+                            {
+                              description:
+                                "El cobro se genera con los artículos ya guardados en la cuenta.",
+                            }
+                          )
+                          return
+                        }
+
                         if (offlineCheckoutOrderIds.has(activeOrder.id)) {
                           toast.info(
                             "Ya hay un cobro guardado en este dispositivo para esta cuenta.",
@@ -3392,6 +4343,8 @@ export function PosView({
                     {canPrintAccount ? (
                       <Button
                         variant="ghost"
+                        size="sm"
+                        className="text-xs"
                         disabled={printingAccount || !offline.isOnline}
                         title={
                           !offline.isOnline
@@ -3436,7 +4389,7 @@ export function PosView({
                   No tienes permiso para abrir cuentas.
                 </p>
               ) : null}
-    </>
+    </div>
   )
 
   const comandaPanel = showComandaColumn ? (
@@ -3489,7 +4442,7 @@ export function PosView({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger className="md:hidden">
             <NotebookTextIcon />
             Menú global
             <span className="ml-1.5 max-w-24 truncate text-xs font-normal text-muted-foreground">
@@ -3580,6 +4533,26 @@ export function PosView({
             </DropdownMenuGroup>
 
             <DropdownMenuGroup>
+              <DropdownMenuLabel>Altura de tarjetas</DropdownMenuLabel>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={!squareCards}
+                onClick={() => setSquareCards(false)}
+              >
+                <MinusIcon />
+                Más bajas
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                closeOnClick={false}
+                disabled={squareCards}
+                onClick={() => setSquareCards(true)}
+              >
+                <PlusIcon />
+                Más altas
+              </DropdownMenuItem>
+            </DropdownMenuGroup>
+
+            <DropdownMenuGroup>
               <DropdownMenuLabel>Tamaño del texto</DropdownMenuLabel>
               <DropdownMenuItem
                 closeOnClick={false}
@@ -3604,30 +4577,21 @@ export function PosView({
             </DropdownMenuGroup>
 
             <DropdownMenuGroup>
-              <DropdownMenuLabel>Altura de tarjetas</DropdownMenuLabel>
-              <DropdownMenuItem
+              <DropdownMenuLabel>Imágenes</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={showImages}
                 closeOnClick={false}
-                disabled={!squareCards}
-                onClick={() => setSquareCards(false)}
+                onCheckedChange={setShowImages}
               >
-                <MinusIcon />
-                Más bajas
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                closeOnClick={false}
-                disabled={squareCards}
-                onClick={() => setSquareCards(true)}
-              >
-                <PlusIcon />
-                Más altas
-              </DropdownMenuItem>
+                Mostrar imágenes
+              </DropdownMenuCheckboxItem>
             </DropdownMenuGroup>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
         {canManageCash ? (
           <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
+            <DropdownMenuSubTrigger className="md:hidden">
               <WalletIcon />
               Caja
               <span className="ml-1.5 max-w-24 truncate text-xs font-normal text-muted-foreground">
@@ -3679,16 +4643,90 @@ export function PosView({
       setCardTextSize,
       squareCards,
       setSquareCards,
+      showImages,
+      setShowImages,
       cash.session,
       canManageCash,
       cashClosePending,
     ]
   )
 
+  const viewControl = React.useMemo(
+    () => (
+      <Popover>
+        <PopoverTrigger
+          render={
+            <Button type="button" variant="outline" aria-label="Vista">
+              <LayoutGridIcon />
+              Vista
+            </Button>
+          }
+        />
+        <PopoverContent align="end" className="w-72">
+          <PosViewFields
+            cardColumns={cardColumns}
+            setCardColumns={setCardColumns}
+            cardTextSize={cardTextSize}
+            setCardTextSize={setCardTextSize}
+            squareCards={squareCards}
+            setSquareCards={setSquareCards}
+            showImages={showImages}
+            setShowImages={setShowImages}
+          />
+        </PopoverContent>
+      </Popover>
+    ),
+    [
+      cardColumns,
+      cardTextSize,
+      squareCards,
+      showImages,
+      setCardColumns,
+      setCardTextSize,
+      setSquareCards,
+      setShowImages,
+    ]
+  )
+
+  const sortControl = React.useMemo(
+    () => (
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              type="button"
+              variant="outline"
+              aria-label="Ordenar artículos"
+            >
+              <ArrowUpDownIcon />
+              Ordenar
+            </Button>
+          }
+        />
+        <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Ordenar por</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={sortOrder}
+              onValueChange={(value) => setSortOrder(value as PosSortOrder)}
+            >
+              {SORT_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem key={option.value} value={option.value}>
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ),
+    [sortOrder, setSortOrder]
+  )
+
   const filtersToolbar = React.useMemo(
     () => (
           <div className="filtros-mobile flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <div className="flex min-w-0 items-center gap-2 sm:flex-1">
+            <div className="flex min-w-0 items-center gap-2 sm:flex-1 xl:flex-none">
               <div className="relative min-w-0 flex-1 xl:w-56 xl:flex-none">
                 <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -3705,52 +4743,51 @@ export function PosView({
                 />
               </div>
 
-              <div className="hidden xl:block">
-                <Select
-                  value={menuId}
-                  onValueChange={(value) => {
-                    const next = value ?? ""
-
-                    if (!next) return
-
-                    setMenuId(next)
-                    posCapture.noteFilter()
-                    trackEvent({
-                      name: "pos.menu_filtered",
-                      menuId: next,
-                    })
-                  }}
-                  items={menus.map((menu) => ({
-                    value: menu.id,
-                    label: `${menu.name}${
-                      menu.isAvailableNow ? "" : " · fuera de horario"
-                    }`,
-                  }))}
-                >
-                  <SelectTrigger
-                    className="w-44"
-                    aria-label="Filtrar por menú"
-                  >
-                    <span className="flex min-w-0 items-center gap-1.5">
-                      <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Menú" />
-                    </span>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {menus.map((menu) => (
-                      <SelectItem key={menu.id} value={menu.id}>
-                        {menu.name}
-                        {menu.isAvailableNow ? "" : " · fuera de horario"}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="xl:hidden">{mobileToolsMenu}</div>
+              {isPhone ? (
+                <div className="md:hidden">{mobileToolsMenu}</div>
+              ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 max-xl:hidden sm:ml-auto">
+            <div className="hidden xl:block">
+              <Select
+                value={menuId}
+                onValueChange={(value) => {
+                  const next = value ?? ""
+
+                  if (!next) return
+
+                  setMenuId(next)
+                  posCapture.noteFilter()
+                  trackEvent({
+                    name: "pos.menu_filtered",
+                    menuId: next,
+                  })
+                }}
+                items={menus.map((menu) => ({
+                  value: menu.id,
+                  label: `${menu.name}${
+                    menu.isAvailableNow ? "" : " · fuera de horario"
+                  }`,
+                }))}
+              >
+                <SelectTrigger className="w-44" aria-label="Filtrar por menú">
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                    <SelectValue placeholder="Menú" />
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {menus.map((menu) => (
+                    <SelectItem key={menu.id} value={menu.id}>
+                      {menu.name}
+                      {menu.isAvailableNow ? "" : " · fuera de horario"}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 max-xl:hidden">
               <Popover>
                 <PopoverTrigger
                   render={
@@ -3761,116 +4798,16 @@ export function PosView({
                   }
                 />
                 <PopoverContent align="end" className="w-72">
-                  <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Ancho de tarjetas
-                        </span>
-                        <ButtonGroup aria-label="Ancho de las tarjetas">
-                          {/* «−» achica las tarjetas repartiendo más por fila; «+» las agranda. */}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label="Tarjetas más pequeñas"
-                            title="Tarjetas más pequeñas"
-                            disabled={cardColumns >= 7}
-                            onClick={() =>
-                              setCardColumns((current) =>
-                                Math.min(7, current + 1)
-                              )
-                            }
-                          >
-                            <MinusIcon className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label="Tarjetas más grandes"
-                            title="Tarjetas más grandes"
-                            disabled={cardColumns <= 4}
-                            onClick={() =>
-                              setCardColumns((current) =>
-                                Math.max(4, current - 1)
-                              )
-                            }
-                          >
-                            <PlusIcon className="size-4" />
-                          </Button>
-                        </ButtonGroup>
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <span className="text-xs font-medium text-muted-foreground">
-                          Tamaño del texto
-                        </span>
-                        <ButtonGroup aria-label="Tamaño del texto de las tarjetas">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label="Texto más pequeño"
-                            title="Texto más pequeño"
-                            disabled={cardTextSize <= 1}
-                            onClick={() =>
-                              setCardTextSize((current) =>
-                                Math.max(1, current - 1)
-                              )
-                            }
-                          >
-                            <MinusIcon className="size-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon-sm"
-                            aria-label="Texto más grande"
-                            title="Texto más grande"
-                            disabled={cardTextSize >= 4}
-                            onClick={() =>
-                              setCardTextSize((current) =>
-                                Math.min(4, current + 1)
-                              )
-                            }
-                          >
-                            <PlusIcon className="size-4" />
-                          </Button>
-                        </ButtonGroup>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        Altura de tarjetas
-                      </span>
-                      <ButtonGroup aria-label="Altura de las tarjetas">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Tarjetas más bajas"
-                          title="Tarjetas más bajas"
-                          disabled={!squareCards}
-                          onClick={() => setSquareCards(false)}
-                        >
-                          <MinusIcon className="size-4" />
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="icon-sm"
-                          aria-label="Tarjetas más altas"
-                          title="Tarjetas más altas"
-                          disabled={squareCards}
-                          onClick={() => setSquareCards(true)}
-                        >
-                          <PlusIcon className="size-4" />
-                        </Button>
-                      </ButtonGroup>
-                    </div>
-                  </div>
+                  <PosViewFields
+                    cardColumns={cardColumns}
+                    setCardColumns={setCardColumns}
+                    cardTextSize={cardTextSize}
+                    setCardTextSize={setCardTextSize}
+                    squareCards={squareCards}
+                    setSquareCards={setSquareCards}
+                    showImages={showImages}
+                    setShowImages={setShowImages}
+                  />
                 </PopoverContent>
               </Popover>
 
@@ -3927,6 +4864,7 @@ export function PosView({
       menus,
       setMenuId,
       mobileToolsMenu,
+      isPhone,
       sortOrder,
       setSortOrder,
       cardColumns,
@@ -3935,6 +4873,8 @@ export function PosView({
       setCardTextSize,
       squareCards,
       setSquareCards,
+      showImages,
+      setShowImages,
       cash.session,
       cash.summary,
       canManageCash,
@@ -3942,11 +4882,67 @@ export function PosView({
   )
 
   return (
+    <PosRenderProfiler id="PosView">
     <div className="@container/main flex flex-1 flex-col gap-4 px-4 py-6 pb-24 max-lg:landscape:pb-20 lg:px-6 xl:pb-6">
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
         <div className="flex min-w-0 flex-col gap-3">
-          {!showComandaColumn ? (
-            <Card className="flex w-full min-w-0 flex-col gap-3 overflow-hidden border p-4 ring-0">
+          {!isDesktopClient ? (
+            <div className="comanda-tablet">
+              <div className="comanda-tablet-tools">
+                <Select
+                  value={menuId}
+                  onValueChange={(value) => {
+                    const next = value ?? ""
+
+                    if (!next) return
+
+                    setMenuId(next)
+                    posCapture.noteFilter()
+                    trackEvent({
+                      name: "pos.menu_filtered",
+                      menuId: next,
+                    })
+                  }}
+                  items={menus.map((menu) => ({
+                    value: menu.id,
+                    label: `${menu.name}${
+                      menu.isAvailableNow ? "" : " · fuera de horario"
+                    }`,
+                  }))}
+                >
+                  <SelectTrigger className="w-full" aria-label="Filtrar por menú">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <NotebookTextIcon className="size-4 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Menú" />
+                    </span>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {menus.map((menu) => (
+                      <SelectItem key={menu.id} value={menu.id}>
+                        {menu.name}
+                        {menu.isAvailableNow ? "" : " · fuera de horario"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="grid grid-cols-2 gap-2 [&_[data-slot=button]]:w-full">
+                  {sortControl}
+                  {viewControl}
+                </div>
+
+                {canManageCash ? (
+                  <div className="w-full [&>[data-slot=button]]:w-full [&_[data-slot=button-group]]:w-full [&_[data-slot=button-group]>[data-slot=button]:first-child]:flex-1">
+                    <CashSessionActions
+                      session={cash.session}
+                      summary={cash.summary}
+                      canManage={canManageCash}
+                    />
+                  </div>
+                ) : null}
+              </div>
+
+              <Card className="flex w-full min-w-0 flex-col gap-3 overflow-hidden border p-4 ring-0">
               <div className="comanda-rapida-mobile flex min-w-0 flex-col gap-2 rounded-lg">
               <div className="flex flex-wrap gap-1.5">
                 {CHANNELS.map((value) => {
@@ -3988,52 +4984,58 @@ export function PosView({
                       >
                         Mesa
                       </Label>
-                      <Button
-                        id="mobile-pos-table"
-                        type="button"
-                        variant="outline"
-                        className="h-8 w-full justify-between gap-2 px-2 text-xs"
-                        onClick={() => {
-                          if (activeOrder && activeTableIds.length === 0) {
-                            toast.error("La cuenta no tiene mesas asignadas")
-                            return
-                          }
-                          posCapture.noteComandaInteraction()
-                          setTablePickerMode(activeOrder ? "change" : "select")
-                          setTablePickerOpen(true)
-                        }}
-                      >
-                        <span className="truncate">
-                          {activeOrder
-                            ? activeOrder.tables?.length
-                              ? activeOrder.tables
-                                  .map((row) => `M${row.table.number}`)
-                                  .join("+")
-                              : `M${activeOrder.tableNumber ?? "—"}`
-                            : diningTables.find((table) => table.id === tableId)
-                              ? `Mesa ${diningTables.find((table) => table.id === tableId)?.number}`
-                              : `Mesa ${tableNumber}`}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">
-                          {activeOrder ? "Cambiar" : "Elegir"}
-                        </span>
-                      </Button>
-                      {activeOrder ? (
+                      <ButtonGroup className="w-full">
+                        <Button
+                          id="mobile-pos-table"
+                          type="button"
+                          variant="outline"
+                          className="h-8 min-w-0 flex-1 justify-between gap-2 px-2 text-xs"
+                          onClick={() => {
+                            if (activeOrder && activeTableIds.length === 0) {
+                              toast.error("La cuenta no tiene mesas asignadas")
+                              return
+                            }
+                            posCapture.noteComandaInteraction()
+                            setTablePickerMode(activeOrder ? "change" : "select")
+                            setTablePickerOpen(true)
+                          }}
+                        >
+                          <span className="truncate">
+                            {activeOrder
+                              ? activeOrder.tables?.length
+                                ? activeOrder.tables
+                                    .map((row) => `M${row.table.number}`)
+                                    .join("+")
+                                : `M${activeOrder.tableNumber ?? "—"}`
+                              : draftTableIds.length > 0
+                                ? draftTableIds
+                                    .map(
+                                      (id) =>
+                                        `M${
+                                          diningTables.find((table) => table.id === id)
+                                            ?.number ?? "—"
+                                        }`
+                                    )
+                                    .join("+")
+                                : `Mesa ${tableNumber}`}
+                          </span>
+                        </Button>
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
-                          className="h-8 text-xs"
+                          size="icon-sm"
+                          className="h-8"
+                          aria-label="Juntar mesas"
+                          title="Juntar mesas"
                           onClick={() => {
                             posCapture.noteComandaInteraction()
                             setTablePickerMode("merge")
                             setTablePickerOpen(true)
                           }}
                         >
-                          <Link2Icon />
-                          Juntar
+                          <MergeIcon />
                         </Button>
-                      ) : null}
+                      </ButtonGroup>
                     </div>
 
                     <div className="flex flex-col gap-1">
@@ -4118,6 +5120,7 @@ export function PosView({
               ) : null}
                 </div>
               </Card>
+            </div>
           ) : null}
 
           <PosCatalog
@@ -4134,6 +5137,7 @@ export function PosView({
             pendingProductId={pendingProductId}
             cardTextScale={cardTextScale}
             squareCards={squareCards}
+            showImages={showImages}
             outOfScheduleMenuName={
               selectedMenu && !selectedMenu.isAvailableNow
                 ? selectedMenu.name
@@ -4145,169 +5149,215 @@ export function PosView({
 
                 {showComandaColumn ? (
           <div className="hidden xl:sticky xl:top-4 xl:block">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <ButtonGroup
+                aria-label="Comandas y pedidos"
+                className="h-8 overflow-hidden rounded-full border bg-card p-0 shadow-xs"
+              >
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-none px-2"
+                  aria-label={`Comandas guardadas (${draftCount})`}
+                  title="Comandas guardadas"
+                  onClick={() => {
+                    setDraftsOpen(true)
+                    void refreshServiceData()
+                  }}
+                >
+                  <SaveCheckIcon className="size-4" />
+                  <span
+                    className={cn(
+                      "text-xs font-semibold tabular-nums",
+                      draftCount > 0 ? "text-primary" : "text-muted-foreground"
+                    )}
+                  >
+                    {draftCount}
+                  </span>
+                </Button>
+                <Separator
+                  orientation="vertical"
+                  className="h-5 self-center!"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-none px-2"
+                  aria-label={`Pedidos listos (${readyQueueRounds.length})`}
+                  title="Pedidos listos"
+                  onClick={() => openServiceQueue("ready")}
+                >
+                  <ConciergeBellIcon className="size-4" />
+                  <span
+                    className={cn(
+                      "text-xs font-semibold tabular-nums",
+                      readyQueueRounds.length > 0
+                        ? "text-primary"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {readyQueueRounds.length}
+                  </span>
+                </Button>
+                <Separator
+                  orientation="vertical"
+                  className="h-5 self-center!"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-8 gap-1.5 rounded-none px-2"
+                  aria-label={`Cuentas abiertas (${openAccounts.length})`}
+                  title="Cuentas abiertas"
+                  onClick={() => openServiceQueue("pending")}
+                >
+                  <BanknoteXIcon className="size-4" />
+                  <span
+                    className={cn(
+                      "text-xs font-semibold tabular-nums",
+                      openAccounts.length > 0
+                        ? "text-primary"
+                        : "text-muted-foreground"
+                    )}
+                  >
+                    {openAccounts.length}
+                  </span>
+                </Button>
+              </ButtonGroup>
+
+              <div className="ml-auto flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  className="h-8 gap-1.5 rounded-full px-2.5 shadow-xs"
+                  aria-label={`Pedido actual${
+                    newDraftUnits > 0 ? ` (${newDraftUnits} artículos)` : ""
+                  }`}
+                  title="Volver al pedido actual"
+                  onClick={() => {
+                    if (orderId) selectOrder("")
+                  }}
+                >
+                  <PencilLineIcon className="size-4" />
+                  <span className="text-xs font-medium">Pedido actual</span>
+                  {newDraftUnits > 0 ? (
+                    <span className="text-xs font-bold tabular-nums">
+                      {newDraftUnits}
+                    </span>
+                  ) : null}
+                </Button>
+              </div>
+            </div>
             {comandaPanel}
           </div>
         ) : null}
       </div>
 
-      {!showComandaColumn ? (
+      {!isDesktopClient ? (
         <>
           <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-2 px-3 max-lg:landscape:bottom-4 lg:bottom-6 xl:hidden">
             <ButtonGroup
               aria-label="Comandas y pedidos"
-              className="pointer-events-auto h-12 overflow-hidden rounded-full border bg-card p-0 shadow-lg shadow-black/10"
+              className="pointer-events-auto h-12 md:h-14 overflow-hidden rounded-full border bg-card p-0 shadow-lg shadow-black/10"
             >
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-lg"
-                className="relative h-12 rounded-none"
-                aria-label={
-                  draftCount > 0
-                    ? `Comandas guardadas (${draftCount})`
-                    : "Comandas guardadas"
-                }
+              className="h-12 md:h-14 gap-1.5 md:gap-2 rounded-none px-2 md:px-3"
+                aria-label={`Comandas guardadas (${draftCount})`}
                 title="Comandas guardadas"
                 onClick={() => {
                   setDraftsOpen(true)
                   void refreshServiceData()
                 }}
               >
-                <ClipboardClockIcon />
-                {draftCount > 0 ? (
-                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {draftCount > 9 ? "9+" : draftCount}
-                  </span>
-                ) : null}
+                <SaveCheckIcon className="size-4 md:size-5" />
+                <span
+                  className={cn(
+                    "text-xs md:text-sm font-semibold tabular-nums",
+                    draftCount > 0 ? "text-primary" : "text-muted-foreground"
+                  )}
+                >
+                  {draftCount}
+                </span>
               </Button>
+              <Separator orientation="vertical" className="h-6 md:h-8 self-center!" />
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-lg"
-                className="relative h-12 rounded-none"
-                aria-label={
-                  kitchenQueueRounds.length > 0
-                    ? `Pedidos en cocina (${kitchenQueueRounds.length})`
-                    : "Pedidos en cocina"
-                }
-                title="Pedidos en cocina"
-                onClick={() => openServiceQueue("kitchen")}
-              >
-                <ChefHatIcon />
-                {kitchenQueueRounds.length > 0 ? (
-                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {kitchenQueueRounds.length > 9
-                      ? "9+"
-                      : kitchenQueueRounds.length}
-                  </span>
-                ) : null}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-lg"
-                className="relative h-12 rounded-none"
-                aria-label={
-                  readyQueueRounds.length > 0
-                    ? `Pedidos listos (${readyQueueRounds.length})`
-                    : "Pedidos listos"
-                }
+              className="h-12 md:h-14 gap-1.5 md:gap-2 rounded-none px-2 md:px-3"
+                aria-label={`Pedidos listos (${readyQueueRounds.length})`}
                 title="Pedidos listos"
                 onClick={() => openServiceQueue("ready")}
               >
-                <ConciergeBellIcon />
-                {readyQueueRounds.length > 0 ? (
-                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {readyQueueRounds.length > 9
-                      ? "9+"
-                      : readyQueueRounds.length}
-                  </span>
-                ) : null}
+                <ConciergeBellIcon className="size-4 md:size-5" />
+                <span
+                  className={cn(
+                    "text-xs md:text-sm font-semibold tabular-nums",
+                    readyQueueRounds.length > 0
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {readyQueueRounds.length}
+                </span>
               </Button>
+              <Separator orientation="vertical" className="h-6 md:h-8 self-center!" />
               <Button
                 type="button"
                 variant="ghost"
-                size="icon-lg"
-                className="relative h-12 rounded-none"
-                aria-label={
-                  pendingQueueOrders.length > 0
-                    ? `Cuentas por cobrar (${pendingQueueOrders.length})`
-                    : "Cuentas por cobrar"
-                }
-                title="Cuentas por cobrar"
+              className="h-12 md:h-14 gap-1.5 md:gap-2 rounded-none px-2 md:px-3"
+                aria-label={`Cuentas abiertas (${openAccounts.length})`}
+                title="Cuentas abiertas"
                 onClick={() => openServiceQueue("pending")}
               >
-                <BanknoteXIcon />
-                {pendingQueueOrders.length > 0 ? (
-                  <span className="absolute top-1 right-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground">
-                    {pendingQueueOrders.length > 9
-                      ? "9+"
-                      : pendingQueueOrders.length}
-                  </span>
-                ) : null}
+                <BanknoteXIcon className="size-4 md:size-5" />
+                <span
+                  className={cn(
+                    "text-xs md:text-sm font-semibold tabular-nums",
+                    openAccounts.length > 0
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {openAccounts.length}
+                </span>
               </Button>
             </ButtonGroup>
 
             <Button
               type="button"
-              className="pointer-events-auto h-12 rounded-full px-4 shadow-lg shadow-black/10"
+              className="pointer-events-auto h-12 md:h-14 gap-1.5 md:gap-2 rounded-full px-2.5 md:px-3 shadow-lg shadow-black/10"
               aria-label="Ver pedido actual"
               onClick={() => setComandaOpen(true)}
             >
-              <ReceiptTextIcon data-icon="inline-start" />
-              <span className="hidden font-medium min-[350px]:inline">
+              <PencilLineIcon data-icon="inline-start" className="size-4 md:size-5" />
+              <span className="hidden font-medium min-[350px]:inline md:text-base">
                 Pedido
               </span>
               {comandaUnits > 0 ? (
-                <Badge variant="secondary" className="tabular-nums">
+                <span className="text-sm md:text-base font-bold text-primary-foreground tabular-nums">
                   {comandaUnits}
-                </Badge>
+                </span>
               ) : null}
             </Button>
           </div>
 
-          <Sheet open={comandaOpen} onOpenChange={setComandaOpen}>
-            <SheetContent
-              side="bottom"
-              showCloseButton={false}
-              className="h-dvh! gap-0 overflow-hidden rounded-none border-0! p-0"
-            >
-              <SheetTitle className="sr-only">Comanda</SheetTitle>
-              <SheetDescription className="sr-only">
-                Revisa la cuenta y envía la ronda a cocina.
-              </SheetDescription>
-              {comandaPanel}
-            </SheetContent>
-          </Sheet>
-
-          <AlertDialog
-            open={confirmNewComanda}
-            onOpenChange={setConfirmNewComanda}
-          >
-            <AlertDialogContent size="sm">
-              <AlertDialogHeader>
-                <AlertDialogMedia className="bg-destructive/10 text-destructive">
-                  <AlertTriangleIcon />
-                </AlertDialogMedia>
-                <AlertDialogTitle>
-                  ¿Empezar una comanda nueva?
-                </AlertDialogTitle>
-                <AlertDialogDescription>
-                  Tienes artículos sin guardar en esta comanda nueva. Se
-                  perderán al empezar otra.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction
-                  variant="destructive"
-                  onClick={confirmStartNewComanda}
-                >
-                  Empezar nueva
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          {!showComandaColumn ? (
+            <Sheet open={comandaOpen} onOpenChange={setComandaOpen}>
+              <SwipeableSheetContent
+                side="bottom"
+                showCloseButton={false}
+                onOpenChange={setComandaOpen}
+                className="h-dvh! gap-0 overflow-hidden rounded-none border-0! p-0"
+              >
+                <SheetTitle className="sr-only">Comanda</SheetTitle>
+                <SheetDescription className="sr-only">
+                  Revisa la cuenta y envía la ronda a cocina.
+                </SheetDescription>
+                {comandaPanel}
+              </SwipeableSheetContent>
+            </Sheet>
+          ) : null}
         </>
       ) : null}
 
@@ -4446,7 +5496,7 @@ export function PosView({
         key={`${tablePickerMode}-${tablePickerOpen ? "open" : "closed"}-${activeTableIds.join("|")}`}
         open={tablePickerOpen}
         onOpenChange={setTablePickerOpen}
-        tables={diningTables}
+        tables={tablePickerTables}
         mode={tablePickerMode}
         currentOrderId={activeOrder?.id ?? null}
         currentTableIds={activeTableIds}
@@ -4458,7 +5508,10 @@ export function PosView({
         open={draftsOpen}
         onOpenChange={setDraftsOpen}
         onResume={handleResumeDraft}
-        onCountChange={setDraftCount}
+        drafts={serviceDrafts}
+        onDraftsChange={setServiceDrafts}
+        onRefresh={() => void refreshServiceData()}
+        side={showComandaColumn ? "right" : "bottom"}
       />
 
       <PosServiceQueueSheet
@@ -4468,8 +5521,18 @@ export function PosView({
           if (!open) setServiceQueueMode(null)
         }}
         rounds={serviceRounds}
-        orders={pendingQueueOrders}
-        onOpenOrder={handleSelectQueueOrder}
+        orders={openAccounts}
+        onPrintOrder={handlePrintQueueOrder}
+        onChargeOrder={handleChargeQueueOrder}
+        onCloseOrder={handleCloseQueueOrder}
+        onDeliverRound={handleDeliverQueueRound}
+        onCancelRound={handleCancelQueueRound}
+        onPrioritizeRound={handlePrioritizeQueueRound}
+        onEditOrder={handleEditQueueOrder}
+        canPrintReceipt={canPrintReceipt}
+        canCloseOrder={canConfirm}
+        loading={serviceRoundsLoading}
+        side={showComandaColumn ? "right" : "bottom"}
       />
 
       <AlertDialog
@@ -4510,35 +5573,48 @@ export function PosView({
           displayTipPercent={displayState?.tipPercent ?? null}
           onFullyPaid={() => void releasePayFirstRound()}
           onClose={() => {
+            const fromQueue = queueChargeRef.current
+            queueChargeRef.current = false
+
             setCharging(false)
             setChargeOrder(null)
-            setPendingOrder(null)
+            if (!fromQueue) setPendingOrder(null)
             // Los cobros se reflejan en el diálogo sin revalidar el POS; al
-            // cerrarlo se trae la lista de cuentas con los saldos reales.
-            router.refresh()
+            // cerrarlo se trae solo la lista de cuentas con los saldos reales.
+            void refreshOrders()
+            void refreshServiceData()
           }}
           onDone={() => {
+            const fromQueue = queueChargeRef.current
+            queueChargeRef.current = false
+
             setCharging(false)
             setChargeOrder(null)
-            setPayFirstRoundId(null)
-            setPendingOrder(null)
-            setOrderId("")
-            setCart([])
-            setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
-            setPartySize(1)
-            setActiveGuestKey(null)
-            setTableNumber("1")
-            resetChannel()
-            setCustomerName("")
-            setCustomerSex(null)
-            setCustomerAgeRange(null)
-            setCustomerPhone("")
-            setDeliveryAddress("")
-            setDeliveryFee("0")
-            setPendingProductId(null)
-            dismissComboNotice()
-            setComboConflict(null)
-            router.refresh()
+
+            if (!fromQueue) {
+              setPayFirstRoundId(null)
+              setPendingOrder(null)
+              setOrderId("")
+              setCart([])
+              setGuests([{ key: newGuestKey(), name: "", savedName: "", sex: null, ageRange: null }])
+              setPartySize(1)
+              setActiveGuestKey(null)
+              setTableNumber("1")
+              setTableId("")
+              setDraftTableIds([])
+              resetChannel()
+              setCustomerName("")
+              setCustomerSex(null)
+              setCustomerAgeRange(null)
+              setCustomerPhone("")
+              setDeliveryAddress("")
+              setDeliveryFee("0")
+              setPendingProductId(null)
+              dismissComboNotice()
+              setComboConflict(null)
+            }
+
+            void refreshOrders()
             void refreshServiceData()
           }}
         />
@@ -4562,6 +5638,113 @@ export function PosView({
         session={cash.session}
         summary={cash.summary}
       />
+    </div>
+    </PosRenderProfiler>
+  )
+}
+
+function ComandaLineDetails({ line }: { line: ComandaLine }) {
+  const money = useMoney()
+
+  return (
+    <>
+      {line.extras.length > 0 ? (
+        <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
+          <span className="font-medium">Extras:</span>
+          {line.extras.map((extra) => (
+            <div
+              key={extra.id}
+              className="flex items-baseline justify-between gap-3"
+            >
+              <span className="min-w-0 truncate">- {extra.name}</span>
+              {extra.price !== 0 ? (
+                <span className="shrink-0 tabular-nums">
+                  {extra.price > 0 ? "+" : "−"}
+                  {money(Math.abs(extra.price))}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {groupCartOptions(line.options).map(([groupName, options]) => (
+        <div
+          key={groupName}
+          className="flex flex-col gap-0.5 text-[10px] text-muted-foreground"
+        >
+          <span className="font-medium">{groupName}:</span>
+          {options.map((option, index) => (
+            <div
+              key={`${groupName}-${option.itemOptionValueId ?? option.name}-${index}`}
+              className="flex items-baseline justify-between gap-3"
+            >
+              <span className="min-w-0 truncate">- {option.name}</span>
+              {option.price !== 0 ? (
+                <span className="shrink-0 tabular-nums">
+                  {option.price > 0 ? "+" : "−"}
+                  {money(Math.abs(option.price))}
+                </span>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ))}
+
+      {line.excludedNames.length > 0 ? (
+        <div className="flex flex-col gap-0.5 text-[10px] text-muted-foreground">
+          <span className="font-medium">Sin:</span>
+          {line.excludedNames.map((name) => (
+            <span key={name} className="min-w-0 truncate">
+              - {name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+
+      {line.notes ? (
+        <p className="text-[10px] italic text-muted-foreground">
+          “{line.notes}”
+        </p>
+      ) : null}
+    </>
+  )
+}
+
+/** Artículo ya enviado: visible, pero sin controles de edición. */
+function SentComandaLine({ line }: { line: ComandaLine }) {
+  const money = useMoney()
+
+  return (
+    <li className="flex flex-col gap-0.5 opacity-70">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-xs font-medium">
+            {line.quantity}× {line.itemName}
+            {line.variantName ? ` ${line.variantName}` : ""}
+          </p>
+          <ComandaLineDetails line={line} />
+        </div>
+        <span className="shrink-0 text-xs font-medium tabular-nums">
+          {money(line.total)}
+        </span>
+      </div>
+    </li>
+  )
+}
+
+function ComandaItemsSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 py-1" aria-busy="true">
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="flex flex-col gap-1">
+          <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+          <div className="h-2.5 w-1/3 animate-pulse rounded bg-muted" />
+        </div>
+      ))}
+      <span className="text-[10px] text-muted-foreground">
+        Cargando artículos de la cuenta…
+      </span>
     </div>
   )
 }

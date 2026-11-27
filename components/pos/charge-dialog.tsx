@@ -64,6 +64,7 @@ import {
   voidPayment,
 } from "@/lib/payment-actions"
 import {
+  countPendingDeliveryRounds,
   orderLabel,
   PAYMENT_METHOD_LABELS,
   type ChargeSummary,
@@ -604,6 +605,7 @@ export function ChargeDialog({
   const cashReceived = Math.max(Number(cashInput) || 0, 0)
   const change = Math.round((cashReceived - chargeTotal) * 100) / 100
   const canClose = balance <= 0.004
+  const pendingDeliveryRounds = countPendingDeliveryRounds(order)
   const pointMinAmount = mercadoPago.minAmount ?? 5
   const belowPointMinimum =
     method === "MERCADO_PAGO_POINT" &&
@@ -1423,10 +1425,30 @@ export function ChargeDialog({
     setStep(steps[Math.max(0, index - 1)].id)
   }
 
-  const detailRounds = React.useMemo(
-    () => detail?.rounds ?? [],
-    [detail]
-  )
+  const detailRounds = React.useMemo<ChargeSummary["rounds"]>(() => {
+    if (detail) return detail.rounds
+
+    // Mientras llega el resumen, la ronda recién enviada ya trae artículos.
+    return (order.rounds ?? []).flatMap((round) => {
+      if (!("items" in round)) return []
+
+      return [
+        {
+          id: round.id,
+          items: round.items.map((item) => ({
+            id: item.id,
+            itemName: item.itemName,
+            variantName: item.variantName,
+            quantity: item.quantity,
+            subtotal: item.subtotal,
+            guestId: item.guestId ?? null,
+            guestName: item.guestName ?? null,
+            notes: item.notes,
+          })),
+        },
+      ]
+    })
+  }, [detail, order.rounds])
   const reviewGuests = detail?.guests ?? order.guests ?? []
   const reviewItems = React.useMemo(
     () => detailRounds.flatMap((round) => round.items),
@@ -1715,18 +1737,29 @@ export function ChargeDialog({
           ) : null}
 
           {step === "review" ? (
-            detailLoading ? (
+            detailLoading && reviewItems.length === 0 ? (
               <p className="flex items-center justify-center gap-2 rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
                 <Loader2Icon className="size-4 animate-spin" />
                 Cargando artículos…
               </p>
-            ) : detailError ? (
+            ) : detailError && reviewItems.length === 0 ? (
               <p className="rounded-lg border border-dashed p-4 text-center text-sm text-muted-foreground">
                 No se pudieron cargar los artículos. Revisa el total antes de
                 cobrar.
               </p>
             ) : (
               <div className="flex flex-col gap-3">
+                {detailLoading ? (
+                  <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2Icon className="size-3.5 animate-spin" />
+                    Actualizando el resto de la cuenta…
+                  </p>
+                ) : detailError ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    No se pudo actualizar el resumen; se muestra la ronda
+                    enviada.
+                  </p>
+                ) : null}
                 {viewMode !== "COMBINED" && activeSplit ? (
                   <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
                     <div className="min-w-0">
@@ -2511,7 +2544,11 @@ export function ChargeDialog({
             <div className="flex flex-col gap-2">
               <p className="text-sm text-muted-foreground">
                 {canClose
-                  ? "La cuenta quedó pagada y se cerró automáticamente. Puedes imprimir el ticket antes de salir."
+                  ? pendingDeliveryRounds > 0
+                    ? pendingDeliveryRounds === 1
+                      ? "La cuenta está pagada. Se cerrará automáticamente cuando se entregue la ronda pendiente."
+                      : `La cuenta está pagada. Se cerrará automáticamente cuando se entreguen las ${pendingDeliveryRounds} rondas pendientes.`
+                    : "La cuenta quedó pagada y se cerró automáticamente. Puedes imprimir el ticket antes de salir."
                   : pendingTotal > 0 && available <= 0.004
                     ? `Falta confirmar ${money(pendingTotal)} para cerrar la cuenta.`
                     : `Falta cobrar ${money(available)}${
@@ -2563,7 +2600,9 @@ export function ChargeDialog({
                 activeSplit.remainingAmount <= 0
                   ? "Parte pagada"
                   : canClose
-                    ? "Ver cierre"
+                    ? pendingDeliveryRounds > 0
+                      ? "Ver estado"
+                      : "Ver cierre"
                     : "Continuar"}
               </Button>
             ) : null}
@@ -2758,7 +2797,7 @@ export function ChargeDialog({
                 ) : null}
                 <Button type="button" onClick={onDone}>
                   <CheckIcon />
-                  Cerrar
+                  {pendingDeliveryRounds > 0 ? "Entendido" : "Cerrar"}
                 </Button>
               </>
             ) : step === "close" && canConfirm ? (

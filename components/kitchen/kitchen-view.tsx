@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   BellIcon,
   BellOffIcon,
+  ConciergeBellIcon,
   ListOrderedIcon,
   Loader2Icon,
   Maximize2Icon,
@@ -56,6 +57,21 @@ const COLUMN_TAB_LABELS: Record<string, string> = {
   PENDING: "Pendientes",
   PREPARING: "Preparación",
   READY: "Listas",
+}
+
+/** La columna de listas usa la campana de entrega, no el plato del estado. */
+function ColumnIcon({
+  status,
+  className,
+}: {
+  status: RoundStatus
+  className?: string
+}) {
+  if (status === "READY") {
+    return <ConciergeBellIcon className={className} data-icon="inline-start" />
+  }
+
+  return <OrderStatusIcon status={status} className={className} />
 }
 
 /** Estilo de la insignia según la urgencia. */
@@ -504,7 +520,7 @@ export function KitchenView({
               )}
             >
               <span className="flex items-center gap-1">
-                <OrderStatusIcon status={status} className="size-4 shrink-0" />
+                <ColumnIcon status={status} className="size-4 shrink-0" />
                 <span
                   className={cn(
                     "min-w-5 rounded-full px-1 text-center text-[10px] tabular-nums",
@@ -543,7 +559,7 @@ export function KitchenView({
               <header className="flex items-center justify-between">
                 <div>
                   <h3 className="flex items-center gap-1.5 font-medium">
-                    <OrderStatusIcon status={status} className="size-4" />
+                    <ColumnIcon status={status} className="size-4" />
                     {ROUND_STATUS_LABELS[status]}
                   </h3>
                   <p className="text-xs text-muted-foreground">
@@ -589,6 +605,11 @@ export function KitchenView({
                               {branch ? null : round.order.branch ? (
                                 <Badge variant="outline">
                                   {round.order.branch.name}
+                                </Badge>
+                              ) : null}
+                              {round.prioritized ? (
+                                <Badge variant="success" size="sm">
+                                  Priorizada
                                 </Badge>
                               ) : null}
                             </div>
